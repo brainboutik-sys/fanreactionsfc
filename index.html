@@ -207,7 +207,9 @@ select option{background:#1a1a2e;color:#fff}
 
 /* streamers list */
 .str-list{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
-.str-row{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);padding:12px 14px;transition:border-color .2s}
+.str-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);padding:12px 14px;transition:border-color .2s}
+.str-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);object-fit:cover;flex-shrink:0;font-size:0}
+.str-avatar.fallback{display:flex;align-items:center;justify-content:center;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;color:var(--gold);background:var(--gold-dim)}
 .str-row:hover{border-color:rgba(255,255,255,.15)}
 .str-info{min-width:0;display:flex;flex-direction:column;gap:3px}
 .str-name{font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -222,7 +224,7 @@ select option{background:#1a1a2e;color:#fff}
 .str-empty{text-align:center;padding:30px 16px;color:var(--text-3);font-size:13px;font-style:italic;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:var(--radius-sm)}
 .str-count{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 .str-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-@media(max-width:600px){.str-form-grid{grid-template-columns:1fr}.str-row{grid-template-columns:1fr auto auto}.str-row .btn-remove{grid-column:1/-1;justify-self:end}}
+@media(max-width:600px){.str-form-grid{grid-template-columns:1fr}.str-row{grid-template-columns:auto 1fr auto}.str-row .str-link.live,.str-row .btn-remove{grid-column:auto}.str-row .str-link.live{grid-column:2/3;justify-self:end}}
 </style>
 </head>
 <body>
@@ -1151,8 +1153,15 @@ function renderStreamers(){
     list.innerHTML='<div class="str-empty">No streamers yet — add one above, or click "Import from existing channel list" to seed the database.</div>';
     return;
   }
-  list.innerHTML=filtered.map(s=>`
+  list.innerHTML=filtered.map(s=>{
+    const av=channelAvatar(s.channel);
+    const initial=escapeHtml((s.name||'?').charAt(0).toUpperCase());
+    const avatarHtml=av
+      ? `<img class="str-avatar" src="${av}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;str-avatar fallback&quot;>${initial}</div>'">`
+      : `<div class="str-avatar fallback">${initial}</div>`;
+    return `
     <div class="str-row">
+      ${avatarHtml}
       <div class="str-info">
         <div class="str-name">${escapeHtml(s.name)}</div>
         <div class="str-team">${escapeHtml(s.team)}</div>
@@ -1160,9 +1169,20 @@ function renderStreamers(){
       <a class="str-link ${s.channel?'':'empty'}" href="${s.channel||'#'}" target="_blank" rel="noopener" title="Channel">CH</a>
       <a class="str-link live ${s.live?'':'empty'}" href="${s.live||'#'}" target="_blank" rel="noopener" title="Live / Streams">LIVE</a>
       <button class="btn-remove" onclick="removeStreamer('${s.id}')" title="Remove">×</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Resolve a channel URL to a profile-picture URL via unavatar.io (no API key needed).
+// Supports YouTube @handle URLs and /channel/UCxxxx URLs.
+function channelAvatar(url){
+  if(!url) return '';
+  const handle=url.match(/youtube\.com\/(@[\w.-]+)/i);
+  if(handle) return `https://unavatar.io/youtube/${handle[1]}`;
+  const cid=url.match(/youtube\.com\/channel\/([\w-]+)/i);
+  if(cid) return `https://unavatar.io/youtube/${cid[1]}`;
+  return '';
+}
 async function seedStreamers(){
   if(!currentUser){alert('Please sign in.');return;}
   if(!confirm('Import all channels from the built-in channel database into Supabase? Existing streamers will be skipped.')) return;

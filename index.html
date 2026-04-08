@@ -498,6 +498,7 @@ select option{background:#1a1a2e;color:#fff}
       <div class="str-toolbar">
         <button class="fav-toggle" id="favToggle" onclick="toggleFavOnly()">★ Favorites only</button>
         <button class="btn-openall" onclick="openAllLive()">🔴 Open all LIVE in new tabs</button>
+        <button class="fav-toggle" id="btnCacheAvatars" onclick="cacheMissingAvatars()">🖼 Cache missing avatars</button>
       </div>
       <div class="str-count" id="strCount"></div>
       <div class="str-list" id="strList"></div>
@@ -1188,16 +1189,52 @@ async function addStreamer(){
   if(streamers.some(s=>s.name.toLowerCase()===name.toLowerCase()&&s.team===team)){
     if(!confirm(`"${name}" already exists for ${team}. Add anyway?`)) return;
   }
-  const {error}=await sb.from('frfc_streamers').insert({
+  const {data:inserted,error}=await sb.from('frfc_streamers').insert({
     name,team,channel_url:channel||null,live_url:liveUrl||null,avatar_url:avatar||null,created_by:currentUser.id
-  });
+  }).select().single();
   if(error){alert('Error: '+error.message);return;}
   document.getElementById('strName').value='';
   document.getElementById('strChannel').value='';
   document.getElementById('strLive').value='';
   document.getElementById('strAvatar').value='';
+  // Auto-resolve avatar if not provided
+  if(inserted&&!avatar&&channel) await resolveAndStoreAvatar(inserted.id,channel);
   await loadStreamers();
   renderStreamers();
+}
+
+// ── Avatar caching via Edge Function ──────────────────────────────────────────
+async function resolveAndStoreAvatar(id,channelUrl){
+  if(!channelUrl) return null;
+  try{
+    const {data,error}=await sb.functions.invoke('resolve-yt-avatar',{body:{url:channelUrl}});
+    if(error||!data?.avatar) return null;
+    const {error:upErr}=await sb.from('frfc_streamers').update({avatar_url:data.avatar}).eq('id',id);
+    if(upErr) return null;
+    return data.avatar;
+  }catch(e){console.warn('avatar resolve failed',e);return null;}
+}
+
+async function cacheMissingAvatars(){
+  if(!currentUser){alert('Please sign in.');return;}
+  const missing=streamers.filter(s=>!s.avatar&&s.channel&&/youtube\.com\//.test(s.channel));
+  if(!missing.length){alert('All avatars are already cached. ✓');return;}
+  if(!confirm(`Resolve & cache avatars for ${missing.length} streamer${missing.length===1?'':'s'}?\n\nThis takes a few seconds — please don't close the page.`)) return;
+  const btn=document.getElementById('btnCacheAvatars');
+  const origText=btn.textContent;
+  let done=0,failed=0;
+  // Run in batches of 4 in parallel
+  const BATCH=4;
+  for(let i=0;i<missing.length;i+=BATCH){
+    const batch=missing.slice(i,i+BATCH);
+    const results=await Promise.all(batch.map(s=>resolveAndStoreAvatar(s.id,s.channel)));
+    results.forEach(r=>{if(r){done++;}else{failed++;}});
+    btn.textContent=`Caching… ${done+failed}/${missing.length}`;
+  }
+  btn.textContent=origText;
+  await loadStreamers();
+  renderStreamers();
+  alert(`Done. Cached: ${done}. Failed: ${failed}.`);
 }
 async function removeStreamer(id){
   if(!confirm('Remove this streamer?')) return;

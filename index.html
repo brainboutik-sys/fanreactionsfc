@@ -207,7 +207,17 @@ select option{background:#1a1a2e;color:#fff}
 
 /* streamers list */
 .str-list{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
-.str-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);padding:12px 14px;transition:border-color .2s}
+.str-row{display:grid;grid-template-columns:auto 1fr auto auto auto auto;gap:10px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);padding:12px 14px;transition:border-color .2s}
+.str-fav{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer;color:var(--text-3);transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.str-fav:hover{color:var(--gold);border-color:rgba(245,197,24,.3)}
+.str-fav.on{color:var(--gold);background:var(--gold-dim);border-color:rgba(245,197,24,.45)}
+.btn-openall{background:linear-gradient(135deg,rgba(255,68,68,.18),rgba(255,68,68,.08));border:1px solid rgba(255,68,68,.3);border-radius:var(--radius-sm);padding:11px 16px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ff8888;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-openall:hover{background:rgba(255,68,68,.25);border-color:rgba(255,68,68,.5);color:#ffaaaa}
+.str-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.str-toolbar .btn-add{margin:0}
+.fav-toggle{background:rgba(255,255,255,.04);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:11px 16px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);cursor:pointer;transition:all .2s;white-space:nowrap}
+.fav-toggle:hover{color:var(--text);border-color:var(--glass-border-bright)}
+.fav-toggle.active{background:var(--gold-dim);border-color:var(--gold);color:var(--gold)}
 .str-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);object-fit:cover;flex-shrink:0;font-size:0}
 .str-avatar.fallback{display:flex;align-items:center;justify-content:center;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;color:var(--gold);background:var(--gold-dim)}
 .str-row:hover{border-color:rgba(255,255,255,.15)}
@@ -224,7 +234,7 @@ select option{background:#1a1a2e;color:#fff}
 .str-empty{text-align:center;padding:30px 16px;color:var(--text-3);font-size:13px;font-style:italic;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:var(--radius-sm)}
 .str-count{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 .str-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-@media(max-width:600px){.str-form-grid{grid-template-columns:1fr}.str-row{grid-template-columns:auto 1fr auto}.str-row .str-link.live,.str-row .btn-remove{grid-column:auto}.str-row .str-link.live{grid-column:2/3;justify-self:end}}
+@media(max-width:600px){.str-form-grid{grid-template-columns:1fr}.str-row{grid-template-columns:auto 1fr auto auto;row-gap:8px}.str-row .str-link,.str-row .btn-remove,.str-row .str-fav{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -471,6 +481,10 @@ select option{background:#1a1a2e;color:#fff}
           <input type="text" id="strLive" placeholder="https://www.youtube.com/@channel/streams">
         </div>
       </div>
+      <div class="gap">
+        <label class="field-label">Avatar URL (optional — overrides auto-fetch)</label>
+        <input type="text" id="strAvatar" placeholder="https://... (leave blank to use unavatar.io)">
+      </div>
       <button class="btn-generate" onclick="addStreamer()">＋ Add Streamer to Database</button>
     </div>
 
@@ -480,6 +494,10 @@ select option{background:#1a1a2e;color:#fff}
       <div class="str-filter-row">
         <input type="text" id="strSearch" placeholder="🔎 Search by name..." oninput="renderStreamers()">
         <select id="strFilterTeam" onchange="renderStreamers()"><option value="">All teams</option></select>
+      </div>
+      <div class="str-toolbar">
+        <button class="fav-toggle" id="favToggle" onclick="toggleFavOnly()">★ Favorites only</button>
+        <button class="btn-openall" onclick="openAllLive()">🔴 Open all LIVE in new tabs</button>
       </div>
       <div class="str-count" id="strCount"></div>
       <div class="str-list" id="strList"></div>
@@ -1091,10 +1109,58 @@ async function signOut(){
 
 // ── Streamers DB (Supabase-backed) ────────────────────────────────────────────
 let streamers=[];
+let favorites=new Set();
+let favOnly=false;
 async function loadStreamers(){
   const {data,error}=await sb.from('frfc_streamers').select('*').order('team').order('name');
   if(error){console.error(error);streamers=[];return;}
-  streamers=data.map(r=>({id:r.id,name:r.name,team:r.team,channel:r.channel_url||'',live:r.live_url||''}));
+  streamers=data.map(r=>({id:r.id,name:r.name,team:r.team,channel:r.channel_url||'',live:r.live_url||'',avatar:r.avatar_url||''}));
+  await loadFavorites();
+}
+async function loadFavorites(){
+  if(!currentUser){favorites=new Set();return;}
+  const {data,error}=await sb.from('frfc_streamer_favorites').select('streamer_id').eq('user_id',currentUser.id);
+  if(error){console.error(error);favorites=new Set();return;}
+  favorites=new Set(data.map(r=>r.streamer_id));
+}
+async function toggleFavorite(id){
+  if(!currentUser) return;
+  if(favorites.has(id)){
+    const {error}=await sb.from('frfc_streamer_favorites').delete().eq('user_id',currentUser.id).eq('streamer_id',id);
+    if(error){alert('Error: '+error.message);return;}
+    favorites.delete(id);
+  } else {
+    const {error}=await sb.from('frfc_streamer_favorites').insert({user_id:currentUser.id,streamer_id:id});
+    if(error){alert('Error: '+error.message);return;}
+    favorites.add(id);
+  }
+  renderStreamers();
+}
+function toggleFavOnly(){
+  favOnly=!favOnly;
+  document.getElementById('favToggle').classList.toggle('active',favOnly);
+  renderStreamers();
+}
+function openAllLive(){
+  const visible=getFilteredStreamers();
+  const withLive=visible.filter(s=>s.live);
+  if(!withLive.length){alert('No live URLs in current view.');return;}
+  if(withLive.length>10){
+    if(!confirm(`Open ${withLive.length} tabs? Your browser may block popups — allow them for this site if asked.`)) return;
+  }
+  withLive.forEach((s,i)=>{
+    setTimeout(()=>window.open(s.live,'_blank','noopener'),i*120);
+  });
+}
+function getFilteredStreamers(){
+  const q=(document.getElementById('strSearch')?.value||'').toLowerCase().trim();
+  const ft=document.getElementById('strFilterTeam')?.value||'';
+  let filtered=streamers.slice();
+  if(ft) filtered=filtered.filter(s=>s.team===ft);
+  if(q) filtered=filtered.filter(s=>s.name.toLowerCase().includes(q));
+  if(favOnly) filtered=filtered.filter(s=>favorites.has(s.id));
+  filtered.sort((a,b)=>a.team.localeCompare(b.team)||a.name.localeCompare(b.name));
+  return filtered;
 }
 function populateStreamerDropdowns(){
   const teamOpts=[...TEAMS,...customTeams,'Multi-Club / Other'].sort().map(t=>`<option value="${t}">${t}</option>`).join('');
@@ -1113,6 +1179,7 @@ async function addStreamer(){
   const team=document.getElementById('strTeam').value.trim();
   const channel=document.getElementById('strChannel').value.trim();
   const live=document.getElementById('strLive').value.trim();
+  const avatar=document.getElementById('strAvatar').value.trim();
   if(!name||!team){alert('Name and team are required.');return;}
   let liveUrl=live;
   if(!liveUrl&&channel&&/youtube\.com\/@/.test(channel)){
@@ -1122,12 +1189,13 @@ async function addStreamer(){
     if(!confirm(`"${name}" already exists for ${team}. Add anyway?`)) return;
   }
   const {error}=await sb.from('frfc_streamers').insert({
-    name,team,channel_url:channel||null,live_url:liveUrl||null,created_by:currentUser.id
+    name,team,channel_url:channel||null,live_url:liveUrl||null,avatar_url:avatar||null,created_by:currentUser.id
   });
   if(error){alert('Error: '+error.message);return;}
   document.getElementById('strName').value='';
   document.getElementById('strChannel').value='';
   document.getElementById('strLive').value='';
+  document.getElementById('strAvatar').value='';
   await loadStreamers();
   renderStreamers();
 }
@@ -1142,23 +1210,20 @@ function renderStreamers(){
   populateStreamerDropdowns();
   const list=document.getElementById('strList');
   if(!list) return;
-  const q=(document.getElementById('strSearch')?.value||'').toLowerCase().trim();
-  const ft=document.getElementById('strFilterTeam')?.value||'';
-  let filtered=streamers.slice();
-  if(ft) filtered=filtered.filter(s=>s.team===ft);
-  if(q) filtered=filtered.filter(s=>s.name.toLowerCase().includes(q));
-  filtered.sort((a,b)=>a.team.localeCompare(b.team)||a.name.localeCompare(b.name));
-  document.getElementById('strCount').textContent=`${filtered.length} streamer${filtered.length===1?'':'s'}${streamers.length!==filtered.length?` (of ${streamers.length})`:''}`;
+  const filtered=getFilteredStreamers();
+  document.getElementById('strCount').textContent=`${filtered.length} streamer${filtered.length===1?'':'s'}${streamers.length!==filtered.length?` (of ${streamers.length})`:''}${favOnly?' • favorites only':''}`;
   if(!filtered.length){
-    list.innerHTML='<div class="str-empty">No streamers yet — add one above, or click "Import from existing channel list" to seed the database.</div>';
+    list.innerHTML='<div class="str-empty">No streamers match your filters.</div>';
     return;
   }
   list.innerHTML=filtered.map(s=>{
-    const av=channelAvatar(s.channel);
     const initial=escapeHtml((s.name||'?').charAt(0).toUpperCase());
+    const av=s.avatar||channelAvatar(s.channel);
+    // Use data-src for lazy loading via IntersectionObserver — only loads when scrolled into view
     const avatarHtml=av
-      ? `<img class="str-avatar" src="${av}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;str-avatar fallback&quot;>${initial}</div>'">`
+      ? `<img class="str-avatar" data-src="${av}" alt="" data-initial="${initial}">`
       : `<div class="str-avatar fallback">${initial}</div>`;
+    const isFav=favorites.has(s.id);
     return `
     <div class="str-row">
       ${avatarHtml}
@@ -1166,11 +1231,35 @@ function renderStreamers(){
         <div class="str-name">${escapeHtml(s.name)}</div>
         <div class="str-team">${escapeHtml(s.team)}</div>
       </div>
+      <button class="str-fav ${isFav?'on':''}" onclick="toggleFavorite('${s.id}')" title="${isFav?'Unfavorite':'Favorite'}">${isFav?'★':'☆'}</button>
       <a class="str-link ${s.channel?'':'empty'}" href="${s.channel||'#'}" target="_blank" rel="noopener" title="Channel">CH</a>
       <a class="str-link live ${s.live?'':'empty'}" href="${s.live||'#'}" target="_blank" rel="noopener" title="Live / Streams">LIVE</a>
       <button class="btn-remove" onclick="removeStreamer('${s.id}')" title="Remove">×</button>
     </div>`;
   }).join('');
+  observeAvatars();
+}
+
+// ── Lazy avatar loading via IntersectionObserver ──────────────────────────────
+let _avatarObserver=null;
+function observeAvatars(){
+  const imgs=document.querySelectorAll('.str-avatar[data-src]');
+  if(!imgs.length) return;
+  if(!_avatarObserver){
+    _avatarObserver=new IntersectionObserver(entries=>{
+      entries.forEach(e=>{
+        if(!e.isIntersecting) return;
+        const img=e.target;
+        const src=img.dataset.src;
+        const initial=img.dataset.initial||'?';
+        img.removeAttribute('data-src');
+        img.onerror=()=>{img.outerHTML=`<div class="str-avatar fallback">${initial}</div>`;};
+        img.src=src;
+        _avatarObserver.unobserve(img);
+      });
+    },{rootMargin:'200px 0px'});
+  }
+  imgs.forEach(img=>_avatarObserver.observe(img));
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 // Resolve a channel URL to a profile-picture URL via unavatar.io (no API key needed).
@@ -1191,7 +1280,7 @@ async function seedStreamers(){
     arr.forEach(c=>{
       if(streamers.some(s=>s.name.toLowerCase()===c.name.toLowerCase()&&s.team===team)) return;
       const live=/youtube\.com\/@/.test(c.url)?c.url.replace(/\/streams.*$/,'').replace(/\/$/,'')+'/streams':'';
-      rows.push({name:c.name,team,channel_url:c.url,live_url:live,created_by:currentUser.id});
+      rows.push({name:c.name,team,channel_url:c.url,live_url:live,avatar_url:null,created_by:currentUser.id});
     });
   });
   if(!rows.length){alert('Nothing new to import.');return;}
@@ -1223,7 +1312,7 @@ async function importStreamers(ev){
       const data=JSON.parse(r.result);
       if(!Array.isArray(data)) throw 0;
       const rows=data.filter(s=>s&&s.name&&s.team).map(s=>({
-        name:s.name,team:s.team,channel_url:s.channel||null,live_url:s.live||null,created_by:currentUser.id
+        name:s.name,team:s.team,channel_url:s.channel||null,live_url:s.live||null,avatar_url:s.avatar||null,created_by:currentUser.id
       }));
       if(!rows.length){alert('No valid entries found.');return;}
       const {error}=await sb.from('frfc_streamers').insert(rows);

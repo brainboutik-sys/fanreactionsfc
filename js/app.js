@@ -214,11 +214,24 @@ function navigate(path, push = true) {
   handleRoute();
 }
 
+function updateNavActive(path) {
+  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings' };
+  Object.entries(links).forEach(([id, prefix]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isActive = prefix === '/' ? (path === '/' || path === '/index.html') : path.startsWith(prefix);
+    el.classList.toggle('active', isActive);
+  });
+}
+
 function handleRoute() {
   const path = location.pathname;
   const app = document.getElementById('app');
   closeModal();
   window.scrollTo(0, 0);
+
+  // Update nav active state
+  updateNavActive(path);
 
   if (path === '/' || path === '/index.html') {
     currentRoute = { page: 'home' };

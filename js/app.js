@@ -404,7 +404,8 @@ function initSearch() {
     const box = e.target.closest('.search-wrap').querySelector('.search-results');
     if (q.length < 2) { box.classList.remove('open'); return; }
     const matches = creators.filter(c =>
-      c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q)
+      c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q) ||
+      c.contentTypes.some(t => t.toLowerCase().includes(q))
     ).slice(0, 8);
     if (!matches.length) { box.classList.remove('open'); return; }
     box.innerHTML = matches.map(c => `

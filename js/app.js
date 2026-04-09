@@ -393,7 +393,14 @@ async function toggleFavorite(id) {
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
-function avatarUrl(c) { return c.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=1a2030&color=8a94a6&size=96`; }
+function avatarUrl(c) { return c.avatar || ''; }
+function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
+function avatarOnerror(img, name) { img.onerror=null; img.style.display='none'; const el=document.createElement('div'); el.className=img.className+' avatar-fallback'; el.textContent=avatarInitials(name); img.parentNode.insertBefore(el,img); }
+function avatarImg(c, cls = 'cc-avatar') {
+  const url = avatarUrl(c);
+  if (!url) return `<div class="${cls} avatar-fallback">${avatarInitials(c.name)}</div>`;
+  return `<img class="${cls}" src="${url}" alt="" loading="lazy" onerror="avatarOnerror(this,'${escHtml(c.name.replace(/'/g, "\\'"))}')">`;
+}
 function creatorLink(c) { return `/creators/${c.slug || slugify(c.name)}`; }
 
 // ── Search ────────────────────────────────────────────────────────────────
@@ -410,7 +417,7 @@ function initSearch() {
     if (!matches.length) { box.classList.remove('open'); return; }
     box.innerHTML = matches.map(c => `
       <a href="${creatorLink(c)}" class="search-result">
-        <img src="${avatarUrl(c)}" alt="" loading="lazy">
+        ${avatarImg(c, 'cc-avatar')}
         <div>
           <div class="sr-name">${escHtml(c.name)}</div>
           <div class="sr-team">${escHtml(c.team)}</div>
@@ -493,7 +500,7 @@ function renderHome() {
           ${topRated.map((c, i) => `
             <a href="${creatorLink(c)}" class="trending-row">
               <span class="trending-rank">${i + 1}</span>
-              <img class="trending-avatar" src="${avatarUrl(c)}" alt="" loading="lazy">
+              ${avatarImg(c, 'trending-avatar')}
               <div class="trending-info">
                 <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
                 <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} <span style="opacity:.5;font-size:.68rem">${leagueFlag(c.league || getLeague(c.team))}</span></div>
@@ -547,7 +554,7 @@ function creatorCard(c) {
   return `
     <a href="${creatorLink(c)}" class="creator-card">
       <div class="cc-top">
-        <img class="cc-avatar" src="${avatarUrl(c)}" alt="" loading="lazy">
+        ${avatarImg(c, 'cc-avatar')}
         <div class="cc-info">
           <div class="cc-name">${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
           <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)} <span style="opacity:.5;font-size:.68rem">${leagueFlag(c.league || getLeague(c.team))}</span></div>
@@ -716,7 +723,7 @@ async function renderProfile(slug) {
     <div class="profile-header">
       <div class="container">
         <div class="profile-top">
-          <img class="profile-avatar" src="${avatarUrl(c)}" alt="${escHtml(c.name)}">
+          ${avatarImg(c, 'profile-avatar')}
           <div class="profile-info">
             <h1 class="profile-name">
               ${escHtml(c.name)}
@@ -890,7 +897,7 @@ function renderRankings() {
       ${ranked.length ? `<div class="trending-list">${ranked.map((c, i) => `
         <a href="${creatorLink(c)}" class="trending-row">
           <span class="trending-rank">${i + 1}</span>
-          <img class="trending-avatar" src="${avatarUrl(c)}" alt="" loading="lazy">
+          ${avatarImg(c, 'trending-avatar')}
           <div class="trending-info">
             <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
             <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>

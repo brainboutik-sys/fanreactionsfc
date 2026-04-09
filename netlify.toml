@@ -1,0 +1,5 @@
+# SPA fallback — Netlify serves real files first, then falls back to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

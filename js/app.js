@@ -272,13 +272,15 @@ document.addEventListener('click', e => {
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 async function refreshAuth() {
-  const { data: { user } } = await sb.auth.getUser();
-  currentUser = user;
-  if (currentUser) {
-    await loadFavorites();
-  } else {
-    favorites = new Set();
-  }
+  try {
+    const { data: { user } } = await sb.auth.getUser();
+    currentUser = user;
+    if (currentUser) {
+      await loadFavorites();
+    } else {
+      favorites = new Set();
+    }
+  } catch (e) { console.error('refreshAuth:', e); }
   updateAuthUI();
 }
 
@@ -374,19 +376,26 @@ async function loadCreators() {
 
 async function loadFavorites() {
   if (!currentUser) return;
-  const { data } = await sb.from('frfc_streamer_favorites').select('streamer_id').eq('user_id', currentUser.id);
-  favorites = new Set((data || []).map(r => r.streamer_id));
+  try {
+    const { data, error } = await sb.from('frfc_streamer_favorites').select('streamer_id').eq('user_id', currentUser.id);
+    if (error) { console.error('loadFavorites:', error.message); return; }
+    favorites = new Set((data || []).map(r => r.streamer_id));
+  } catch (e) { console.error('loadFavorites:', e); }
 }
 
 async function toggleFavorite(id) {
   if (!currentUser) { openModal('signin'); return; }
-  if (favorites.has(id)) {
-    await sb.from('frfc_streamer_favorites').delete().eq('user_id', currentUser.id).eq('streamer_id', id);
-    favorites.delete(id);
-  } else {
-    await sb.from('frfc_streamer_favorites').insert({ user_id: currentUser.id, streamer_id: id });
-    favorites.add(id);
-  }
+  try {
+    if (favorites.has(id)) {
+      const { error } = await sb.from('frfc_streamer_favorites').delete().eq('user_id', currentUser.id).eq('streamer_id', id);
+      if (error) throw error;
+      favorites.delete(id);
+    } else {
+      const { error } = await sb.from('frfc_streamer_favorites').insert({ user_id: currentUser.id, streamer_id: id });
+      if (error) throw error;
+      favorites.add(id);
+    }
+  } catch (e) { console.error('toggleFavorite:', e.message || e); }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────

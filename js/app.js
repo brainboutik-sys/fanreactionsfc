@@ -786,7 +786,7 @@ async function renderProfile(slug) {
 
     <div class="container" style="padding-top:24px">
       <!-- Rating distribution + write review -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:32px">
+      <div class="profile-rating-grid">
         <div>
           <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Ratings</h3>
           <div class="rating-dist">

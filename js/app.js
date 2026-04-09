@@ -200,6 +200,7 @@ function getTeamsByLeague() {
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
+  showLoading();
   await loadCreators();
   await refreshAuth();
   sb.auth.onAuthStateChange(() => refreshAuth());
@@ -207,6 +208,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('popstate', handleRoute);
   initSearch();
 });
+
+function showLoading() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <section class="hero">
+      <div class="container" style="text-align:center">
+        <div class="skeleton" style="width:320px;height:36px;margin:0 auto 16px;border-radius:8px"></div>
+        <div class="skeleton" style="width:480px;max-width:100%;height:18px;margin:0 auto 28px;border-radius:6px"></div>
+        <div class="skeleton" style="width:560px;max-width:100%;height:48px;margin:0 auto 20px;border-radius:100px"></div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          ${Array(5).fill('<div class="skeleton" style="width:120px;height:36px;border-radius:100px"></div>').join('')}
+        </div>
+      </div>
+    </section>
+    <div class="container">
+      <div class="skeleton" style="width:180px;height:24px;margin-bottom:16px;border-radius:6px"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px">
+        ${Array(10).fill('<div class="skeleton" style="height:120px;border-radius:var(--radius)"></div>').join('')}
+      </div>
+    </div>`;
+}
 
 // ── Routing ───────────────────────────────────────────────────────────────
 function navigate(path, push = true) {

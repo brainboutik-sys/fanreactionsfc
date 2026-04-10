@@ -1,3 +1,6 @@
+[build]
+  publish = "."
+
 # SPA fallback — Netlify serves real files first, then falls back to index.html
 [[redirects]]
   from = "/*"

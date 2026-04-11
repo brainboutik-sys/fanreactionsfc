@@ -46,8 +46,8 @@ const TEAM_CRESTS = {
   'Leicester': 'https://crests.football-data.org/338.svg',
   'Liverpool': 'https://crests.football-data.org/64.svg',
   'Luton': 'https://crests.football-data.org/389.svg',
-  'Manchester City': 'https://crests.football-data.org/65.svg',
-  'Manchester United': 'https://crests.football-data.org/66.svg',
+  'Man City': 'https://crests.football-data.org/65.svg',
+  'Man United': 'https://crests.football-data.org/66.svg',
   'Newcastle': 'https://crests.football-data.org/67.svg',
   'Nottm Forest': 'https://crests.football-data.org/351.svg',
   'Sheffield Utd': 'https://crests.football-data.org/356.svg',
@@ -141,7 +141,7 @@ const TEAM_CRESTS = {
 const TEAM_TO_LEAGUE = {};
 (function buildLeagueMap() {
   const map = {
-    'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Ipswich','Leeds United','Leicester','Liverpool','Luton','Manchester City','Manchester United','Newcastle','Nottm Forest','Sheffield Utd','Southampton','Tottenham','West Ham','Wolves'],
+    'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Ipswich','Leeds United','Leicester','Liverpool','Luton','Man City','Man United','Newcastle','Nottm Forest','Sheffield Utd','Southampton','Tottenham','West Ham','Wolves'],
     'La Liga': ['Barcelona','Real Madrid','Atletico Madrid','Sevilla','Real Betis','Real Sociedad','Villarreal','Athletic Bilbao','Valencia','Celta Vigo','Espanyol','Getafe','Osasuna','Mallorca','Rayo Vallecano','Girona','Las Palmas','Alaves','Valladolid','Leganes'],
     'Serie A': ['Juventus','AC Milan','Inter Milan','Napoli','Roma','Lazio','Atalanta','Fiorentina','Bologna','Torino','Udinese','Monza','Empoli','Genoa','Cagliari','Lecce','Hellas Verona','Parma','Venezia','Como'],
     'Bundesliga': ['Bayern Munich','Borussia Dortmund','RB Leipzig','Bayer Leverkusen','Union Berlin','Freiburg','Eintracht Frankfurt','Wolfsburg','Mainz','Borussia Monchengladbach','Hoffenheim','Werder Bremen','Augsburg','Bochum','Heidenheim','Stuttgart','Holstein Kiel','St. Pauli'],

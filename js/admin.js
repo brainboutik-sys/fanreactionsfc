@@ -410,7 +410,7 @@ function renderSettings() {
     '<div class="admin-form-row"><div class="admin-form-label">API Key</div><div style="font-size:.85rem;color:var(--text-dim);font-family:monospace">AIza...xcNA (configured in scripts)</div></div>' +
     '<div class="admin-form-row"><div class="admin-form-label">Daily Quota</div><div style="font-size:.85rem">10,000 units/day (YouTube Data API v3)</div></div>' +
     '<div class="admin-form-row"><div class="admin-form-label">Last Sync</div><div style="font-size:.85rem">' + getLastSync() + '</div></div>' +
-    '<button class="btn-admin btn-admin-primary" onclick="Admin.runSync()" style="margin-top:8px">Run YouTube Sync Now</button>' +
+    '<div style="display:flex;align-items:center;gap:12px;margin-top:8px"><button class="btn-admin btn-admin-primary" onclick="Admin.runSync()">Run YouTube Sync Now</button><span id="syncStatus" style="font-size:.82rem;color:var(--text-dim)"></span></div>' +
   '</div></div>' +
 
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Platform Info</span></div><div class="admin-card-body">' +
@@ -432,8 +432,127 @@ function getLastSync() {
   return timeAgo(synced[0].last_youtube_sync);
 }
 
+// ── In-browser YouTube Sync ──────────────────────────────────────────────────
+var YT_KEY = 'AIzaSyCLZDo4mNC0ohtvU_lRyXClXcT6uw-xcNA';
+var YT_BASE = 'https://www.googleapis.com/youtube/v3';
+var syncRunning = false;
+
+async function ytFetch(endpoint, params) {
+  params.key = YT_KEY;
+  var url = YT_BASE + '/' + endpoint + '?' + new URLSearchParams(params);
+  var res = await fetch(url);
+  if (!res.ok) { var e = await res.json().catch(function(){return {}}); throw new Error(e.error?.message || res.statusText); }
+  return res.json();
+}
+
 async function runSync() {
-  toast('YouTube sync must be run via CLI: node scripts/fetch-youtube-data.js', 'info');
+  if (syncRunning) { toast('Sync already running', 'info'); return; }
+  syncRunning = true;
+  toast('YouTube sync started...', 'info');
+
+  var statusEl = document.getElementById('syncStatus');
+  function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
+
+  try {
+    var total = allCreators.length;
+    var ok = 0, fail = 0, quota = 0;
+
+    for (var i = 0; i < allCreators.length; i++) {
+      var c = allCreators[i];
+      var handle = (c.channel_url || '').match(/@([A-Za-z0-9_.-]+)/);
+      if (!handle) { fail++; continue; }
+      handle = handle[1];
+      setStatus('Syncing ' + (i+1) + '/' + total + ': ' + c.name);
+
+      try {
+        // 1. Channel stats
+        quota += 5;
+        var chData = await ytFetch('channels', { forHandle: handle, part: 'snippet,statistics,contentDetails' });
+        var ch = chData.items?.[0];
+        if (!ch) { fail++; continue; }
+
+        var stats = ch.statistics || {};
+        var snippet = ch.snippet || {};
+        var uploadsPlaylist = ch.contentDetails?.relatedPlaylists?.uploads;
+
+        var update = {
+          youtube_channel_id: ch.id,
+          subscriber_count: parseInt(stats.subscriberCount) || 0,
+          total_view_count: parseInt(stats.viewCount) || 0,
+          video_count: parseInt(stats.videoCount) || 0,
+          channel_created_at: snippet.publishedAt || null,
+          avatar_url: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || c.avatar_url,
+          is_live: false,
+          live_video_id: null,
+          last_youtube_sync: new Date().toISOString()
+        };
+
+        // 2. Latest videos from uploads playlist
+        if (uploadsPlaylist) {
+          try {
+            quota += 3;
+            var plData = await ytFetch('playlistItems', { playlistId: uploadsPlaylist, part: 'snippet', maxResults: 5 });
+            var vids = (plData.items || []).map(function(item) {
+              return { videoId: item.snippet?.resourceId?.videoId, publishedAt: item.snippet?.publishedAt, title: item.snippet?.title || '' };
+            }).filter(function(v) { return v.videoId; });
+
+            if (vids.length) {
+              var latest = vids[0];
+              update.latest_video_id = latest.videoId;
+              update.latest_video_title = latest.title;
+              update.latest_video_date = latest.publishedAt;
+              update.latest_video_thumbnail = 'https://i.ytimg.com/vi/' + latest.videoId + '/mqdefault.jpg';
+
+              // Get view count for latest video
+              try {
+                quota += 7;
+                var vidData = await ytFetch('videos', { id: latest.videoId, part: 'statistics,liveStreamingDetails' });
+                var vidDetail = vidData.items?.[0];
+                if (vidDetail) {
+                  update.latest_video_views = parseInt(vidDetail.statistics?.viewCount) || 0;
+                  if (vidDetail.liveStreamingDetails?.actualStartTime && !vidDetail.liveStreamingDetails?.actualEndTime) {
+                    update.is_live = true;
+                    update.live_video_id = latest.videoId;
+                  }
+                }
+              } catch(e) { /* video detail fetch failed, continue */ }
+
+              // Upload frequency
+              var dates = vids.map(function(v){return v.publishedAt}).filter(Boolean);
+              if (dates.length >= 2) {
+                var sorted = dates.map(function(d){return new Date(d).getTime()}).sort(function(a,b){return b-a});
+                var gaps = [];
+                for (var g = 0; g < sorted.length-1; g++) gaps.push((sorted[g]-sorted[g+1])/86400000);
+                var avg = gaps.reduce(function(a,b){return a+b},0)/gaps.length;
+                update.upload_frequency = avg<2?'Daily':avg<2.5?'5x/week':avg<3.5?'3x/week':avg<5?'2x/week':avg<10?'Weekly':avg<20?'Biweekly':avg<45?'Monthly':'Inactive';
+              }
+            }
+          } catch(e) { /* playlist fetch failed, continue with channel data */ }
+        }
+
+        // 3. Write to Supabase
+        await sb.from('frfc_streamers').update(update).eq('id', c.id);
+
+        // 4. Subscriber history
+        if (update.subscriber_count > 0) {
+          await sb.from('frfc_subscriber_history').insert({ creator_id: c.id, subscriber_count: update.subscriber_count });
+        }
+
+        ok++;
+      } catch(e) {
+        fail++;
+      }
+    }
+
+    await logAction('sync', 'youtube', null, { ok: ok, fail: fail, quota: quota });
+    toast('Sync complete: ' + ok + ' updated, ' + fail + ' failed (~' + quota + ' quota)', 'success');
+    await loadAdminData();
+    renderPage();
+  } catch(e) {
+    toast('Sync error: ' + e.message, 'error');
+  } finally {
+    syncRunning = false;
+  }
 }
 
 async function resetAllLive() {

@@ -1,6 +1,27 @@
+# Netlify
 .netlify/
+
+# Claude Code
 .claude/
+
+# Dependencies
 node_modules/
+
+# OS files
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
 *.log
+
+# Environment
+.env
+.env.*
+
+# Build artifacts
+dist/
+build/
+
+# Utility scripts (DB migrations, avatar fetchers)
 scripts/

@@ -4,283 +4,33 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FanReactionsFC — Description Generator</title>
+<meta name="description" content="Generate YouTube video titles, descriptions, and tags for football fan reaction videos. Built for FanReactionsFC.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<link rel="stylesheet" href="/css/generator.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --gold:#f5c518;--gold-dim:rgba(245,197,24,0.18);--gold-glow:rgba(245,197,24,0.35);
-  --red:#ff4444;--green:#44dd88;
-  --text:#fff;--text-2:rgba(255,255,255,0.65);--text-3:rgba(255,255,255,0.35);
-  --glass:rgba(255,255,255,0.07);--glass-hover:rgba(255,255,255,0.12);
-  --glass-border:rgba(255,255,255,0.15);--glass-border-bright:rgba(255,255,255,0.3);
-  --blur:blur(24px) saturate(180%);--blur-sm:blur(12px) saturate(160%);
-  --radius:20px;--radius-sm:12px;--radius-xs:8px;
-}
-html{scroll-behavior:smooth}
-body{font-family:'DM Sans',sans-serif;font-weight:400;color:var(--text);min-height:100vh;overflow-x:hidden;background:#060810}
-
-/* bg */
-.bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 120% 80% at 15% 20%,#1a0f2e 0%,transparent 60%),radial-gradient(ellipse 80% 100% at 85% 80%,#0d1f0d 0%,transparent 55%),radial-gradient(ellipse 60% 60% at 50% 50%,#0a1020 0%,transparent 70%),#060810}
-.bg-orb{position:fixed;border-radius:50%;filter:blur(80px);opacity:.5;animation:drift 20s ease-in-out infinite alternate}
-.bg-orb-1{width:600px;height:600px;top:-200px;left:-150px;background:radial-gradient(circle,rgba(120,60,255,.3) 0%,transparent 70%);animation-delay:0s}
-.bg-orb-2{width:500px;height:500px;bottom:-100px;right:-100px;background:radial-gradient(circle,rgba(245,197,24,.15) 0%,transparent 70%);animation-delay:-8s}
-.bg-orb-3{width:400px;height:400px;top:40%;left:40%;background:radial-gradient(circle,rgba(0,180,120,.12) 0%,transparent 70%);animation-delay:-4s}
-@keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,30px) scale(1.1)}}
-
-/* layout */
-.wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:40px 20px 80px}
-
-/* sticky status bar */
-.status-bar{
-  position:fixed;top:0;left:0;right:0;z-index:100;
-  display:flex;align-items:center;justify-content:space-between;
-  padding:10px 24px;
-  background:rgba(6,8,16,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border-bottom:1px solid rgba(255,255,255,0.08);
-  transform:translateY(-100%);transition:transform 0.35s ease;
-}
-.status-bar.visible{transform:translateY(0)}
-.status-label{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--green)}
-.status-actions{display:flex;gap:8px}
-.status-btn{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:5px 14px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);cursor:pointer;transition:all .2s}
-.status-btn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
-.status-btn.green:hover{border-color:var(--green);color:var(--green);background:rgba(68,221,136,.08)}
-
-/* header */
-.header{text-align:center;margin-bottom:48px;padding-top:20px}
-.header-badge{display:inline-flex;align-items:center;gap:8px;background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:var(--blur-sm);-webkit-backdrop-filter:var(--blur-sm);border-radius:100px;padding:6px 16px;margin-bottom:20px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
-.badge-dot{width:6px;height:6px;background:var(--gold);border-radius:50%;box-shadow:0 0 8px var(--gold);animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
-.header h1{font-family:'Outfit',sans-serif;font-size:clamp(28px,5vw,48px);font-weight:800;letter-spacing:-.02em;line-height:1.05;background:linear-gradient(135deg,#fff 0%,rgba(255,255,255,.7) 50%,var(--gold) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.header p{color:var(--text-2);font-size:15px;margin-top:10px;font-weight:300}
-.header-actions{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:16px}
-.btn-new{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:100px;padding:7px 18px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ff8888;cursor:pointer;transition:all .2s}
-.btn-new:hover{background:rgba(255,68,68,.15);border-color:rgba(255,68,68,.4);color:#ffaaaa}
-
-/* glass card */
-.glass-card{background:var(--glass);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--glass-border);border-radius:var(--radius);padding:28px;margin-bottom:16px;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s;animation:fadeUp .4s ease both}
-.glass-card::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
-.glass-card:hover{border-color:var(--glass-border-bright);box-shadow:0 8px 40px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.1)}
-.glass-card:nth-child(1){animation-delay:.05s}.glass-card:nth-child(2){animation-delay:.1s}.glass-card:nth-child(3){animation-delay:.15s}.glass-card:nth-child(4){animation-delay:.2s}.glass-card:nth-child(5){animation-delay:.25s}.glass-card:nth-child(6){animation-delay:.3s}
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-
-.card-title{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--gold);margin-bottom:20px;display:flex;align-items:center;gap:8px}
-.card-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--gold-dim),transparent)}
-.step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--gold-dim);border:1px solid rgba(245,197,24,.25);font-family:'Outfit',sans-serif;font-size:10px;font-weight:800;color:var(--gold);flex-shrink:0}
-
-/* type tabs */
-.type-tabs{display:flex;gap:6px;flex-wrap:wrap}
-.type-tab{flex:1;min-width:110px;background:rgba(255,255,255,.04);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:11px 14px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);cursor:pointer;transition:all .2s;text-align:center}
-.type-tab:hover{background:rgba(255,255,255,.08);color:var(--text);border-color:var(--glass-border-bright)}
-.type-tab.active{background:linear-gradient(135deg,rgba(245,197,24,.2),rgba(245,197,24,.08));border-color:var(--gold);color:var(--gold);box-shadow:0 0 20px rgba(245,197,24,.15),inset 0 1px 0 rgba(245,197,24,.2)}
-
-/* fields */
-.field-label{font-family:'Outfit',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);display:block;margin-bottom:6px}
-input[type=text],input[type=number],select{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:400;padding:11px 14px;outline:none;transition:all .2s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-input[type=text]::placeholder{color:var(--text-3)}
-input[type=text]:focus,input[type=number]:focus,select:focus{border-color:rgba(245,197,24,.5);background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(245,197,24,.08)}
-select{cursor:pointer}
-select option{background:#1a1a2e;color:#fff}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-@media(max-width:600px){.grid3{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
-@media(max-width:400px){.grid3{grid-template-columns:1fr}}
-.gap{margin-bottom:16px}
-
-/* score */
-.score-row{display:flex;align-items:flex-end;gap:12px}
-.score-row>.score-field{flex:1}
-.score-vs{font-family:'Outfit',sans-serif;font-size:20px;font-weight:800;color:var(--gold);padding-bottom:11px;flex-shrink:0;text-shadow:0 0 20px var(--gold-glow)}
-
-/* title char counter */
-.title-field-wrap{position:relative}
-.title-char-count{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;color:var(--text-3);pointer-events:none;transition:color .2s}
-.title-char-count.warn{color:var(--gold)}
-.title-char-count.over{color:var(--red)}
-
-/* score sync banner */
-.score-sync-banner{display:none;align-items:center;justify-content:space-between;gap:10px;background:rgba(245,197,24,.07);border:1px solid rgba(245,197,24,.2);border-radius:var(--radius-xs);padding:10px 14px;margin-top:10px;font-size:13px;color:var(--text-2)}
-.score-sync-banner.visible{display:flex}
-.btn-sync{background:var(--gold-dim);border:1px solid rgba(245,197,24,.3);border-radius:6px;padding:5px 12px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gold);cursor:pointer;transition:all .2s;white-space:nowrap}
-.btn-sync:hover{background:rgba(245,197,24,.25)}
-.btn-sync-dismiss{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:16px;padding:0 4px;transition:color .2s}
-.btn-sync-dismiss:hover{color:var(--text-2)}
-
-/* emotions */
-.emotion-input-row{display:flex;gap:8px;margin-bottom:14px}
-.emotion-input-row input{flex:1}
-.btn-ghost{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);padding:11px 16px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);cursor:pointer;white-space:nowrap;transition:all .2s}
-.btn-ghost:hover{border-color:rgba(255,68,68,.5);color:#ff8888;background:rgba(255,68,68,.06)}
-.emotion-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.emotion-cat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);overflow:hidden}
-.emotion-cat-title{font-family:'Outfit',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-3);padding:8px 10px 7px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
-.emotion-words{display:grid;grid-template-columns:1fr 1fr}
-.etag{background:none;border:none;border-bottom:1px solid rgba(255,255,255,.04);border-right:1px solid rgba(255,255,255,.04);color:var(--text-2);font-family:'DM Sans',sans-serif;font-size:12px;padding:7px 9px;cursor:pointer;text-align:left;transition:all .15s;width:100%}
-.etag:nth-child(even){border-right:none}
-.etag:hover{background:rgba(255,255,255,.06);color:var(--text)}
-.etag.active{background:linear-gradient(135deg,rgba(245,197,24,.15),rgba(245,197,24,.05));color:var(--gold)}
-
-/* timestamps */
-.ts-intro{display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,.03);border-radius:var(--radius-xs);margin-bottom:10px;opacity:.45}
-.ts-time-fixed{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;color:var(--text-3);min-width:52px;text-align:center}
-.ts-label-fixed{font-size:13px;color:var(--text-3);font-style:italic}
-.ts-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
-.ts-row{display:grid;grid-template-columns:72px 1fr auto auto;gap:6px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-xs);padding:8px 10px;transition:border-color .2s,box-shadow .2s}
-.ts-row.drag-over{border-color:rgba(245,197,24,.5);box-shadow:0 0 0 2px rgba(245,197,24,.15)}
-.ts-row.dragging{opacity:.4}
-.ts-row:hover{border-color:rgba(255,255,255,.13)}
-.ts-time-input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;padding:6px 5px;letter-spacing:0;text-align:center;outline:none;width:100%;transition:all .2s}
-.ts-time-input:focus{border-color:rgba(245,197,24,.4);box-shadow:0 0 0 2px rgba(245,197,24,.06)}
-.ts-inner{display:flex;align-items:center;gap:8px;min-width:0}
-.ts-badge{font-family:'Outfit',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:100px;flex-shrink:0}
-.ts-badge.goal-home{background:rgba(68,221,136,.15);color:#44dd88;border:1px solid rgba(68,221,136,.25)}
-.ts-badge.goal-away{background:rgba(100,160,255,.15);color:#6cb4ff;border:1px solid rgba(100,160,255,.25)}
-.ts-badge.event{background:rgba(255,68,68,.12);color:#ff7777;border:1px solid rgba(255,68,68,.2)}
-.ts-score{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;flex-shrink:0}
-.drag-handle{display:flex;align-items:center;justify-content:center;width:20px;height:28px;cursor:grab;color:var(--text-3);font-size:12px;flex-shrink:0;border-radius:4px;transition:color .2s;user-select:none}
-.drag-handle:hover{color:var(--text-2)}
-.drag-handle:active{cursor:grabbing}
-.ts-note{flex:0 0 280px;width:280px;min-width:0;font-size:12px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:3px 6px;color:var(--text-2);font-family:'DM Sans',sans-serif;outline:none;transition:all .2s}
-.ts-note::placeholder{color:var(--text-3)}
-.ts-note:focus{border-bottom-color:rgba(245,197,24,.35)}
-
-/* channels */
-.ch-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
-.ch-row{display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-xs);padding:8px 10px}
-@media(max-width:640px){.ch-row{grid-template-columns:1fr 1fr auto auto}}
-.ch-link{display:flex;align-items:center;justify-content:center;width:30px;height:30px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--text-3);text-decoration:none;font-size:13px;transition:all .2s;flex-shrink:0}
-.ch-link:hover{background:var(--gold-dim);border-color:rgba(245,197,24,.3);color:var(--gold)}
-.ch-link.empty{pointer-events:none;opacity:.25}
-
-/* buttons */
-.btn-add{background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:var(--radius-xs);padding:8px 14px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:5px}
-.btn-add:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
-.btn-add-wrap{display:flex;gap:8px;flex-wrap:wrap}
-.btn-remove{background:rgba(255,68,68,.06);border:1px solid rgba(255,68,68,.15);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#ff6666;transition:all .2s}
-.btn-remove:hover{background:rgba(255,68,68,.15);border-color:rgba(255,68,68,.35)}
-.btn-generate{width:100%;margin-top:8px;background:linear-gradient(135deg,rgba(245,197,24,.9),rgba(245,160,20,.85));border:1px solid rgba(245,197,24,.6);border-radius:var(--radius-sm);padding:16px 28px;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#0a0a0a;cursor:pointer;transition:all .25s;box-shadow:0 4px 30px rgba(245,197,24,.25),inset 0 1px 0 rgba(255,255,255,.25);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.btn-generate:hover{transform:translateY(-2px);box-shadow:0 8px 40px rgba(245,197,24,.4),inset 0 1px 0 rgba(255,255,255,.3)}
-.btn-generate:active{transform:translateY(0)}
-
-/* social */
-.social-locked{display:flex;align-items:center;gap:10px;background:rgba(68,221,136,.05);border:1px solid rgba(68,221,136,.15);border-radius:var(--radius-sm);padding:11px 14px;font-size:13px;color:var(--text-2)}
-.lock-icon{font-size:9px;font-family:'Outfit',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.08em;background:rgba(68,221,136,.15);color:#44dd88;border:1px solid rgba(68,221,136,.25);padding:2px 7px;border-radius:100px;flex-shrink:0}
-
-/* validation banner */
-.validation-banner{display:none;align-items:flex-start;gap:10px;background:rgba(255,68,68,.07);border:1px solid rgba(255,68,68,.2);border-radius:var(--radius-xs);padding:12px 14px;margin-bottom:16px;font-size:13px;color:#ff9999}
-.validation-banner.visible{display:flex}
-.validation-banner ul{list-style:none;display:flex;flex-direction:column;gap:4px}
-.validation-banner li::before{content:'⚠ ';opacity:.7}
-
-/* output */
-.divider{border:none;height:1px;background:linear-gradient(90deg,transparent,var(--glass-border),transparent);margin:28px 0}
-.output-section{display:none}
-.output-section.visible{display:block}
-.output-block{margin-bottom:20px}
-.output-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.output-label{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--gold)}
-.output-right{display:flex;align-items:center;gap:8px}
-.tag-count{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px}
-.tag-ok{background:rgba(68,221,136,.12);color:#44dd88;border:1px solid rgba(68,221,136,.2)}
-.tag-warn{background:rgba(245,197,24,.12);color:var(--gold);border:1px solid var(--gold-dim)}
-.output-text{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);padding:18px;font-size:13px;line-height:1.75;color:var(--text-2);white-space:pre-wrap;word-break:break-word;font-family:'DM Sans',sans-serif;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:border-color .2s}
-.output-text:hover{border-color:rgba(255,255,255,.18)}
-.btn-copy{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 14px;font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);cursor:pointer;transition:all .2s}
-.btn-copy:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
-.btn-copy.copied{border-color:#44dd88;color:#44dd88;background:rgba(68,221,136,.08)}
-.btn-copy-all{background:linear-gradient(135deg,rgba(68,221,136,.15),rgba(68,221,136,.07));border:1px solid rgba(68,221,136,.25);border-radius:8px;padding:8px 18px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#44dd88;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
-.btn-copy-all:hover{background:rgba(68,221,136,.2);border-color:rgba(68,221,136,.4)}
-.btn-copy-all.copied{opacity:.6}
-.copy-all-row{display:flex;justify-content:flex-end;margin-bottom:16px}
-
-.empty-hint{font-size:12px;color:var(--text-3);padding:6px 2px;font-style:italic}
-
-/* main tabs */
-.main-tabs{display:flex;gap:8px;justify-content:center;margin-bottom:28px;flex-wrap:wrap}
-.main-tab{background:var(--glass);backdrop-filter:var(--blur-sm);-webkit-backdrop-filter:var(--blur-sm);border:1px solid var(--glass-border);border-radius:100px;padding:10px 22px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-2);cursor:pointer;transition:all .25s}
-.main-tab:hover{color:var(--text);border-color:var(--glass-border-bright)}
-.main-tab.active{background:linear-gradient(135deg,rgba(245,197,24,.22),rgba(245,197,24,.08));border-color:var(--gold);color:var(--gold);box-shadow:0 0 24px rgba(245,197,24,.18),inset 0 1px 0 rgba(245,197,24,.2)}
-.tab-pane{display:none}
-.tab-pane.active{display:block}
-
-/* streamers list */
-.str-list{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
-.str-row{display:grid;grid-template-columns:auto 1fr auto auto auto auto;gap:10px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-sm);padding:12px 14px;transition:border-color .2s}
-.str-fav{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer;color:var(--text-3);transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.str-fav:hover{color:var(--gold);border-color:rgba(245,197,24,.3)}
-.str-fav.on{color:var(--gold);background:var(--gold-dim);border-color:rgba(245,197,24,.45)}
-.btn-openall{background:linear-gradient(135deg,rgba(255,68,68,.18),rgba(255,68,68,.08));border:1px solid rgba(255,68,68,.3);border-radius:var(--radius-sm);padding:11px 16px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ff8888;cursor:pointer;transition:all .2s;white-space:nowrap}
-.btn-openall:hover{background:rgba(255,68,68,.25);border-color:rgba(255,68,68,.5);color:#ffaaaa}
-.str-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.str-toolbar .btn-add{margin:0}
-.fav-toggle{background:rgba(255,255,255,.04);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:11px 16px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);cursor:pointer;transition:all .2s;white-space:nowrap}
-.fav-toggle:hover{color:var(--text);border-color:var(--glass-border-bright)}
-.fav-toggle.active{background:var(--gold-dim);border-color:var(--gold);color:var(--gold)}
-.str-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);object-fit:cover;flex-shrink:0;font-size:0}
-.str-avatar.fallback{display:flex;align-items:center;justify-content:center;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;color:var(--gold);background:var(--gold-dim)}
-.str-row:hover{border-color:rgba(255,255,255,.15)}
-.str-info{min-width:0;display:flex;flex-direction:column;gap:3px}
-.str-name{font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.str-team{font-size:11px;color:var(--gold);font-family:'Outfit',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
-.str-link{display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text-2);text-decoration:none;font-size:13px;transition:all .2s;flex-shrink:0;font-family:'Outfit',sans-serif;font-weight:700}
-.str-link:hover{background:var(--gold-dim);border-color:rgba(245,197,24,.3);color:var(--gold)}
-.str-link.live{color:#ff7777;border-color:rgba(255,68,68,.2);background:rgba(255,68,68,.06)}
-.str-link.live:hover{background:rgba(255,68,68,.18);border-color:rgba(255,68,68,.45);color:#ffaaaa}
-.str-link.empty{opacity:.25;pointer-events:none}
-.str-search{margin-bottom:14px}
-.str-filter-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.str-empty{text-align:center;padding:30px 16px;color:var(--text-3);font-size:13px;font-style:italic;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:var(--radius-sm)}
-.str-count{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
-.str-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-@media(max-width:600px){.str-form-grid{grid-template-columns:1fr}.str-row{grid-template-columns:auto 1fr auto auto;row-gap:8px}.str-row .str-link,.str-row .btn-remove,.str-row .str-fav{grid-column:auto}}
-
-/* ── Site nav (dark-adapted) ── */
-.site-header{position:sticky;top:0;z-index:200;background:rgba(6,8,16,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08)}
-.nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px;max-width:1200px;margin:0 auto;padding:0 20px}
-.nav-brand{display:flex;align-items:center;gap:8px;font-size:1.15rem;font-weight:700;color:#fff;white-space:nowrap;text-decoration:none}
-.nav-brand .brand-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}
-.nav-brand .brand-fan{color:#F6BE06;font-weight:800}
-.nav-brand .brand-reactions{color:#fff;font-weight:800}
-.nav-brand .brand-fc{color:#F6BE06;font-weight:700;font-size:.85em}
-.nav-links{display:flex;align-items:center;gap:6px}
-.nav-link{padding:6px 14px;border-radius:6px;font-size:.85rem;font-weight:500;color:rgba(255,255,255,.6);transition:all .15s;text-decoration:none}
-.nav-link:hover,.nav-link.active{color:#fff;background:rgba(255,255,255,.08)}
-.nav-toggle{display:none;background:none;border:none;color:#fff;font-size:1.4rem;padding:6px;cursor:pointer}
-@media(max-width:768px){
-  .nav-links{display:none;position:absolute;top:60px;left:0;right:0;flex-direction:column;background:rgba(6,8,16,.95);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;gap:4px}
-  .nav-links.open{display:flex}
-  .nav-toggle{display:block}
-}
-.site-footer-gen{border-top:1px solid rgba(255,255,255,.08);padding:32px 0;margin-top:40px;text-align:center;font-size:.78rem;color:rgba(255,255,255,.3)}
-.site-footer-gen a{color:rgba(255,255,255,.45);text-decoration:none}
-.site-footer-gen a:hover{color:#F6BE06}
-</style>
 </head>
 <body>
-<!-- Site nav -->
+<!-- Header -->
 <header class="site-header">
-  <div class="nav-inner">
+  <div class="container nav-inner">
     <a href="/" class="nav-brand"><img src="/img/logo.png" alt="" class="brand-logo"><span class="brand-fan">Fan</span><span class="brand-reactions">Reactions</span><span class="brand-fc">FC</span></a>
-    <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">&#9776;</button>
-    <nav class="nav-links">
+    <button class="nav-toggle" onclick="document.getElementById('navLinks').classList.toggle('open')">&#9776;</button>
+    <nav class="nav-links" id="navLinks">
       <a href="/" class="nav-link">Home</a>
       <a href="/discover" class="nav-link">Discover</a>
       <a href="/rankings" class="nav-link">Rankings</a>
       <a href="/tools/generator" class="nav-link active">Description Generator</a>
     </nav>
+    <div class="nav-actions"></div>
   </div>
 </header>
 
-<div class="bg"></div>
-<div class="bg-orb bg-orb-1"></div>
-<div class="bg-orb bg-orb-2"></div>
-<div class="bg-orb bg-orb-3"></div>
-
 <!-- Sticky status bar -->
 <div class="status-bar" id="statusBar">
-  <span class="status-label">✓ Content generated</span>
+  <span class="status-label">&#10003; Content generated</span>
   <div class="status-actions">
     <button class="status-btn green" onclick="scrollToOutput()">View Output</button>
     <button class="status-btn" onclick="copyAll(this)">Copy All</button>
@@ -288,48 +38,36 @@ select option{background:#1a1a2e;color:#fff}
   </div>
 </div>
 
-<div class="wrap">
-  <div class="header">
-    <div class="header-badge"><span class="badge-dot"></span>Fan Reactions FC</div>
-    <h1>Description Generator</h1>
-    <p>Title · Description · Tags — ready to paste</p>
-    <div class="header-actions">
-      <button class="btn-new" onclick="confirmReset()">↺ New Video</button>
+<div class="gen-wrap">
+  <div class="gen-header">
+    <h1>Description <span class="accent">Generator</span></h1>
+    <p>Title &middot; Description &middot; Tags &mdash; ready to paste</p>
+    <div class="gen-header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="confirmReset()">&#8634; New Video</button>
     </div>
   </div>
 
-  <!-- Main tabs -->
-  <div class="main-tabs">
-    <button class="main-tab active" id="mainTabGen" onclick="switchMainTab('gen')">⚡ Content Generator</button>
-    <button class="main-tab" id="mainTabStr" onclick="switchMainTab('str')">📡 Streamers DB</button>
-  </div>
-
-  <!-- ════════════════════════════════════════════════════════════════ -->
-  <!-- TAB: GENERATOR                                                  -->
-  <!-- ════════════════════════════════════════════════════════════════ -->
-  <div class="tab-pane active" id="paneGen">
-
   <!-- Validation -->
   <div class="validation-banner" id="validationBanner">
-    <span>⚠</span>
+    <span>!</span>
     <ul id="validationList"></ul>
   </div>
 
   <!-- 1. Type -->
-  <div class="glass-card">
-    <div class="card-title"><span class="step-num">1</span>Video Type</div>
+  <div class="gen-card">
+    <div class="gen-card-title"><span class="step-num">1</span>Video Type</div>
     <div class="type-tabs">
-      <button class="type-tab active" onclick="setType('fan')">⚽ Fan Reactions</button>
-      <button class="type-tab" onclick="setType('mixed')">🤝 Mixed Fans</button>
-      <button class="type-tab" onclick="setType('rivals')">😈 Rivals &amp; Haters</button>
-      <button class="type-tab" onclick="setType('postmatch')">🎙️ Post-Match</button>
-      <button class="type-tab" onclick="setType('transfer')">📰 Signing / Sacking</button>
+      <button class="type-tab active" onclick="setType('fan')">&#9917; Fan Reactions</button>
+      <button class="type-tab" onclick="setType('mixed')">&#129309; Mixed Fans</button>
+      <button class="type-tab" onclick="setType('rivals')">&#128520; Rivals &amp; Haters</button>
+      <button class="type-tab" onclick="setType('postmatch')">&#127908; Post-Match</button>
+      <button class="type-tab" onclick="setType('transfer')">&#128240; Signing / Sacking</button>
     </div>
   </div>
 
   <!-- 2. Match Details -->
-  <div class="glass-card">
-    <div class="card-title"><span class="step-num">2</span>Match Details</div>
+  <div class="gen-card">
+    <div class="gen-card-title"><span class="step-num">2</span>Match Details</div>
     <div class="gap">
       <div class="score-row">
         <div class="score-field"><label class="field-label">Home Team</label><select id="teamA" onchange="onTeamSelect(this);updateGoalLabels();checkScoreSync()"><option value="">Select team...</option></select></div>
@@ -357,7 +95,7 @@ select option{background:#1a1a2e;color:#fff}
       <span id="scoreSyncMsg">Add timestamps for these goals?</span>
       <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
         <button class="btn-sync" id="btnSyncYes" onclick="syncGoalsFromScore()">Auto-add Goals</button>
-        <button class="btn-sync-dismiss" onclick="dismissSync()">✕</button>
+        <button class="btn-sync-dismiss" onclick="dismissSync()">&times;</button>
       </div>
     </div>
 
@@ -366,7 +104,7 @@ select option{background:#1a1a2e;color:#fff}
       <label class="field-label">Emotion / Headline Word</label>
       <div class="emotion-input-row">
         <input type="text" id="emotion" placeholder="Type or pick from grid below..." oninput="onEmotionType()">
-        <button class="btn-ghost" onclick="clearEmotion()">✕ Clear</button>
+        <button class="btn-clear" onclick="clearEmotion()">&times; Clear</button>
       </div>
       <div class="emotion-grid" id="emotionGrid"></div>
     </div>
@@ -377,7 +115,7 @@ select option{background:#1a1a2e;color:#fff}
     </div>
     <div id="transferRow" style="display:none;margin-top:16px">
       <div class="grid2 gap">
-        <div><label class="field-label">Player / Manager Name</label><input type="text" id="transferName" placeholder="e.g. Kylian Mbappé"></div>
+        <div><label class="field-label">Player / Manager Name</label><input type="text" id="transferName" placeholder="e.g. Kylian Mbapp&eacute;"></div>
         <div><label class="field-label">Event Type</label>
           <select id="transferType">
             <option value="signing">Signing</option>
@@ -390,33 +128,33 @@ select option{background:#1a1a2e;color:#fff}
   </div>
 
   <!-- 3. Timestamps -->
-  <div class="glass-card" id="tsCard">
-    <div class="card-title"><span class="step-num">3</span>Timestamps</div>
+  <div class="gen-card" id="tsCard">
+    <div class="gen-card-title"><span class="step-num">3</span>Timestamps</div>
     <div class="ts-intro">
       <div class="ts-time-fixed">00:00</div>
       <div class="ts-label-fixed">Introduction (fixed)</div>
     </div>
     <div id="tsList" class="ts-list"></div>
     <div class="btn-add-wrap">
-      <button class="btn-add" onclick="addGoal('A')">⚽ <span id="goalALabel">Home</span> Goal</button>
-      <button class="btn-add" onclick="addGoal('B')">⚽ <span id="goalBLabel">Away</span> Goal</button>
-      <button class="btn-add" onclick="addEvent('Red Card')">🟥 Red Card</button>
-      <button class="btn-add" onclick="addEvent('VAR Decision')">📺 VAR</button>
-      <button class="btn-add" onclick="addEvent('Penalty')">🎯 Penalty</button>
-      <button class="btn-add" onclick="addCustomEvent()">＋ Custom</button>
+      <button class="btn-add" onclick="addGoal('A')">&#9917; <span id="goalALabel">Home</span> Goal</button>
+      <button class="btn-add" onclick="addGoal('B')">&#9917; <span id="goalBLabel">Away</span> Goal</button>
+      <button class="btn-add" onclick="addEvent('Red Card')">&#128997; Red Card</button>
+      <button class="btn-add" onclick="addEvent('VAR Decision')">&#128250; VAR</button>
+      <button class="btn-add" onclick="addEvent('Penalty')">&#127919; Penalty</button>
+      <button class="btn-add" onclick="addCustomEvent()">+ Custom</button>
     </div>
   </div>
 
   <!-- 4. Channels -->
-  <div class="glass-card">
-    <div class="card-title"><span class="step-num">4</span>Featured YouTube Channels</div>
+  <div class="gen-card">
+    <div class="gen-card-title"><span class="step-num">4</span>Featured YouTube Channels</div>
     <div id="chList" class="ch-list"></div>
-    <button class="btn-add" onclick="addChannel()">＋ Add Channel</button>
+    <button class="btn-add" onclick="addChannel()">+ Add Channel</button>
   </div>
 
   <!-- 5. Social -->
-  <div class="glass-card">
-    <div class="card-title"><span class="step-num">5</span>Social Links</div>
+  <div class="gen-card">
+    <div class="gen-card-title"><span class="step-num">5</span>Social Links</div>
     <div class="grid3">
       <div><label class="field-label">Instagram</label><div class="social-locked"><span class="lock-icon">Locked</span>fanreactionsfc</div></div>
       <div><label class="field-label">TikTok</label><input type="text" id="linkTT" placeholder="Your TikTok URL"></div>
@@ -424,17 +162,17 @@ select option{background:#1a1a2e;color:#fff}
     </div>
   </div>
 
-  <button class="btn-generate" id="btnGenerate" onclick="generate()">⚡ Generate Content</button>
+  <button class="btn-generate" id="btnGenerate" onclick="generate()">&#9889; Generate Content</button>
 
   <!-- Output -->
   <div class="output-section" id="outputSection">
-    <hr class="divider">
+    <hr class="gen-divider">
     <div class="copy-all-row">
-      <button class="btn-copy-all" id="btnCopyAll" onclick="copyAll(this)">⬇ Copy All to Clipboard</button>
+      <button class="btn-copy-all" id="btnCopyAll" onclick="copyAll(this)">&#11015; Copy All to Clipboard</button>
     </div>
     <div class="output-block">
       <div class="output-header">
-        <span class="output-label">📌 Title</span>
+        <span class="output-label">Title</span>
         <div class="output-right">
           <span class="tag-count" id="titleCharCount"></span>
           <button class="btn-copy" onclick="copyField('outTitle',this)">Copy</button>
@@ -444,7 +182,7 @@ select option{background:#1a1a2e;color:#fff}
     </div>
     <div class="output-block">
       <div class="output-header">
-        <span class="output-label">📝 Description</span>
+        <span class="output-label">Description</span>
         <button class="btn-copy" onclick="copyField('outDesc',this)">Copy</button>
       </div>
       <div class="output-text" id="outDesc"></div>
@@ -452,7 +190,7 @@ select option{background:#1a1a2e;color:#fff}
     <div class="output-block">
       <div class="output-header">
         <div class="output-right">
-          <span class="output-label">🏷️ Tags</span>
+          <span class="output-label">Tags</span>
           <span class="tag-count" id="tagCount"></span>
         </div>
         <button class="btn-copy" onclick="copyField('outTags',this)">Copy</button>
@@ -460,121 +198,38 @@ select option{background:#1a1a2e;color:#fff}
       <div class="output-text" id="outTags"></div>
     </div>
   </div>
-
-  </div><!-- /paneGen -->
-
-  <!-- ════════════════════════════════════════════════════════════════ -->
-  <!-- TAB: STREAMERS DB                                               -->
-  <!-- ════════════════════════════════════════════════════════════════ -->
-  <div class="tab-pane" id="paneStr">
-
-    <!-- Auth -->
-    <div class="glass-card" id="strAuthCard">
-      <div class="card-title"><span class="step-num">🔒</span><span id="strAuthTitle">Sign in to manage streamers</span></div>
-      <div id="strAuthSignedOut">
-        <div class="str-form-grid">
-          <div><label class="field-label">Email</label><input type="email" id="authEmail" placeholder="you@example.com"></div>
-          <div><label class="field-label">Password</label><input type="password" id="authPassword" placeholder="••••••••"></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-generate" style="flex:1;min-width:200px" onclick="signIn()">Sign In</button>
-          <button class="btn-add" onclick="signUp()">＋ Create Account</button>
-        </div>
-        <div id="authMsg" style="margin-top:12px;font-size:13px;color:var(--text-3);min-height:18px"></div>
-      </div>
-      <div id="strAuthSignedIn" style="display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <div class="field-label">Signed in as</div>
-          <div id="authUserEmail" style="font-family:'Outfit',sans-serif;font-weight:700;color:var(--gold);font-size:14px"></div>
-        </div>
-        <button class="btn-add" onclick="signOut()">↪ Sign Out</button>
-      </div>
-    </div>
-
-    <div id="strContent" style="display:none">
-
-    <!-- Add form -->
-    <div class="glass-card">
-      <div class="card-title"><span class="step-num">+</span>Add Streamer</div>
-      <div class="str-form-grid">
-        <div>
-          <label class="field-label">Channel URL</label>
-          <input type="text" id="strChannel" placeholder="https://www.youtube.com/@channel">
-        </div>
-        <div>
-          <label class="field-label">League</label>
-          <select id="strLeague" onchange="filterTeamsByLeague()">
-            <option value="">Select league...</option>
-            <option value="Premier League">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</option>
-            <option value="La Liga">🇪🇸 La Liga</option>
-            <option value="Serie A">🇮🇹 Serie A</option>
-            <option value="Bundesliga">🇩🇪 Bundesliga</option>
-            <option value="Ligue 1">🇫🇷 Ligue 1</option>
-          </select>
-        </div>
-        <div>
-          <label class="field-label">Team Supported</label>
-          <select id="strTeam"><option value="">Select team...</option></select>
-        </div>
-      </div>
-      <button class="btn-generate" onclick="addStreamer()">＋ Add Streamer to Database</button>
-    </div>
-
-    <!-- List + filters -->
-    <div class="glass-card">
-      <div class="card-title"><span class="step-num">⌕</span>Streamer Database</div>
-      <div class="str-filter-row">
-        <input type="text" id="strSearch" placeholder="🔎 Search by name..." oninput="renderStreamers()">
-        <select id="strFilterTeam" onchange="renderStreamers()"><option value="">All teams</option></select>
-      </div>
-      <div class="str-toolbar">
-        <button class="fav-toggle" id="favToggle" onclick="toggleFavOnly()">★ Favorites only</button>
-        <button class="btn-openall" onclick="openAllLive()">🔴 Open all LIVE in new tabs</button>
-        <button class="fav-toggle" id="btnCacheAvatars" onclick="cacheMissingAvatars()">🖼 Cache missing avatars</button>
-      </div>
-      <div class="str-count" id="strCount"></div>
-      <div class="str-list" id="strList"></div>
-      <button class="btn-add" onclick="seedStreamers()">⤓ Import from existing channel list</button>
-      <button class="btn-add" onclick="exportStreamers()" style="margin-left:8px">⬇ Export JSON</button>
-      <button class="btn-add" onclick="document.getElementById('strImportFile').click()" style="margin-left:8px">⬆ Import JSON</button>
-      <input type="file" id="strImportFile" accept="application/json" style="display:none" onchange="importStreamers(event)">
-    </div>
-
-    </div><!-- /strContent -->
-  </div><!-- /paneStr -->
 </div>
 
+<!-- Footer -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand"><span style="color:var(--accent)">Fan</span>Reactions<span style="color:var(--accent)">FC</span></div>
+        <div class="footer-desc">The definitive database of football YouTubers across Europe's top 5 leagues. Community-rated, creator-claimed, editorially curated.</div>
+      </div>
+      <div class="footer-col">
+        <h4>Browse</h4>
+        <a href="/discover">All Creators</a>
+        <a href="/rankings">Rankings</a>
+      </div>
+      <div class="footer-col">
+        <h4>Tools</h4>
+        <a href="/tools/generator">Description Generator</a>
+      </div>
+      <div class="footer-col">
+        <h4>FanReactionsFC</h4>
+        <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube Channel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 FanReactionsFC.com</span>
+      <span>Description Generator</span>
+    </div>
+  </div>
+</footer>
+
 <script>
-// ── Channel DB ────────────────────────────────────────────────────────────────
-const CHANNELS={
-  "Arsenal":[{name:"AFTVmedia",url:"https://www.youtube.com/@AFTVmedia"},{name:"CurtisShawTV",url:"https://www.youtube.com/@CurtisShawTV"},{name:"DeludedGooner",url:"https://www.youtube.com/@deludedgooner"},{name:"Denveloper",url:"https://www.youtube.com/@Denveloper"},{name:"SelioTV",url:"https://www.youtube.com/@SelioTV"},{name:"TroopzTV",url:"https://www.youtube.com/@TroopzTV"},{name:"StrictoStrict",url:"https://www.youtube.com/@strictostrict"},{name:"Hughwizzy",url:"https://www.youtube.com/@hughwizzy"},{name:"TAFMedia",url:"https://www.youtube.com/@tafmedia1"},{name:"Jamzor",url:"https://www.youtube.com/@Jamzor/streams"},{name:"SaadsFootballCorner",url:"https://www.youtube.com/@SaadsFootballCorner"},{name:"KvReacts",url:"https://www.youtube.com/@kvreacts5"},{name:"LeeGunner",url:"https://www.youtube.com/@LeeGunner"},{name:"FootballWDaksh",url:"https://www.youtube.com/@FootballWDaksh"}],
-  "Aston Villa":[{name:"ajsTV",url:"https://www.youtube.com/@ajsTVOfficial"},{name:"Kingflipper",url:"https://www.youtube.com/@Kingflipper"},{name:"AVFTS",url:"https://www.youtube.com/@AVFTS1"},{name:"AVFCStatto",url:"https://www.youtube.com/@avfcstatto"},{name:"NoirVillan",url:"https://www.youtube.com/@NOIRVILLAN"},{name:"VillaSince89",url:"https://www.youtube.com/@VillaSince89"}],
-  "Bournemouth":[{name:"CherriesRedArmy",url:"https://www.youtube.com/@cherriesredarmy"}],
-  "Brighton":[{name:"SeagullsSocial",url:"https://www.youtube.com/@SeagullsSocial"}],
-  "Burnley":[{name:"TurfMoorhouseTV",url:"https://www.youtube.com/@TurfMoorhouseTV"}],
-  "Chelsea":[{name:"MatisseArmani",url:"https://www.youtube.com/@matissearmani"},{name:"HarryCFXI",url:"https://www.youtube.com/@harrycfxi"},{name:"TheShootout",url:"https://www.youtube.com/@TheShootout"},{name:"TalkinChelsea",url:"https://www.youtube.com/@TalkinChelsea"},{name:"AnkTV Chelsea",url:"https://www.youtube.com/@anktv-chelsea"},{name:"AlmightyBlues",url:"https://www.youtube.com/@AlmightyBlues"},{name:"TheOtherSideOfTheCoin",url:"https://www.youtube.com/@TheOtherSideOfTheCoin"},{name:"GBFC",url:"https://www.youtube.com/@GBFC"},{name:"YounesTalksFootball",url:"https://www.youtube.com/@YounesTalksFootball"},{name:"UbeTalksFooty",url:"https://www.youtube.com/@ubetalksfooty"},{name:"BlueLionsTV",url:"https://www.youtube.com/@BlueLionsTVNiiNiiFC"},{name:"DrogBABA",url:"https://www.youtube.com/@DrogBABA"},{name:"CFCFanTV",url:"https://www.youtube.com/@CFCFANTV"},{name:"HTPZ",url:"https://www.youtube.com/@HTPZ"},{name:"ElijahFootball",url:"https://www.youtube.com/@elijahfootballpresenter"}],
-  "Crystal Palace":[{name:"BackOfTheNest",url:"https://www.youtube.com/@BackOfTheNest"},{name:"Tristan03",url:"https://www.youtube.com/@tristan_03"}],
-  "Everton":[{name:"FollowEverton",url:"https://www.youtube.com/@FollowEverton"},{name:"RestrictedEFC",url:"https://www.youtube.com/@RestrictedEFC"},{name:"ToffeeTV",url:"https://www.youtube.com/@ToffeeTVEFC/streams"},{name:"EvertonRose",url:"https://www.youtube.com/@evertonrose"},{name:"MisterDroneUK",url:"https://www.youtube.com/@misterdroneuk"}],
-  "Fulham":[{name:"FulhamishPod",url:"https://www.youtube.com/@fulhamishpod"}],
-  "Leeds United":[{name:"OneLeeds1919",url:"https://www.youtube.com/@oneleeds1919"},{name:"JustJoeFootball",url:"https://www.youtube.com/@JUSTJOEFOOTBALLSHOW"},{name:"JTLive",url:"https://www.youtube.com/@JTLive7"},{name:"MatLeeds",url:"https://www.youtube.com/@MatLeeds438"},{name:"LeedsLately",url:"https://www.youtube.com/@LeedsLately"}],
-  "Leicester":[{name:"LeicesterTillIDieTV",url:"https://www.youtube.com/@LeicesterTillIDieTV"},{name:"BlueTintedGlasses",url:"https://www.youtube.com/@BlueTintedGlassesLCFC"},{name:"LeicesterFanTV",url:"https://www.youtube.com/@LeicesterFanTv"},{name:"LeeChappy",url:"https://www.youtube.com/@LeeChappy"}],
-  "Liverpool":[{name:"DonHusam",url:"https://www.youtube.com/@don_husam"},{name:"TheRedmenTV",url:"https://www.youtube.com/@theredmentv"},{name:"AnfieldAgenda",url:"https://www.youtube.com/@AnfieldAgenda"},{name:"LeosGoals",url:"https://www.youtube.com/@LeosGoals"},{name:"TyDenty",url:"https://www.youtube.com/@TyDenty"},{name:"AnfieldIndex",url:"https://www.youtube.com/@AnfieldIndexTV"},{name:"FuIzzy",url:"https://www.youtube.com/@fu_izzy"},{name:"RedsAllezTV",url:"https://www.youtube.com/@redsalleztv"},{name:"PremierLeagueDad",url:"https://www.youtube.com/@PremierLeagueDad"},{name:"TheFootballStorey",url:"https://www.youtube.com/@thefootballstorey"},{name:"AnfieldRoadTV",url:"https://www.youtube.com/@anfieldroadtv"},{name:"TheKopTV",url:"https://www.youtube.com/@TheKopTV"},{name:"AllRedShow",url:"https://www.youtube.com/@AllRedShow"},{name:"NothingButReds",url:"https://www.youtube.com/@NothingButReds"},{name:"NathanConnorTV",url:"https://www.youtube.com/@nathanconnortv"},{name:"FinchStreams",url:"https://www.youtube.com/@FinchStreams/streams"},{name:"TogJamie",url:"https://www.youtube.com/@togjamie"},{name:"LiverpoolChats",url:"https://www.youtube.com/@liverpoolchats"},{name:"LiverpoolJapan",url:"https://www.youtube.com/@liverpooljapan"}],
-  "Luton":[{name:"TBoysTV",url:"https://www.youtube.com/@T_Boys_TV"}],
-  "Man City":[{name:"TypicalCity",url:"https://www.youtube.com/@typicalcity9320"},{name:"ItsLB",url:"https://www.youtube.com/@Its-LB"},{name:"JSGC",url:"https://www.youtube.com/@JSGC171"},{name:"Nobbins",url:"https://www.youtube.com/@Nobbins"},{name:"NathanielKnowsBall",url:"https://www.youtube.com/@NathanielKnowsBall"},{name:"HamzaTalksFootball",url:"https://www.youtube.com/@HamzaTalksFootballMCFC"},{name:"CityUnplugged",url:"https://www.youtube.com/@cityunplugged3618"},{name:"MCFCConnect",url:"https://www.youtube.com/@MCFC_Connect"},{name:"LawrenceTalksFootball",url:"https://www.youtube.com/@LawrenceTalksFootball"},{name:"EsteemedKompany",url:"https://www.youtube.com/@EsteemedKompany"},{name:"CityXtra",url:"https://www.youtube.com/@CityXtra"}],
-  "Man United":[{name:"UnitedStand",url:"https://www.youtube.com/@UnitedStand"},{name:"FlyingPigUnited",url:"https://www.youtube.com/@FlyingPigUnited"},{name:"SaeedTV",url:"https://www.youtube.com/@SaeedTV_"},{name:"UnitedCommunity",url:"https://www.youtube.com/@unitedcommunitychannel"},{name:"UnitedViewTV",url:"https://www.youtube.com/@UnitedViewTV"},{name:"KGRecklessSport",url:"https://www.youtube.com/@KGRecklessSport"},{name:"TheCasualFan",url:"https://www.youtube.com/@TheCasual_Fan"},{name:"HollyCashin",url:"https://www.youtube.com/@HollyCashinMUFC"},{name:"RedUnitedTV",url:"https://www.youtube.com/@RedUnitedTV"},{name:"FullTimeDevils",url:"https://www.youtube.com/@FullTimeDevils"},{name:"RantsNBants",url:"https://www.youtube.com/@RantsNBants"},{name:"UCATTFC",url:"https://www.youtube.com/@UCATTFC"},{name:"RNADec",url:"https://www.youtube.com/@RNA_Dec"},{name:"Gamst",url:"https://www.youtube.com/@gamst6217"},{name:"MusseMagasin",url:"https://www.youtube.com/@mussesmagasin4894"},{name:"GoodVibesJohn",url:"https://www.youtube.com/@GoodVibesJohn"},{name:"TheUnitedWave",url:"https://www.youtube.com/@theunitedwave"}],
-  "Newcastle":[{name:"TheToonReview",url:"https://www.youtube.com/@TheToonReview"},{name:"NUFCTalkTV",url:"https://www.youtube.com/@NUFCTalkTV"},{name:"GeordieJosh",url:"https://www.youtube.com/@Geordiejosh_"},{name:"ThroughBlackAndWhiteEyes",url:"https://www.youtube.com/@throughblackandwhiteeyes"},{name:"TheKickOff",url:"https://www.youtube.com/@TheKickOff"},{name:"GeordieDreadTV",url:"https://www.youtube.com/@GeordieDreadTV"},{name:"LoadedMagnUFC",url:"https://www.youtube.com/@LOADEDMAGNUFC"},{name:"GallowgateShots",url:"https://www.youtube.com/@GallowgateShots"},{name:"CashTalksFootball",url:"https://www.youtube.com/@cashtalksfootball1013"}],
-  "Nottm Forest":[{name:"ForestFanTV",url:"https://www.youtube.com/@ForestFanTV"}],
-  "Sheffield Utd":[{name:"SheffUnitedWay",url:"https://www.youtube.com/@SheffUnitedWay"}],
-  "Tottenham":[{name:"IrishHotspur",url:"https://www.youtube.com/@IrishHotspur"},{name:"ExpressionsOozing",url:"https://www.youtube.com/ExpressionsOozing"},{name:"WeAreTottenhamTV",url:"https://www.youtube.com/WeAreTottenhamTV"},{name:"FuadCadani",url:"https://www.youtube.com/FuadCadani"},{name:"LeesStarTV",url:"https://www.youtube.com/leestartv"},{name:"Yummy2",url:"https://www.youtube.com/twitch_yummy_2"},{name:"JacobUSofA",url:"https://www.youtube.com/@Jacob_USofA"},{name:"HotspurHippie",url:"https://www.youtube.com/hotspurhippie"},{name:"TheOnsideBanjara",url:"https://www.youtube.com/@TheOnsideBanjara"},{name:"DejiSpurs",url:"https://www.youtube.com/@dejispurs"},{name:"TottenhamAwayTV",url:"https://www.youtube.com/TottenhamAwayTV"},{name:"CanadianDoseOfSpurs",url:"https://www.youtube.com/@CDOSpurs"},{name:"HenryTalksFootball",url:"https://www.youtube.com/@HenryTalksFootball"},{name:"FootballHeritageTV",url:"https://www.youtube.com/FootballHeritageTV"}],
-  "West Ham":[{name:"E20ZoneTV",url:"https://www.youtube.com/@E20ZoneTv"},{name:"WestHamNetwork",url:"https://www.youtube.com/@WestHamNetwork"},{name:"HammersChat",url:"https://www.youtube.com/@HammersChat"},{name:"WestHamFanTV",url:"https://www.youtube.com/@WESTHAMFANTV"},{name:"JPWHU",url:"https://www.youtube.com/@JPWHUTV"}],
-  "Wolves":[{name:"WolfpackWWFC",url:"https://www.youtube.com/@wolfpackwwfc"}],
-  "Multi-Club / Other":[{name:"TheBig6ix",url:"https://www.youtube.com/@TheBig6ix"},{name:"TheClubLive",url:"https://www.youtube.com/@theclublive"},{name:"PitchSidePod",url:"https://www.youtube.com/@PitchSidePod"},{name:"OnTheBall",url:"https://www.youtube.com/@OnTheBall2023"},{name:"ThatsFootball",url:"https://www.youtube.com/@thatsfootball"},{name:"NeverAFoul",url:"https://www.youtube.com/@NeverAFoul"},{name:"BarcaBoy",url:"https://www.youtube.com/@BarcaBoy"}]
-};
-
-// ── Teams dropdown ───────────────────────────────────────────────────────────
-const TEAMS=Object.keys(CHANNELS).filter(t=>t!=='Multi-Club / Other').sort();
-const customTeams=[];
-
 // ── League → Teams mapping ──────────────────────────────────────────────────
 const LEAGUE_TEAMS={
   'Premier League':['Arsenal','Aston Villa','Bournemouth','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Ipswich','Leeds United','Leicester','Liverpool','Luton','Man City','Man United','Newcastle','Nottm Forest','Sheffield Utd','Southampton','Tottenham','West Ham','Wolves'],
@@ -584,54 +239,14 @@ const LEAGUE_TEAMS={
   'Ligue 1':['Angers','Auxerre','Brest','Le Havre','Lens','Lille','Lyon','Marseille','Monaco','Montpellier','Nantes','Nice','PSG','Reims','Rennes','Saint-Etienne','Strasbourg','Toulouse']
 };
 
-function filterTeamsByLeague(){
-  const league=document.getElementById('strLeague').value;
-  const strTeam=document.getElementById('strTeam');
-  if(!strTeam) return;
-  let teams;
-  if(league&&LEAGUE_TEAMS[league]){
-    teams=LEAGUE_TEAMS[league];
-  } else {
-    // Show all teams from all leagues
-    teams=[...new Set(Object.values(LEAGUE_TEAMS).flat(),...TEAMS,...customTeams)].sort();
-  }
-  const opts=teams.map(t=>`<option value="${t}">${t}</option>`).join('')+`<option value="__add__">＋ Add team…</option>`;
-  strTeam.innerHTML=`<option value="">Select team...</option>`+opts;
-}
-function buildTeamOptions(){
-  const allLeagueTeams=Object.values(LEAGUE_TEAMS).flat();
-  const all=[...new Set([...TEAMS,...allLeagueTeams,...customTeams])].sort();
-  return all.map(t=>`<option value="${t}">${t}</option>`).join('')+`<option value="__add__">＋ Add team…</option>`;
-}
-function populateTeamDropdowns(){
-  const opts=buildTeamOptions();
-  ['teamA','teamB','rivalTeam'].forEach(id=>{
-    const sel=document.getElementById(id); if(!sel) return;
-    const cur=sel.value;
-    sel.innerHTML=`<option value="">Select team...</option>`+opts;
-    if(cur&&cur!=='__add__') sel.value=cur;
-  });
-}
-function onTeamSelect(sel){
-  if(sel.value!=='__add__') return;
-  const name=prompt('Enter team name:');
-  if(name&&name.trim()){
-    const t=name.trim();
-    if(!TEAMS.includes(t)&&!customTeams.includes(t)) customTeams.push(t);
-    populateTeamDropdowns();
-    sel.value=t;
-  } else {
-    sel.value='';
-  }
-  // fire change-dependent updates
-  if(sel.id==='teamA'||sel.id==='teamB'){updateGoalLabels();checkScoreSync();}
-}
+const TEAMS=[...new Set(Object.values(LEAGUE_TEAMS).flat())].sort();
+const customTeams=[];
 
 const EMOTIONS=[
-  {label:"Anger / Frustration",words:["FUMING 😡","LIVID 🤬","OUTRAGED 😤","INFURIATED 🔥","FURIOUS 😠","ANNOYED 😒","INCENSED 💢","FRUSTRATED 😣","BITTER 😾","MIFFED 😤"]},
-  {label:"Disappointment / Sadness",words:["GUTTED 😞","HEARTBROKEN 💔","CRESTFALLEN 😔","DEJECTED 😟","MISERABLE 😩","DOWNCAST 😓","DESPONDENT 😖","WOEFUL 😭","MELANCHOLY 😢","RESIGNED 🫠"]},
-  {label:"Happiness / Joy",words:["ELATED 😁","EUPHORIC 🥳","JUBILANT 🎉","OVERJOYED 😆","THRILLED 😃","TRIUMPHANT 🏆","ECSTATIC 🤩","CHEERFUL 😄","SATISFIED 😊","RELIEVED 😌"]},
-  {label:"Disbelief / Surprise",words:["STUNNED 😳","SPEECHLESS 😶","SHOCKED 😱","FLABBERGASTED 🤯","DUMBFOUNDED 🫨","GOBSMACKED 😲","BAFFLED 😵","BEWILDERED 😕","DAZED 🤔","OVERCOME 😧"]}
+  {label:"Anger / Frustration",words:["FUMING \u{1F621}","LIVID \u{1F92C}","OUTRAGED \u{1F624}","INFURIATED \u{1F525}","FURIOUS \u{1F620}","ANNOYED \u{1F612}","INCENSED \u{1F4A2}","FRUSTRATED \u{1F623}","BITTER \u{1F63E}","MIFFED \u{1F624}"]},
+  {label:"Disappointment / Sadness",words:["GUTTED \u{1F61E}","HEARTBROKEN \u{1F494}","CRESTFALLEN \u{1F614}","DEJECTED \u{1F61F}","MISERABLE \u{1F629}","DOWNCAST \u{1F613}","DESPONDENT \u{1F616}","WOEFUL \u{1F62D}","MELANCHOLY \u{1F622}","RESIGNED \u{1FAE0}"]},
+  {label:"Happiness / Joy",words:["ELATED \u{1F601}","EUPHORIC \u{1F973}","JUBILANT \u{1F389}","OVERJOYED \u{1F606}","THRILLED \u{1F603}","TRIUMPHANT \u{1F3C6}","ECSTATIC \u{1F929}","CHEERFUL \u{1F604}","SATISFIED \u{1F60A}","RELIEVED \u{1F60C}"]},
+  {label:"Disbelief / Surprise",words:["STUNNED \u{1F633}","SPEECHLESS \u{1F636}","SHOCKED \u{1F631}","FLABBERGASTED \u{1F92F}","DUMBFOUNDED \u{1FAE8}","GOBSMACKED \u{1F632}","BAFFLED \u{1F635}","BEWILDERED \u{1F615}","DAZED \u{1F914}","OVERCOME \u{1F627}"]}
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -640,43 +255,84 @@ const tsData=[], chData=[];
 let syncDismissed=false;
 const FIXED_IG='https://www.instagram.com/fanreactionsfc/';
 const FIXED_X='https://x.com/FanReactionsFC';
-const PROMO_BLOCK='👕 Grab your kit with an exclusive 8% discount — use code FRFC at checkout: https://www.okayjersey.com\n🎨 Get your custom LINEUP BUILDER stream layout here: https://www.stream-builder.co.uk/?referral=FanReactionsFC';
+const PROMO_BLOCK='\u{1F455} Grab your kit with an exclusive 8% discount \u2014 use code FRFC at checkout: https://www.okayjersey.com\n\u{1F3A8} Get your custom LINEUP BUILDER stream layout here: https://www.stream-builder.co.uk/?referral=FanReactionsFC';
+
+// ── Supabase (read-only for channel data) ─────────────────────────────────────
+const SUPABASE_URL='https://dsxijgrpxsfywxuffbmt.supabase.co';
+const SUPABASE_KEY='sb_publishable_iq6Dv3b9IYfNktis7WeZ-g_y7_DV0gm';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let streamers=[];
+
+async function loadStreamers(){
+  try{
+    const {data,error}=await sb.from('frfc_streamers').select('id,name,team,channel_url,live_url').order('team').order('name');
+    if(error){console.error(error);streamers=[];return;}
+    streamers=data.map(r=>({id:r.id,name:r.name,team:r.team,channel:r.channel_url||'',live:r.live_url||''}));
+    refreshChannelRows();
+  }catch(e){console.error('loadStreamers:',e);streamers=[];}
+}
+
+// ── Teams dropdown ─────────────────────────────────────────────────────────────
+function buildTeamOptions(){
+  const dbTeams=streamers.map(s=>s.team).filter(Boolean);
+  const all=[...new Set([...TEAMS,...dbTeams,...customTeams])].sort();
+  return all.map(t=>'<option value="'+t+'">'+t+'</option>').join('')+'<option value="__add__">+ Add team\u2026</option>';
+}
+function populateTeamDropdowns(){
+  const opts=buildTeamOptions();
+  ['teamA','teamB','rivalTeam'].forEach(function(id){
+    var sel=document.getElementById(id); if(!sel) return;
+    var cur=sel.value;
+    sel.innerHTML='<option value="">Select team...</option>'+opts;
+    if(cur&&cur!=='__add__') sel.value=cur;
+  });
+}
+function onTeamSelect(sel){
+  if(sel.value!=='__add__') return;
+  var name=prompt('Enter team name:');
+  if(name&&name.trim()){
+    var t=name.trim();
+    if(!TEAMS.includes(t)&&!customTeams.includes(t)) customTeams.push(t);
+    populateTeamDropdowns();
+    sel.value=t;
+  } else { sel.value=''; }
+  if(sel.id==='teamA'||sel.id==='teamB'){updateGoalLabels();checkScoreSync();}
+}
 
 // ── Competition auto-select ───────────────────────────────────────────────────
 function autoSelectCompetition(){
-  const day=new Date().getDay(); // 0=Sun,1=Mon,...,6=Sat
-  const sel=document.getElementById('competition');
-  if(day===2||day===3) sel.value='Champions League';       // Tue/Wed
-  else if(day===4||day===0) sel.value='Europa League';     // Thu/Sun
+  var day=new Date().getDay();
+  var sel=document.getElementById('competition');
+  if(day===2||day===3) sel.value='Champions League';
+  else if(day===4||day===0) sel.value='Europa League';
   else sel.value='Premier League';
 }
 
 // ── Emotions ──────────────────────────────────────────────────────────────────
 function renderEmotions(){
-  document.getElementById('emotionGrid').innerHTML=EMOTIONS.map(cat=>`
-    <div class="emotion-cat">
-      <div class="emotion-cat-title">${cat.label}</div>
-      <div class="emotion-words">${cat.words.map(w=>`<button class="etag" onclick="pickEmotion(this,'${w.replace(/'/g,"&#39;")}')">${w}</button>`).join('')}</div>
-    </div>`).join('');
+  document.getElementById('emotionGrid').innerHTML=EMOTIONS.map(function(cat){
+    return '<div class="emotion-cat"><div class="emotion-cat-title">'+cat.label+'</div><div class="emotion-words">'+cat.words.map(function(w){
+      return '<button class="etag" onclick="pickEmotion(this,\''+w.replace(/'/g,"&#39;")+'\')">'+w+'</button>';
+    }).join('')+'</div></div>';
+  }).join('');
 }
 function pickEmotion(el,w){
-  document.querySelectorAll('.etag').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.etag').forEach(function(e){e.classList.remove('active');});
   el.classList.add('active');
   document.getElementById('emotion').value=w;
 }
 function clearEmotion(){
-  document.querySelectorAll('.etag').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.etag').forEach(function(e){e.classList.remove('active');});
   document.getElementById('emotion').value='';
 }
 function onEmotionType(){
-  // If user types manually, deactivate all pill highlights
-  document.querySelectorAll('.etag').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.etag').forEach(function(e){e.classList.remove('active');});
 }
 
 // ── Type ──────────────────────────────────────────────────────────────────────
 function setType(t){
   videoType=t;
-  document.querySelectorAll('.type-tab').forEach((el,i)=>el.classList.toggle('active',['fan','mixed','rivals','postmatch','transfer'][i]===t));
+  document.querySelectorAll('.type-tab').forEach(function(el,i){el.classList.toggle('active',['fan','mixed','rivals','postmatch','transfer'][i]===t);});
   document.getElementById('rivalRow').style.display   =t==='rivals'  ?'block':'none';
   document.getElementById('transferRow').style.display=t==='transfer'?'block':'none';
   document.getElementById('tsCard').style.display     =t==='transfer'?'none' :'block';
@@ -684,44 +340,38 @@ function setType(t){
 
 // ── Goal labels ───────────────────────────────────────────────────────────────
 function updateGoalLabels(){
-  const a=document.getElementById('teamA').value||'Home';
-  const b=document.getElementById('teamB').value||'Away';
+  var a=document.getElementById('teamA').value||'Home';
+  var b=document.getElementById('teamB').value||'Away';
   document.getElementById('goalALabel').textContent=a;
   document.getElementById('goalBLabel').textContent=b;
-  document.querySelectorAll('[data-lteam]').forEach(el=>{
+  document.querySelectorAll('[data-lteam]').forEach(function(el){
     el.textContent=(el.dataset.lteam==='A'?a:b)+' Goal';
     el.className='ts-badge '+(el.dataset.lteam==='A'?'goal-home':'goal-away');
   });
-  document.querySelectorAll('.ts-score').forEach(el=>el.textContent=`${a} ${el.dataset.hs}-${el.dataset.as} ${b}`);
+  document.querySelectorAll('.ts-score').forEach(function(el){el.textContent=a+' '+el.dataset.hs+'-'+el.dataset.as+' '+b;});
 }
 
 // ── Score sync ────────────────────────────────────────────────────────────────
 function checkScoreSync(){
   if(syncDismissed) return;
-  const sA=parseInt(document.getElementById('scoreA').value)||0;
-  const sB=parseInt(document.getElementById('scoreB').value)||0;
-  const totalScoreGoals=sA+sB;
-  const existingGoals=tsData.filter(t=>t.type==='goal').length;
-  const diff=totalScoreGoals-existingGoals;
-  const banner=document.getElementById('scoreSyncBanner');
+  var sA=parseInt(document.getElementById('scoreA').value)||0;
+  var sB=parseInt(document.getElementById('scoreB').value)||0;
+  var totalScoreGoals=sA+sB;
+  var existingGoals=tsData.filter(function(t){return t.type==='goal';}).length;
+  var diff=totalScoreGoals-existingGoals;
+  var banner=document.getElementById('scoreSyncBanner');
   if(diff>0&&totalScoreGoals>0){
-    const tA=document.getElementById('teamA').value||'Home';
-    const tB=document.getElementById('teamB').value||'Away';
-    document.getElementById('scoreSyncMsg').textContent=`Score shows ${sA}-${sB} (${diff} goal${diff>1?'s':''} missing timestamps). Auto-add them?`;
+    document.getElementById('scoreSyncMsg').textContent='Score shows '+sA+'-'+sB+' ('+diff+' goal'+(diff>1?'s':'')+' missing timestamps). Auto-add them?';
     banner.classList.add('visible');
-  } else {
-    banner.classList.remove('visible');
-  }
+  } else { banner.classList.remove('visible'); }
 }
 function syncGoalsFromScore(){
-  const sA=parseInt(document.getElementById('scoreA').value)||0;
-  const sB=parseInt(document.getElementById('scoreB').value)||0;
-  const existingA=tsData.filter(t=>t.type==='goal'&&t.team==='A').length;
-  const existingB=tsData.filter(t=>t.type==='goal'&&t.team==='B').length;
-  const addA=Math.max(0,sA-existingA);
-  const addB=Math.max(0,sB-existingB);
-  for(let i=0;i<addA;i++) addGoal('A');
-  for(let i=0;i<addB;i++) addGoal('B');
+  var sA=parseInt(document.getElementById('scoreA').value)||0;
+  var sB=parseInt(document.getElementById('scoreB').value)||0;
+  var existA=tsData.filter(function(t){return t.type==='goal'&&t.team==='A';}).length;
+  var existB=tsData.filter(function(t){return t.type==='goal'&&t.team==='B';}).length;
+  for(var i=0;i<Math.max(0,sA-existA);i++) addGoal('A');
+  for(var i=0;i<Math.max(0,sB-existB);i++) addGoal('B');
   document.getElementById('scoreSyncBanner').classList.remove('visible');
   syncDismissed=true;
 }
@@ -730,154 +380,131 @@ function dismissSync(){
   syncDismissed=true;
 }
 
-// ── Timestamps (append-only) ──────────────────────────────────────────────────
+// ── Timestamps ────────────────────────────────────────────────────────────────
 function addGoal(team){
   if(team==='A') homeGoals++; else awayGoals++;
-  const id=++counter, first=tsData.length===0;
-  tsData.push({id,type:'goal',team,hs:homeGoals,as:awayGoals,first});
+  var id=++counter, first=tsData.length===0;
+  tsData.push({id:id,type:'goal',team:team,hs:homeGoals,as:awayGoals,first:first});
   _appendTs(tsData[tsData.length-1]);
   checkScoreSync();
 }
 function addEvent(label){
-  const id=++counter, first=tsData.length===0;
-  tsData.push({id,type:'event',label,first});
+  var id=++counter, first=tsData.length===0;
+  tsData.push({id:id,type:'event',label:label,first:first});
   _appendTs(tsData[tsData.length-1]);
 }
 function addCustomEvent(){
-  const label=prompt('Event name (e.g. "Penalty miss"):');
+  var label=prompt('Event name (e.g. "Penalty miss"):');
   if(label) addEvent(label);
 }
 function _appendTs(ts){
-  const list=document.getElementById('tsList');
-  const hint=list.querySelector('.empty-hint'); if(hint) hint.remove();
-  const a=document.getElementById('teamA').value||'Home';
-  const b=document.getElementById('teamB').value||'Away';
-  const ph='00:00';
-  const defaultVal=ts.first?'00:26':'';
-  const goalClass=ts.type==='goal'?(ts.team==='A'?'goal-home':'goal-away'):'event';
-  const div=document.createElement('div');
+  var list=document.getElementById('tsList');
+  var hint=list.querySelector('.empty-hint'); if(hint) hint.remove();
+  var a=document.getElementById('teamA').value||'Home';
+  var b=document.getElementById('teamB').value||'Away';
+  var defaultVal=ts.first?'00:26':'';
+  var goalClass=ts.type==='goal'?(ts.team==='A'?'goal-home':'goal-away'):'event';
+  var div=document.createElement('div');
   div.className='ts-row'; div.dataset.tsid=ts.id;
   div.draggable=true;
-  const inner=ts.type==='goal'
-    ?`<span class="ts-badge ${goalClass}" data-lteam="${ts.team}">${ts.team==='A'?a:b} Goal</span>
-      <span class="ts-score" data-hs="${ts.hs}" data-as="${ts.as}">${a} ${ts.hs}-${ts.as} ${b}</span>
-      <input type="text" placeholder="…" class="ts-note" data-id="${ts.id}">`
-    :`<span class="ts-badge event">${ts.label}</span>
-      <input type="text" placeholder="…" class="ts-note" data-id="${ts.id}">`;
-  div.innerHTML=`
-    <input type="text" placeholder="${ph}" value="${defaultVal}" class="ts-time-input" data-id="${ts.id}" oninput="formatTimeInput(this)" onblur="onTimeBlur(this)" maxlength="5">
-    <div class="ts-inner">${inner}</div>
-    <div class="drag-handle" title="Drag to reorder">⠿</div>
-    <button class="btn-remove" onclick="removeTs(${ts.id})">×</button>`;
-  // Drag events
+  var inner=ts.type==='goal'
+    ?'<span class="ts-badge '+goalClass+'" data-lteam="'+ts.team+'">'+(ts.team==='A'?a:b)+' Goal</span><span class="ts-score" data-hs="'+ts.hs+'" data-as="'+ts.as+'">'+a+' '+ts.hs+'-'+ts.as+' '+b+'</span><input type="text" placeholder="\u2026" class="ts-note" data-id="'+ts.id+'">'
+    :'<span class="ts-badge event">'+ts.label+'</span><input type="text" placeholder="\u2026" class="ts-note" data-id="'+ts.id+'">';
+  div.innerHTML='<input type="text" placeholder="00:00" value="'+defaultVal+'" class="ts-time-input" data-id="'+ts.id+'" oninput="formatTimeInput(this)" onblur="onTimeBlur(this)" maxlength="5"><div class="ts-inner">'+inner+'</div><div class="drag-handle" title="Drag to reorder">\u2807</div><button class="btn-remove" onclick="removeTs('+ts.id+')">&times;</button>';
   div.addEventListener('dragstart',onDragStart);
   div.addEventListener('dragover',onDragOver);
   div.addEventListener('drop',onDrop);
   div.addEventListener('dragend',onDragEnd);
   list.appendChild(div);
-  // Auto-sort by time if already populated
   autoSortTimestamps();
 }
 function removeTs(id){
-  const idx=tsData.findIndex(t=>t.id===id); if(idx===-1)return;
+  var idx=tsData.findIndex(function(t){return t.id===id;}); if(idx===-1) return;
   tsData.splice(idx,1);
-  document.querySelector(`.ts-row[data-tsid="${id}"]`)?.remove();
+  var el=document.querySelector('.ts-row[data-tsid="'+id+'"]'); if(el) el.remove();
   homeGoals=0;awayGoals=0;
-  tsData.forEach((t,i)=>{if(t.type==='goal'){if(t.team==='A')homeGoals++;else awayGoals++;t.hs=homeGoals;t.as=awayGoals;}t.first=(i===0);});
+  tsData.forEach(function(t,i){if(t.type==='goal'){if(t.team==='A')homeGoals++;else awayGoals++;t.hs=homeGoals;t.as=awayGoals;}t.first=(i===0);});
   updateGoalLabels();
-  if(!tsData.length) document.getElementById('tsList').innerHTML='<div class="empty-hint">No timestamps yet — add goals and events below.</div>';
+  if(!tsData.length) document.getElementById('tsList').innerHTML='<div class="empty-hint">No timestamps yet \u2014 add goals and events below.</div>';
   syncDismissed=false; checkScoreSync();
 }
 
-// ── Channels (append-only) ────────────────────────────────────────────────────
-function dbChannelsByTeam(){
-  const m={};
-  if(Array.isArray(streamers)&&streamers.length){
-    streamers.forEach(s=>{
-      if(!s.team||!s.channel) return;
-      (m[s.team]=m[s.team]||[]).push({name:s.name,url:s.channel});
-    });
-  }
-  // Fallback to built-in CHANNELS for any team missing in DB
-  Object.entries(CHANNELS).forEach(([t,arr])=>{ if(!m[t]) m[t]=arr.slice(); });
+// ── Channels ──────────────────────────────────────────────────────────────────
+function channelsByTeam(){
+  var m={};
+  streamers.forEach(function(s){
+    if(!s.team||!s.channel) return;
+    (m[s.team]=m[s.team]||[]).push({name:s.name,url:s.channel});
+  });
   return m;
 }
 function addChannel(){
-  const id=++counter; chData.push({id}); _appendCh(id);
+  var id=++counter; chData.push({id:id}); _appendCh(id);
 }
 function _appendCh(id){
-  const list=document.getElementById('chList');
-  const hint=list.querySelector('.empty-hint'); if(hint) hint.remove();
-  const channelsMap=dbChannelsByTeam();
-  const teamOpts=Object.keys(channelsMap).sort().map(t=>`<option value="${t}">${t}</option>`).join('');
-  const div=document.createElement('div');
+  var list=document.getElementById('chList');
+  var hint=list.querySelector('.empty-hint'); if(hint) hint.remove();
+  var map=channelsByTeam();
+  var teamOpts=Object.keys(map).sort().map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('');
+  var div=document.createElement('div');
   div.className='ch-row'; div.dataset.chid=id;
-  div.innerHTML=`
-    <select class="ch-team" data-id="${id}" onchange="onTeamChange(this,${id})">
-      <option value="">Select team...</option>${teamOpts}
-    </select>
-    <select class="ch-chan" data-id="${id}" onchange="onChanChange(this,${id})">
-      <option value="">— pick team first —</option>
-    </select>
-    <a href="#" class="ch-link empty" id="chLink${id}" target="_blank" rel="noopener" title="Open channel">↗</a>
-    <button class="btn-remove" onclick="removeChannel(${id})">×</button>`;
+  div.innerHTML='<select class="ch-team" data-id="'+id+'" onchange="onTeamChange(this,'+id+')"><option value="">Select team...</option>'+teamOpts+'</select><select class="ch-chan" data-id="'+id+'" onchange="onChanChange(this,'+id+')"><option value="">\u2014 pick team first \u2014</option></select><a href="#" class="ch-link empty" id="chLink'+id+'" target="_blank" rel="noopener" title="Open channel">\u2197</a><button class="btn-remove" onclick="removeChannel('+id+')">&times;</button>';
   list.appendChild(div);
 }
 function removeChannel(id){
-  chData.splice(chData.findIndex(c=>c.id===id),1);
-  document.querySelector(`.ch-row[data-chid="${id}"]`)?.remove();
+  chData.splice(chData.findIndex(function(c){return c.id===id;}),1);
+  var el=document.querySelector('.ch-row[data-chid="'+id+'"]'); if(el) el.remove();
   if(!chData.length) document.getElementById('chList').innerHTML='<div class="empty-hint">No channels added yet.</div>';
 }
 function onTeamChange(sel,id){
-  const t=sel.value, ch=document.querySelector(`.ch-chan[data-id="${id}"]`);
-  const map=dbChannelsByTeam();
-  if(!t||!map[t]){ch.innerHTML='<option value="">— pick team first —</option>';updateChLink(id,'');return;}
-  const sorted=map[t].slice().sort((a,b)=>a.name.localeCompare(b.name));
-  ch.innerHTML='<option value="">Select channel...</option>'+sorted.map(c=>`<option value="${c.url}">${c.name}</option>`).join('');
+  var t=sel.value, ch=document.querySelector('.ch-chan[data-id="'+id+'"]');
+  var map=channelsByTeam();
+  if(!t||!map[t]){ch.innerHTML='<option value="">\u2014 pick team first \u2014</option>';updateChLink(id,'');return;}
+  var sorted=map[t].slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  ch.innerHTML='<option value="">Select channel...</option>'+sorted.map(function(c){return '<option value="'+c.url+'">'+c.name+'</option>';}).join('');
   updateChLink(id,'');
 }
-// Refresh team/channel dropdowns of existing rows after streamers load
 function refreshChannelRows(){
-  const map=dbChannelsByTeam();
-  const teamOpts=Object.keys(map).sort().map(t=>`<option value="${t}">${t}</option>`).join('');
-  document.querySelectorAll('.ch-row').forEach(row=>{
-    const teamSel=row.querySelector('.ch-team');
-    const chanSel=row.querySelector('.ch-chan');
+  var map=channelsByTeam();
+  var teamOpts=Object.keys(map).sort().map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('');
+  document.querySelectorAll('.ch-row').forEach(function(row){
+    var teamSel=row.querySelector('.ch-team');
+    var chanSel=row.querySelector('.ch-chan');
     if(!teamSel||!chanSel) return;
-    const curTeam=teamSel.value, curChan=chanSel.value;
+    var curTeam=teamSel.value, curChan=chanSel.value;
     teamSel.innerHTML='<option value="">Select team...</option>'+teamOpts;
     teamSel.value=curTeam;
     if(curTeam&&map[curTeam]){
-      const sorted=map[curTeam].slice().sort((a,b)=>a.name.localeCompare(b.name));
-      chanSel.innerHTML='<option value="">Select channel...</option>'+sorted.map(c=>`<option value="${c.url}">${c.name}</option>`).join('');
+      var sorted=map[curTeam].slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+      chanSel.innerHTML='<option value="">Select channel...</option>'+sorted.map(function(c){return '<option value="'+c.url+'">'+c.name+'</option>';}).join('');
       chanSel.value=curChan;
     }
   });
 }
 function onChanChange(sel,id){updateChLink(id,sel.value);}
 function updateChLink(id,url){
-  const link=document.getElementById('chLink'+id);
+  var link=document.getElementById('chLink'+id);
   if(!link) return;
   if(url){link.href=url;link.classList.remove('empty');}
   else{link.href='#';link.classList.add('empty');}
 }
-function chName(id){const s=document.querySelector(`.ch-chan[data-id="${id}"]`);return s?s.options[s.selectedIndex]?.text||'':'';}
-function chUrl(id){return document.querySelector(`.ch-chan[data-id="${id}"]`)?.value||'';}
+function chName(id){var s=document.querySelector('.ch-chan[data-id="'+id+'"]');return s?s.options[s.selectedIndex]?.text||'':'';}
+function chUrl(id){return document.querySelector('.ch-chan[data-id="'+id+'"]')?.value||'';}
 
 // ── Tags ──────────────────────────────────────────────────────────────────────
-function buildTags(list){const out=[];let len=0;for(const t of list){const s=t.trim();if(!s)continue;const add=out.length===0?s.length:s.length+2;if(len+add>500)break;out.push(s);len+=add;}return out.join(', ');}
+function buildTags(list){var out=[],len=0;for(var i=0;i<list.length;i++){var s=list[i].trim();if(!s)continue;var add=out.length===0?s.length:s.length+2;if(len+add>500)break;out.push(s);len+=add;}return out.join(', ');}
 function plainEmotion(e){return e.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu,'').trim();}
 
 // ── Validation ────────────────────────────────────────────────────────────────
 function validate(){
-  const errors=[];
+  var errors=[];
   if(!document.getElementById('teamA').value.trim()) errors.push('Home team name is missing');
   if(!document.getElementById('teamB').value.trim()) errors.push('Away team name is missing');
   if(!document.getElementById('emotion').value.trim()) errors.push('No emotion word selected');
-  const banner=document.getElementById('validationBanner');
-  const list=document.getElementById('validationList');
+  var banner=document.getElementById('validationBanner');
+  var list=document.getElementById('validationList');
   if(errors.length){
-    list.innerHTML=errors.map(e=>`<li>${e}</li>`).join('');
+    list.innerHTML=errors.map(function(e){return '<li>'+e+'</li>';}).join('');
     banner.classList.add('visible');
     banner.scrollIntoView({behavior:'smooth',block:'center'});
     return false;
@@ -892,29 +519,24 @@ function confirmReset(){
   resetAll();
 }
 function resetAll(){
-  // Clear state
   tsData.length=0; chData.length=0;
   homeGoals=0; awayGoals=0; counter=0; syncDismissed=false;
-  // Clear inputs
-  ['teamA','teamB','emotion','rivalTeam','transferName','linkTT'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['teamA','teamB','emotion','rivalTeam','transferName','linkTT'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   populateTeamDropdowns();
   document.getElementById('scoreA').value=0;
   document.getElementById('scoreB').value=0;
   autoSelectCompetition();
-  document.querySelectorAll('.etag').forEach(e=>e.classList.remove('active'));
-  // Clear lists
-  document.getElementById('tsList').innerHTML='<div class="empty-hint">No timestamps yet — add goals and events below.</div>';
+  document.querySelectorAll('.etag').forEach(function(e){e.classList.remove('active');});
+  document.getElementById('tsList').innerHTML='<div class="empty-hint">No timestamps yet \u2014 add goals and events below.</div>';
   document.getElementById('chList').innerHTML='<div class="empty-hint">No channels added yet.</div>';
-  // Reset output
   document.getElementById('outputSection').classList.remove('visible');
   document.getElementById('statusBar').classList.remove('visible');
   document.getElementById('validationBanner').classList.remove('visible');
   document.getElementById('scoreSyncBanner').classList.remove('visible');
   document.getElementById('goalALabel').textContent='Home';
   document.getElementById('goalBLabel').textContent='Away';
-  // Re-add default channels
+  setType('fan');
   addChannel(); addChannel(); addChannel();
-  // Scroll top
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -922,171 +544,153 @@ function resetAll(){
 function generate(){
   if(!validate()) return;
 
-  const tA=document.getElementById('teamA').value.trim();
-  const tB=document.getElementById('teamB').value.trim();
-  const sA=document.getElementById('scoreA').value, sB=document.getElementById('scoreB').value;
-  const score=`${sA}-${sB}`, comp=document.getElementById('competition').value;
-  const emotRaw=document.getElementById('emotion').value.trim().toUpperCase();
-  const emotPlain=plainEmotion(emotRaw);
-  const rival=document.getElementById('rivalTeam').value.trim()||'Rival';
-  const tName=document.getElementById('transferName').value.trim()||'Player';
-  const tType=document.getElementById('transferType').value;
-  const tt=document.getElementById('linkTT').value.trim();
+  var tA=document.getElementById('teamA').value.trim();
+  var tB=document.getElementById('teamB').value.trim();
+  var sA=document.getElementById('scoreA').value, sB=document.getElementById('scoreB').value;
+  var score=sA+'-'+sB, comp=document.getElementById('competition').value;
+  var emotRaw=document.getElementById('emotion').value.trim().toUpperCase();
+  var emotPlain=plainEmotion(emotRaw);
+  var rival=document.getElementById('rivalTeam').value.trim()||'Rival';
+  var tName=document.getElementById('transferName').value.trim()||'Player';
+  var tType=document.getElementById('transferType').value;
+  var tt=document.getElementById('linkTT').value.trim();
 
-  const lines=[{time:'00:00',label:'Introduction'}];
-  tsData.forEach((ts,i)=>{
-    const rawTime=document.querySelector(`.ts-time-input[data-id="${ts.id}"]`)?.value||'';
-    const time=(i===0&&!rawTime)?'00:26':(rawTime||'00:26');
-    const note=document.querySelector(`.ts-note[data-id="${ts.id}"]`)?.value||'';
-    const label=ts.type==='goal'?`${tA} ${ts.hs}-${ts.as} ${tB}${note?' — '+note:''}`:`${ts.label}${note?' — '+note:''}`;
-    lines.push({time,label});
+  var lines=[{time:'00:00',label:'Introduction'}];
+  tsData.forEach(function(ts,i){
+    var rawTime=document.querySelector('.ts-time-input[data-id="'+ts.id+'"]')?.value||'';
+    var time=(i===0&&!rawTime)?'00:26':(rawTime||'00:26');
+    var note=document.querySelector('.ts-note[data-id="'+ts.id+'"]')?.value||'';
+    var label=ts.type==='goal'?tA+' '+ts.hs+'-'+ts.as+' '+tB+(note?' \u2014 '+note:''):ts.label+(note?' \u2014 '+note:'');
+    lines.push({time:time,label:label});
   });
-  const tsBlock=lines.map(l=>l.time?`${l.time} – ${l.label}`:l.label).join('\n');
+  var tsBlock=lines.map(function(l){return l.time?l.time+' \u2013 '+l.label:l.label;}).join('\n');
 
-  const chLines=chData.map(ch=>{
-    const name=chName(ch.id), url=chUrl(ch.id);
-    if(!name||name==='Select channel...'||name==='— pick team first —') return null;
-    return `⚽ ${name} — ${url}`;
+  var chLines=chData.map(function(ch){
+    var name=chName(ch.id), url=chUrl(ch.id);
+    if(!name||name==='Select channel...'||name==='\u2014 pick team first \u2014') return null;
+    return '\u26BD '+name+' \u2014 '+url;
   }).filter(Boolean);
-  const chBlock=chLines.length?chLines.join('\n'):'⚽ [Add channel credits above]';
-  const social=[`📸 Instagram: ${FIXED_IG}`,tt?`🎵 TikTok: ${tt}`:'',`🐦 X: ${FIXED_X}`].filter(Boolean).join('\n');
+  var chBlock=chLines.length?chLines.join('\n'):'\u26BD [Add channel credits above]';
+  var social=['\u{1F4F8} Instagram: '+FIXED_IG,tt?'\u{1F3B5} TikTok: '+tt:'','\u{1F426} X: '+FIXED_X].filter(Boolean).join('\n');
 
-  let title='',desc='',tags=[];
+  var title='',desc='',tags=[];
   if(videoType==='fan'){
-    title=`${tA} Fans ${emotRaw} Reactions to ${tA} ${score} ${tB} | ${comp} Fan Reactions`;
-    desc=`${tA} fans react to ${tA} ${score} ${tB} — every goal, every moment, every emotion. Watch die-hard ${tA} supporters experience every goal, every near-miss, and every heart-stopping moment of this ${comp} match in real time. From pure ecstasy to absolute heartbreak — this is what football means to real fans.\n\n⏱️ TIMESTAMPS\n${tsBlock}\n\n📺 FAN CHANNELS IN THIS VIDEO\nShow some love — subscribe to the creators who appear:\n${chBlock}\n\n—\n\n${PROMO_BLOCK}\n\n🔔 Subscribe for fan reaction compilations posted the moment the final whistle blows — Premier League and Champions League every matchday.\n\n${social}`;
-    tags=[`${tA} Fan Reaction`,`${tA} Fans React`,`${tA} vs ${tB}`,`${tA} ${score} ${tB}`,`${comp} Fan Reactions`,`Football Fan Reactions`,`${tA} goal reaction`,`${tA} watchalong`,`Premier League Fan Reactions`,`Champions League Fan Reactions`,`fan reactions football`,`${tA} fans ${emotPlain.toLowerCase()}`,`${tB} fan reaction`,`fan reactions compilation`,`football reactions`];
+    title=tA+' Fans '+emotRaw+' Reactions to '+tA+' '+score+' '+tB+' | '+comp+' Fan Reactions';
+    desc=tA+' fans react to '+tA+' '+score+' '+tB+' \u2014 every goal, every moment, every emotion. Watch die-hard '+tA+' supporters experience every goal, every near-miss, and every heart-stopping moment of this '+comp+' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n'+tsBlock+'\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n'+chBlock+'\n\n\u2014\n\n'+PROMO_BLOCK+'\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n'+social;
+    tags=[tA+' Fan Reaction',tA+' Fans React',tA+' vs '+tB,tA+' '+score+' '+tB,comp+' Fan Reactions','Football Fan Reactions',tA+' goal reaction',tA+' watchalong','Premier League Fan Reactions','Champions League Fan Reactions','fan reactions football',tA+' fans '+emotPlain.toLowerCase(),tB+' fan reaction','fan reactions compilation','football reactions'];
   }else if(videoType==='mixed'){
-    title=`${tA} & ${tB} Fans ${emotRaw} Reactions to ${tA} ${score} ${tB} | ${comp} Fan Reactions`;
-    desc=`${tA} and ${tB} fans react to ${tA} ${score} ${tB} — every goal, every moment, every emotion from both sides. Watch die-hard supporters from both clubs experience every goal, every near-miss, and every heart-stopping moment of this ${comp} match in real time. From pure ecstasy to absolute heartbreak — this is what football means to real fans.\n\n⏱️ TIMESTAMPS\n${tsBlock}\n\n📺 FAN CHANNELS IN THIS VIDEO\nShow some love — subscribe to the creators who appear:\n${chBlock}\n\n—\n\n${PROMO_BLOCK}\n\n🔔 Subscribe for fan reaction compilations posted the moment the final whistle blows — Premier League and Champions League every matchday.\n\n${social}`;
-    tags=[`${tA} Fan Reaction`,`${tB} Fan Reaction`,`${tA} ${tB} Fans React`,`${tA} vs ${tB}`,`${tA} ${score} ${tB}`,`${comp} Fan Reactions`,`Football Fan Reactions`,`${tA} goal reaction`,`${tB} goal reaction`,`Premier League Fan Reactions`,`Champions League Fan Reactions`,`fan reactions football`,`mixed fan reactions`,`fan reactions compilation`,`football reactions`];
+    title=tA+' & '+tB+' Fans '+emotRaw+' Reactions to '+tA+' '+score+' '+tB+' | '+comp+' Fan Reactions';
+    desc=tA+' and '+tB+' fans react to '+tA+' '+score+' '+tB+' \u2014 every goal, every moment, every emotion from both sides. Watch die-hard supporters from both clubs experience every goal, every near-miss, and every heart-stopping moment of this '+comp+' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n'+tsBlock+'\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n'+chBlock+'\n\n\u2014\n\n'+PROMO_BLOCK+'\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n'+social;
+    tags=[tA+' Fan Reaction',tB+' Fan Reaction',tA+' '+tB+' Fans React',tA+' vs '+tB,tA+' '+score+' '+tB,comp+' Fan Reactions','Football Fan Reactions',tA+' goal reaction',tB+' goal reaction','Premier League Fan Reactions','Champions League Fan Reactions','fan reactions football','mixed fan reactions','fan reactions compilation','football reactions'];
   }else if(videoType==='rivals'){
-    title=`${rival} Fans ${emotRaw} Watching ${tA} ${score} ${tB} | ${comp} Rivals Reactions`;
-    desc=`${rival} fans react to ${tB}'s ${score} defeat — and they are absolutely loving every second of it. Watch rival supporters celebrate, mock, and revel in ${tB}'s misery as the goals go in. Pure schadenfreude. This is football at its most ruthless.\n\n⏱️ TIMESTAMPS\n${tsBlock}\n\n📺 FAN CHANNELS IN THIS VIDEO\nShow some love — subscribe to the creators who appear:\n${chBlock}\n\n—\n\n${PROMO_BLOCK}\n\n🔔 Subscribe — new reaction compilations posted at full time, every Premier League and Champions League matchday.\n\n${social}`;
-    tags=[`${rival} Fans React`,`${tB} Fan Reactions`,`Rivals React`,`Haters React`,`${tA} ${score} ${tB}`,`${comp} Rivals Reactions`,`Football Schadenfreude`,`${rival} reaction to ${tB}`,`Premier League Rivals Reactions`,`${tB} fans ${emotPlain.toLowerCase()}`,`fan reactions`,`rivals and haters`,`football fan reactions`,`schadenfreude football`,`${tA} ${tB} reaction`];
+    title=rival+' Fans '+emotRaw+' Watching '+tA+' '+score+' '+tB+' | '+comp+' Rivals Reactions';
+    desc=rival+' fans react to '+tB+"'s "+score+' defeat \u2014 and they are absolutely loving every second of it. Watch rival supporters celebrate, mock, and revel in '+tB+"'s misery as the goals go in. Pure schadenfreude. This is football at its most ruthless.\n\n\u23F1\uFE0F TIMESTAMPS\n"+tsBlock+'\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n'+chBlock+'\n\n\u2014\n\n'+PROMO_BLOCK+'\n\n\u{1F514} Subscribe \u2014 new reaction compilations posted at full time, every Premier League and Champions League matchday.\n\n'+social;
+    tags=[rival+' Fans React',tB+' Fan Reactions','Rivals React','Haters React',tA+' '+score+' '+tB,comp+' Rivals Reactions','Football Schadenfreude',rival+' reaction to '+tB,'Premier League Rivals Reactions',tB+' fans '+emotPlain.toLowerCase(),'fan reactions','rivals and haters','football fan reactions','schadenfreude football',tA+' '+tB+' reaction'];
   }else if(videoType==='postmatch'){
-    title=`${tA} & ${tB} Fans ${emotRaw} Post-Match Reactions | ${tA} ${score} ${tB} | ${comp}`;
-    desc=`${tA} ${score} ${tB} — post-match fan reactions. Watch ${tA} and ${tB} fans process what just happened. The highs, the lows, the disbelief, the fury — unfiltered and in real time.\n\n⏱️ TIMESTAMPS\n${tsBlock}\n\n📺 FAN CHANNELS IN THIS VIDEO\n${chBlock}\n\n—\n\n${PROMO_BLOCK}\n\n🔔 Subscribe — post-match reactions and fan compilation videos every Premier League and Champions League matchday.\n\n${social}`;
-    tags=[`${tA} Post Match Reaction`,`${tB} Post Match Reaction`,`${tA} ${score} ${tB}`,`Post Match Fan Reactions`,`${comp} Post Match`,`${tA} fans`,`${tB} fans`,`full time reaction`,`Football Fan Reactions`,`Premier League Post Match`,`Champions League Post Match`,`${emotPlain.toLowerCase()} fans`,`${tA} ${tB} reaction`,`football fan reactions`,`post match reactions`];
+    title=tA+' & '+tB+' Fans '+emotRaw+' Post-Match Reactions | '+tA+' '+score+' '+tB+' | '+comp;
+    desc=tA+' '+score+' '+tB+' \u2014 post-match fan reactions. Watch '+tA+' and '+tB+' fans process what just happened. The highs, the lows, the disbelief, the fury \u2014 unfiltered and in real time.\n\n\u23F1\uFE0F TIMESTAMPS\n'+tsBlock+'\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\n'+chBlock+'\n\n\u2014\n\n'+PROMO_BLOCK+'\n\n\u{1F514} Subscribe \u2014 post-match reactions and fan compilation videos every Premier League and Champions League matchday.\n\n'+social;
+    tags=[tA+' Post Match Reaction',tB+' Post Match Reaction',tA+' '+score+' '+tB,'Post Match Fan Reactions',comp+' Post Match',tA+' fans',tB+' fans','full time reaction','Football Fan Reactions','Premier League Post Match','Champions League Post Match',emotPlain.toLowerCase()+' fans',tA+' '+tB+' reaction','football fan reactions','post match reactions'];
   }else{
-    const verb=tType==='signing'?'SIGNS':tType==='sacking'?'SACKED':'LEAVES';
-    const vd=tType==='signing'?'joining':tType==='sacking'?'being sacked from':'leaving';
-    title=`${tA} Fans ${emotRaw} as ${tName} ${verb} | ${comp} Fan Reactions`;
-    desc=`${tA} fans react to ${tName} ${vd} ${tA}. Every emotion, every take, unfiltered — this is what it means to be a football fan when the news breaks.\n\n📺 FAN CHANNELS IN THIS VIDEO\n${chBlock}\n\n—\n\n${PROMO_BLOCK}\n\n🔔 Subscribe — reaction compilations posted immediately as the news breaks.\n\n${social}`;
-    tags=[`${tA} Fan Reaction`,`${tName} ${tA}`,`${tA} ${tType}`,`${tName} reaction`,`Football Transfer Reaction`,`${comp} Transfer`,`${tA} fans`,`${tName} ${verb.toLowerCase()}`,`football fan reactions`,`Premier League transfer`,`${tA} transfer news`,`fan reactions`,`${tName}`,`football news reaction`];
+    var verb=tType==='signing'?'SIGNS':tType==='sacking'?'SACKED':'LEAVES';
+    var vd=tType==='signing'?'joining':tType==='sacking'?'being sacked from':'leaving';
+    title=tA+' Fans '+emotRaw+' as '+tName+' '+verb+' | '+comp+' Fan Reactions';
+    desc=tA+' fans react to '+tName+' '+vd+' '+tA+'. Every emotion, every take, unfiltered \u2014 this is what it means to be a football fan when the news breaks.\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\n'+chBlock+'\n\n\u2014\n\n'+PROMO_BLOCK+'\n\n\u{1F514} Subscribe \u2014 reaction compilations posted immediately as the news breaks.\n\n'+social;
+    tags=[tA+' Fan Reaction',tName+' '+tA,tA+' '+tType,tName+' reaction','Football Transfer Reaction',comp+' Transfer',tA+' fans',tName+' '+verb.toLowerCase(),'football fan reactions','Premier League transfer',tA+' transfer news','fan reactions',tName,'football news reaction'];
   }
 
-  const tagsStr=buildTags(tags);
+  var tagsStr=buildTags(tags);
   document.getElementById('outTitle').textContent=title;
   document.getElementById('outDesc').textContent=desc;
   document.getElementById('outTags').textContent=tagsStr;
 
-  // Title char counter
-  const tLen=title.length;
-  const tcc=document.getElementById('titleCharCount');
-  tcc.textContent=`${tLen}/100`;
+  var tLen=title.length;
+  var tcc=document.getElementById('titleCharCount');
+  tcc.textContent=tLen+'/100';
   tcc.className='tag-count '+(tLen>100?'tag-warn':(tLen>85?'tag-warn':'tag-ok'));
 
-  // Tag counter
-  const cnt=document.getElementById('tagCount');
-  cnt.textContent=`${tagsStr.length}/500 chars`;
+  var cnt=document.getElementById('tagCount');
+  cnt.textContent=tagsStr.length+'/500 chars';
   cnt.className='tag-count '+(tagsStr.length<=500?'tag-ok':'tag-warn');
 
-  const out=document.getElementById('outputSection');
+  var out=document.getElementById('outputSection');
   out.classList.add('visible');
   document.getElementById('statusBar').classList.add('visible');
-  setTimeout(()=>out.scrollIntoView({behavior:'smooth',block:'start'}),100);
+  setTimeout(function(){out.scrollIntoView({behavior:'smooth',block:'start'});},100);
 }
 
 function scrollToOutput(){
   document.getElementById('outputSection').scrollIntoView({behavior:'smooth',block:'start'});
 }
-
 function copyField(id,btn){
-  navigator.clipboard.writeText(document.getElementById(id).textContent).then(()=>{
-    btn.textContent='✓ Copied'; btn.classList.add('copied');
-    setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},2000);
+  navigator.clipboard.writeText(document.getElementById(id).textContent).then(function(){
+    btn.textContent='\u2713 Copied'; btn.classList.add('copied');
+    setTimeout(function(){btn.textContent='Copy';btn.classList.remove('copied');},2000);
   });
 }
-
 function copyAll(btn){
-  const title=document.getElementById('outTitle').textContent;
-  const desc=document.getElementById('outDesc').textContent;
-  const tags=document.getElementById('outTags').textContent;
+  var title=document.getElementById('outTitle').textContent;
+  var desc=document.getElementById('outDesc').textContent;
+  var tags=document.getElementById('outTags').textContent;
   if(!title){alert('Generate content first!');return;}
-  const all=`TITLE:\n${title}\n\n${'─'.repeat(60)}\n\nDESCRIPTION:\n${desc}\n\n${'─'.repeat(60)}\n\nTAGS:\n${tags}`;
-  navigator.clipboard.writeText(all).then(()=>{
-    const orig=btn.textContent||btn.innerHTML;
-    btn.textContent='✓ All Copied!'; btn.classList.add('copied');
-    setTimeout(()=>{btn.textContent=orig;btn.classList.remove('copied');},2500);
+  var sep='\u2500'.repeat(60);
+  var all='TITLE:\n'+title+'\n\n'+sep+'\n\nDESCRIPTION:\n'+desc+'\n\n'+sep+'\n\nTAGS:\n'+tags;
+  navigator.clipboard.writeText(all).then(function(){
+    var orig=btn.textContent||btn.innerHTML;
+    btn.textContent='\u2713 All Copied!'; btn.classList.add('copied');
+    setTimeout(function(){btn.textContent=orig;btn.classList.remove('copied');},2500);
   });
 }
 
-// ── Time input formatter (enforce XX:XX) ─────────────────────────────────────
+// ── Time input formatter ──────────────────────────────────────────────────────
 function formatTimeInput(input){
-  // Remove all non-digits, keep max 4
-  let d = input.value.replace(/[^0-9]/g, '');
-  if (d.length > 4) d = d.slice(0, 4);
-  // Insert colon between MM and SS
-  input.value = d.length > 2 ? d.slice(0,2) + ':' + d.slice(2) : d;
+  var d=input.value.replace(/[^0-9]/g,'');
+  if(d.length>4) d=d.slice(0,4);
+  input.value=d.length>2?d.slice(0,2)+':'+d.slice(2):d;
 }
-function onTimeBlur(input){
-  // Only sort after user has finished editing
-  autoSortTimestamps();
-}
+function onTimeBlur(){ autoSortTimestamps(); }
 
-// ── Auto-sort timestamps by entered time ──────────────────────────────────────
+// ── Auto-sort timestamps ──────────────────────────────────────────────────────
 function timeToSeconds(t){
   if(!t||!t.includes(':')) return Infinity;
-  const parts=t.split(':');
+  var parts=t.split(':');
   return parseInt(parts[0]||0)*60+parseInt(parts[1]||0);
 }
 function autoSortTimestamps(){
-  const list=document.getElementById('tsList');
-  const rows=[...list.querySelectorAll('.ts-row')];
+  var list=document.getElementById('tsList');
+  var rows=[].slice.call(list.querySelectorAll('.ts-row'));
   if(rows.length<2) return;
-  const withTimes=rows.map(row=>{
-    const timeEl=row.querySelector('.ts-time-input');
-    const val=timeEl?timeEl.value:'';
-    return{row,id:row.dataset.tsid,secs:timeToSeconds(val),val};
+  var withTimes=rows.map(function(row){
+    var timeEl=row.querySelector('.ts-time-input');
+    var val=timeEl?timeEl.value:'';
+    return{row:row,secs:timeToSeconds(val),val:val};
   });
-  const hasTimes=withTimes.some(r=>r.val&&r.val.includes(':'));
-  if(!hasTimes) return;
-  withTimes.sort((a,b)=>a.secs-b.secs);
-  withTimes.forEach(item=>list.appendChild(item.row));
+  if(!withTimes.some(function(r){return r.val&&r.val.includes(':');})) return;
+  withTimes.sort(function(a,b){return a.secs-b.secs;});
+  withTimes.forEach(function(item){list.appendChild(item.row);});
   recalcScores();
 }
-
 function recalcScores(){
-  // Re-walk DOM rows in order and reassign running scores
-  const list=document.getElementById('tsList');
-  const rows=[...list.querySelectorAll('.ts-row')];
-  const tA=document.getElementById('teamA').value||'Home';
-  const tB=document.getElementById('teamB').value||'Away';
-  let ha=0,hb=0;
-  rows.forEach(row=>{
-    const id=row.dataset.tsid;
-    const ts=tsData.find(t=>t.id==id);
+  var list=document.getElementById('tsList');
+  var rows=[].slice.call(list.querySelectorAll('.ts-row'));
+  var tA=document.getElementById('teamA').value||'Home';
+  var tB=document.getElementById('teamB').value||'Away';
+  var ha=0,hb=0;
+  rows.forEach(function(row){
+    var id=row.dataset.tsid;
+    var ts=tsData.find(function(t){return t.id==id;});
     if(!ts||ts.type!=='goal') return;
     if(ts.team==='A') ha++; else hb++;
     ts.hs=ha; ts.as=hb;
-    // Update badge label
-    const badge=row.querySelector('[data-lteam]');
+    var badge=row.querySelector('[data-lteam]');
     if(badge) badge.textContent=(ts.team==='A'?tA:tB)+' Goal';
-    // Update score display
-    const scoreEl=row.querySelector('.ts-score');
-    if(scoreEl){
-      scoreEl.dataset.hs=ha;
-      scoreEl.dataset.as=hb;
-      scoreEl.textContent=tA+' '+ha+'-'+hb+' '+tB;
-    }
+    var scoreEl=row.querySelector('.ts-score');
+    if(scoreEl){scoreEl.dataset.hs=ha;scoreEl.dataset.as=hb;scoreEl.textContent=tA+' '+ha+'-'+hb+' '+tB;}
   });
-  // Sync master goal counts
   homeGoals=ha; awayGoals=hb;
 }
 
-// ── Drag and drop reorder ─────────────────────────────────────────────────────
-let dragSrcEl=null;
+// ── Drag and drop ─────────────────────────────────────────────────────────────
+var dragSrcEl=null;
 function onDragStart(e){
   dragSrcEl=this;
   this.classList.add('dragging');
@@ -1096,395 +700,41 @@ function onDragStart(e){
 function onDragOver(e){
   e.preventDefault();
   e.dataTransfer.dropEffect='move';
-  document.querySelectorAll('.ts-row').forEach(r=>r.classList.remove('drag-over'));
+  document.querySelectorAll('.ts-row').forEach(function(r){r.classList.remove('drag-over');});
   this.classList.add('drag-over');
   return false;
 }
 function onDrop(e){
   e.stopPropagation();
   if(dragSrcEl!==this){
-    const list=document.getElementById('tsList');
-    const rows=[...list.querySelectorAll('.ts-row')];
-    const srcIdx=rows.indexOf(dragSrcEl);
-    const tgtIdx=rows.indexOf(this);
+    var list=document.getElementById('tsList');
+    var rows=[].slice.call(list.querySelectorAll('.ts-row'));
+    var srcIdx=rows.indexOf(dragSrcEl);
+    var tgtIdx=rows.indexOf(this);
     if(srcIdx<tgtIdx) list.insertBefore(dragSrcEl,this.nextSibling);
     else list.insertBefore(dragSrcEl,this);
   }
-  document.querySelectorAll('.ts-row').forEach(r=>r.classList.remove('drag-over'));
+  document.querySelectorAll('.ts-row').forEach(function(r){r.classList.remove('drag-over');});
   return false;
 }
 function onDragEnd(){
   this.classList.remove('dragging');
-  document.querySelectorAll('.ts-row').forEach(r=>r.classList.remove('drag-over'));
+  document.querySelectorAll('.ts-row').forEach(function(r){r.classList.remove('drag-over');});
 }
 
 // ── Keyboard shortcut ─────────────────────────────────────────────────────────
-document.addEventListener('keydown',e=>{
+document.addEventListener('keydown',function(e){
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();generate();}
 });
-
-// ── Main tab switching ────────────────────────────────────────────────────────
-function switchMainTab(t){
-  document.getElementById('mainTabGen').classList.toggle('active',t==='gen');
-  document.getElementById('mainTabStr').classList.toggle('active',t==='str');
-  document.getElementById('paneGen').classList.toggle('active',t==='gen');
-  document.getElementById('paneStr').classList.toggle('active',t==='str');
-  if(t==='str') renderStreamers();
-  window.scrollTo({top:0,behavior:'smooth'});
-}
-
-// ── Supabase client ───────────────────────────────────────────────────────────
-const SUPABASE_URL='https://dsxijgrpxsfywxuffbmt.supabase.co';
-const SUPABASE_KEY='sb_publishable_iq6Dv3b9IYfNktis7WeZ-g_y7_DV0gm';
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let currentUser=null;
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-async function refreshAuth(){
-  const {data:{user}}=await sb.auth.getUser();
-  currentUser=user;
-  const out=document.getElementById('strAuthSignedOut');
-  const inn=document.getElementById('strAuthSignedIn');
-  const content=document.getElementById('strContent');
-  const title=document.getElementById('strAuthTitle');
-  if(user){
-    out.style.display='none';
-    inn.style.display='flex';
-    content.style.display='block';
-    document.getElementById('authUserEmail').textContent=user.email;
-    title.textContent='Account';
-    await loadStreamers();
-    renderStreamers();
-  } else {
-    out.style.display='block';
-    inn.style.display='none';
-    content.style.display='none';
-    title.textContent='Sign in to manage streamers';
-  }
-}
-function authMsg(t,err){
-  const el=document.getElementById('authMsg');
-  el.textContent=t;
-  el.style.color=err?'#ff8888':'var(--green)';
-}
-async function signIn(){
-  const email=document.getElementById('authEmail').value.trim();
-  const password=document.getElementById('authPassword').value;
-  if(!email||!password){authMsg('Email and password required.',true);return;}
-  authMsg('Signing in…');
-  const {error}=await sb.auth.signInWithPassword({email,password});
-  if(error){authMsg(error.message,true);return;}
-  authMsg('');
-  await refreshAuth();
-}
-async function signUp(){
-  const email=document.getElementById('authEmail').value.trim();
-  const password=document.getElementById('authPassword').value;
-  if(!email||!password){authMsg('Email and password required.',true);return;}
-  if(password.length<6){authMsg('Password must be at least 6 characters.',true);return;}
-  authMsg('Creating account…');
-  const {data,error}=await sb.auth.signUp({email,password});
-  if(error){authMsg(error.message,true);return;}
-  if(data.user&&!data.session){
-    authMsg('Check your email to confirm your account, then sign in.',false);
-  } else {
-    authMsg('');
-    await refreshAuth();
-  }
-}
-async function signOut(){
-  await sb.auth.signOut();
-  currentUser=null;
-  await refreshAuth();
-}
-
-// ── Streamers DB (Supabase-backed) ────────────────────────────────────────────
-let streamers=[];
-let favorites=new Set();
-let favOnly=false;
-async function loadStreamers(){
-  const {data,error}=await sb.from('frfc_streamers').select('*').order('team').order('name');
-  if(error){console.error(error);streamers=[];return;}
-  streamers=data.map(r=>({id:r.id,name:r.name,team:r.team,channel:r.channel_url||'',live:r.live_url||'',avatar:r.avatar_url||''}));
-  if(typeof refreshChannelRows==='function') refreshChannelRows();
-  await loadFavorites();
-}
-async function loadFavorites(){
-  if(!currentUser){favorites=new Set();return;}
-  const {data,error}=await sb.from('frfc_streamer_favorites').select('streamer_id').eq('user_id',currentUser.id);
-  if(error){console.error(error);favorites=new Set();return;}
-  favorites=new Set(data.map(r=>r.streamer_id));
-}
-async function toggleFavorite(id){
-  if(!currentUser) return;
-  if(favorites.has(id)){
-    const {error}=await sb.from('frfc_streamer_favorites').delete().eq('user_id',currentUser.id).eq('streamer_id',id);
-    if(error){alert('Error: '+error.message);return;}
-    favorites.delete(id);
-  } else {
-    const {error}=await sb.from('frfc_streamer_favorites').insert({user_id:currentUser.id,streamer_id:id});
-    if(error){alert('Error: '+error.message);return;}
-    favorites.add(id);
-  }
-  renderStreamers();
-}
-function toggleFavOnly(){
-  favOnly=!favOnly;
-  document.getElementById('favToggle').classList.toggle('active',favOnly);
-  renderStreamers();
-}
-function openAllLive(){
-  const visible=getFilteredStreamers();
-  const withLive=visible.filter(s=>s.live);
-  if(!withLive.length){alert('No live URLs in current view.');return;}
-  if(withLive.length>10){
-    if(!confirm(`Open ${withLive.length} tabs? Your browser may block popups — allow them for this site if asked.`)) return;
-  }
-  withLive.forEach((s,i)=>{
-    setTimeout(()=>window.open(s.live,'_blank','noopener'),i*120);
-  });
-}
-function getFilteredStreamers(){
-  const q=(document.getElementById('strSearch')?.value||'').toLowerCase().trim();
-  const ft=document.getElementById('strFilterTeam')?.value||'';
-  let filtered=streamers.slice();
-  if(ft) filtered=filtered.filter(s=>s.team===ft);
-  if(q) filtered=filtered.filter(s=>s.name.toLowerCase().includes(q));
-  if(favOnly) filtered=filtered.filter(s=>favorites.has(s.id));
-  filtered.sort((a,b)=>a.team.localeCompare(b.team)||a.name.localeCompare(b.name));
-  return filtered;
-}
-function populateStreamerDropdowns(){
-  const allLeagueTeams=Object.values(LEAGUE_TEAMS).flat();
-  const allTeams=[...new Set([...TEAMS,...allLeagueTeams,...customTeams,'Multi-Club / Other'])].sort();
-  const teamOpts=allTeams.map(t=>`<option value="${t}">${t}</option>`).join('');
-  const strTeam=document.getElementById('strTeam');
-  if(strTeam) strTeam.innerHTML=`<option value="">Select team...</option>`+teamOpts;
-  const filter=document.getElementById('strFilterTeam');
-  if(filter){
-    const cur=filter.value;
-    filter.innerHTML=`<option value="">All teams</option>`+teamOpts;
-    filter.value=cur;
-  }
-}
-async function addStreamer(){
-  if(!currentUser){alert('Please sign in.');return;}
-  const team=document.getElementById('strTeam').value.trim();
-  const channel=document.getElementById('strChannel').value.trim();
-  if(!channel||!team){alert('Channel URL and team are required.');return;}
-  if(!/youtube\.com\//.test(channel)){alert('Please enter a valid youtube.com URL.');return;}
-  const liveUrl=channel.replace(/\/(streams|videos|featured|about|community|playlists)\/?$/i,'').replace(/\/$/,'')+'/streams';
-  const btn=document.querySelector('#paneStr .btn-generate');
-  const origText=btn?btn.textContent:'';
-  if(btn){btn.disabled=true;btn.textContent='Fetching channel info…';}
-  // Resolve name + avatar via edge function
-  let name=null,avatar=null;
-  try{
-    const {data,error}=await sb.functions.invoke('resolve-yt-avatar',{body:{url:channel}});
-    if(error){console.warn('[add] resolve error',error);}
-    else{name=data?.name||null;avatar=data?.avatar||null;}
-  }catch(e){console.warn('[add] resolve exception',e);}
-  if(!name){
-    // Fallback: derive from @handle
-    const m=channel.match(/@([^\/?#]+)/);
-    name=m?m[1]:channel;
-  }
-  if(streamers.some(s=>s.name.toLowerCase()===name.toLowerCase()&&s.team===team)){
-    if(!confirm(`"${name}" already exists for ${team}. Add anyway?`)){
-      if(btn){btn.disabled=false;btn.textContent=origText;}
-      return;
-    }
-  }
-  const league=document.getElementById('strLeague').value||null;
-  const {error}=await sb.from('frfc_streamers').insert({
-    name,team,channel_url:channel,live_url:liveUrl,avatar_url:avatar,league,created_by:currentUser.id
-  });
-  if(btn){btn.disabled=false;btn.textContent=origText;}
-  if(error){alert('Error: '+error.message);return;}
-  document.getElementById('strChannel').value='';
-  await loadStreamers();
-  renderStreamers();
-}
-
-// ── Avatar caching via Edge Function ──────────────────────────────────────────
-async function resolveAndStoreAvatar(id,channelUrl){
-  if(!channelUrl) return null;
-  try{
-    const {data,error}=await sb.functions.invoke('resolve-yt-avatar',{body:{url:channelUrl}});
-    if(error){console.warn('[avatar] invoke error',channelUrl,error);return null;}
-    if(!data?.avatar){console.warn('[avatar] no avatar in response',channelUrl,data);return null;}
-    const {error:upErr}=await sb.from('frfc_streamers').update({avatar_url:data.avatar}).eq('id',id);
-    if(upErr){console.warn('[avatar] db update failed',channelUrl,upErr);return null;}
-    return data.avatar;
-  }catch(e){console.warn('[avatar] exception',channelUrl,e);return null;}
-}
-
-async function cacheMissingAvatars(){
-  if(!currentUser){alert('Please sign in.');return;}
-  const missing=streamers.filter(s=>!s.avatar&&s.channel&&/youtube\.com\//.test(s.channel));
-  if(!missing.length){alert('All avatars are already cached. ✓');return;}
-  if(!confirm(`Resolve & cache avatars for ${missing.length} streamer${missing.length===1?'':'s'}?\n\nThis takes a few seconds — please don't close the page.`)) return;
-  const btn=document.getElementById('btnCacheAvatars');
-  const origText=btn.textContent;
-  let done=0,failed=0;
-  // Run in batches of 4 in parallel
-  const BATCH=4;
-  for(let i=0;i<missing.length;i+=BATCH){
-    const batch=missing.slice(i,i+BATCH);
-    const results=await Promise.all(batch.map(s=>resolveAndStoreAvatar(s.id,s.channel)));
-    results.forEach(r=>{if(r){done++;}else{failed++;}});
-    btn.textContent=`Caching… ${done+failed}/${missing.length}`;
-  }
-  btn.textContent=origText;
-  await loadStreamers();
-  renderStreamers();
-  alert(`Done. Cached: ${done}. Failed: ${failed}.`);
-}
-async function removeStreamer(id){
-  if(!confirm('Remove this streamer?')) return;
-  const {error}=await sb.from('frfc_streamers').delete().eq('id',id);
-  if(error){alert('Error: '+error.message);return;}
-  await loadStreamers();
-  renderStreamers();
-}
-function renderStreamers(){
-  populateStreamerDropdowns();
-  const list=document.getElementById('strList');
-  if(!list) return;
-  const filtered=getFilteredStreamers();
-  document.getElementById('strCount').textContent=`${filtered.length} streamer${filtered.length===1?'':'s'}${streamers.length!==filtered.length?` (of ${streamers.length})`:''}${favOnly?' • favorites only':''}`;
-  if(!filtered.length){
-    list.innerHTML='<div class="str-empty">No streamers match your filters.</div>';
-    return;
-  }
-  list.innerHTML=filtered.map(s=>{
-    const initial=escapeHtml((s.name||'?').charAt(0).toUpperCase());
-    const av=s.avatar||channelAvatar(s.channel);
-    // Use data-src for lazy loading via IntersectionObserver — only loads when scrolled into view
-    const avatarHtml=av
-      ? `<img class="str-avatar" data-src="${av}" alt="" data-initial="${initial}">`
-      : `<div class="str-avatar fallback">${initial}</div>`;
-    const isFav=favorites.has(s.id);
-    return `
-    <div class="str-row">
-      ${avatarHtml}
-      <div class="str-info">
-        <div class="str-name">${escapeHtml(s.name)}</div>
-        <div class="str-team">${escapeHtml(s.team)}</div>
-      </div>
-      <button class="str-fav ${isFav?'on':''}" onclick="toggleFavorite('${s.id}')" title="${isFav?'Unfavorite':'Favorite'}">${isFav?'★':'☆'}</button>
-      <a class="str-link ${s.channel?'':'empty'}" href="${s.channel||'#'}" target="_blank" rel="noopener" title="Channel">CH</a>
-      <a class="str-link live ${s.live?'':'empty'}" href="${s.live||'#'}" target="_blank" rel="noopener" title="Live / Streams">LIVE</a>
-      <button class="btn-remove" onclick="removeStreamer('${s.id}')" title="Remove">×</button>
-    </div>`;
-  }).join('');
-  observeAvatars();
-}
-
-// ── Lazy avatar loading via IntersectionObserver ──────────────────────────────
-let _avatarObserver=null;
-function observeAvatars(){
-  const imgs=document.querySelectorAll('.str-avatar[data-src]');
-  if(!imgs.length) return;
-  if(!_avatarObserver){
-    _avatarObserver=new IntersectionObserver(entries=>{
-      entries.forEach(e=>{
-        if(!e.isIntersecting) return;
-        const img=e.target;
-        const src=img.dataset.src;
-        const initial=img.dataset.initial||'?';
-        img.removeAttribute('data-src');
-        img.onerror=()=>{img.outerHTML=`<div class="str-avatar fallback">${initial}</div>`;};
-        img.src=src;
-        _avatarObserver.unobserve(img);
-      });
-    },{rootMargin:'200px 0px'});
-  }
-  imgs.forEach(img=>_avatarObserver.observe(img));
-}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-// Resolve a channel URL to a profile-picture URL via unavatar.io (no API key needed).
-// Supports YouTube @handle URLs and /channel/UCxxxx URLs.
-function channelAvatar(url){
-  if(!url) return '';
-  const handle=url.match(/youtube\.com\/(@[\w.-]+)/i);
-  if(handle) return `https://unavatar.io/youtube/${handle[1]}`;
-  const cid=url.match(/youtube\.com\/channel\/([\w-]+)/i);
-  if(cid) return `https://unavatar.io/youtube/${cid[1]}`;
-  return '';
-}
-async function seedStreamers(){
-  if(!currentUser){alert('Please sign in.');return;}
-  if(!confirm('Import all channels from the built-in channel database into Supabase? Existing streamers will be skipped.')) return;
-  const rows=[];
-  Object.entries(CHANNELS).forEach(([team,arr])=>{
-    arr.forEach(c=>{
-      if(streamers.some(s=>s.name.toLowerCase()===c.name.toLowerCase()&&s.team===team)) return;
-      const live=/youtube\.com\/@/.test(c.url)?c.url.replace(/\/streams.*$/,'').replace(/\/$/,'')+'/streams':'';
-      rows.push({name:c.name,team,channel_url:c.url,live_url:live,avatar_url:null,created_by:currentUser.id});
-    });
-  });
-  if(!rows.length){alert('Nothing new to import.');return;}
-  // Insert in batches of 100
-  let added=0;
-  for(let i=0;i<rows.length;i+=100){
-    const batch=rows.slice(i,i+100);
-    const {error}=await sb.from('frfc_streamers').insert(batch);
-    if(error){alert('Error at batch '+(i/100)+': '+error.message);break;}
-    added+=batch.length;
-  }
-  await loadStreamers();
-  renderStreamers();
-  alert(`Imported ${added} streamer${added===1?'':'s'}.`);
-}
-function exportStreamers(){
-  const blob=new Blob([JSON.stringify(streamers,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url; a.download='frfc-streamers.json'; a.click();
-  URL.revokeObjectURL(url);
-}
-async function importStreamers(ev){
-  if(!currentUser){alert('Please sign in.');return;}
-  const f=ev.target.files[0]; if(!f) return;
-  const r=new FileReader();
-  r.onload=async()=>{
-    try{
-      const data=JSON.parse(r.result);
-      if(!Array.isArray(data)) throw 0;
-      const rows=data.filter(s=>s&&s.name&&s.team).map(s=>({
-        name:s.name,team:s.team,channel_url:s.channel||null,live_url:s.live||null,avatar_url:s.avatar||null,created_by:currentUser.id
-      }));
-      if(!rows.length){alert('No valid entries found.');return;}
-      const {error}=await sb.from('frfc_streamers').insert(rows);
-      if(error){alert('Error: '+error.message);return;}
-      await loadStreamers(); renderStreamers();
-      alert(`Imported ${rows.length} entries.`);
-    }catch(e){alert('Invalid JSON file.');}
-    ev.target.value='';
-  };
-  r.readAsText(f);
-}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 renderEmotions();
 populateTeamDropdowns();
 autoSelectCompetition();
-document.getElementById('tsList').innerHTML='<div class="empty-hint">No timestamps yet — add goals and events below.</div>';
+document.getElementById('tsList').innerHTML='<div class="empty-hint">No timestamps yet \u2014 add goals and events below.</div>';
 document.getElementById('chList').innerHTML='<div class="empty-hint">No channels added yet.</div>';
 addChannel(); addChannel(); addChannel();
-populateStreamerDropdowns();
 loadStreamers();
-refreshAuth();
-sb.auth.onAuthStateChange((_e,_session)=>{ refreshAuth(); });
 </script>
-
-<!-- Site footer -->
-<footer class="site-footer-gen">
-  <div style="max-width:860px;margin:0 auto;padding:0 20px">
-    <div style="margin-bottom:8px"><a href="/">Home</a> &bull; <a href="/discover">Discover</a> &bull; <a href="/rankings">Rankings</a> &bull; <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube</a></div>
-    <div>&copy; 2026 FanReactionsFC.com &bull; Description Generator</div>
-  </div>
-</footer>
 </body>
 </html>

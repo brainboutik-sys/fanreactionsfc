@@ -328,6 +328,7 @@ async function saveCreator(id) {
     err = res.error;
     if (!err) await logAction('update', 'creator', id, { name: data.name });
   } else {
+    data.created_by = currentUser.id;
     var res = await sb.from('frfc_streamers').insert(data).select();
     err = res.error;
     if (!err) await logAction('create', 'creator', res.data?.[0]?.id, { name: data.name });

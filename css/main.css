@@ -362,6 +362,11 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .ps-growth.up{color:var(--green)}
 .ps-growth.down{color:var(--red)}
 
+/* ── Suggest creator CTA ──────────────────────────────────────────────── */
+.suggest-cta{display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;margin-top:20px;background:var(--bg-card);border:1px dashed var(--border);border-radius:var(--radius);color:var(--text-dim);font-size:.85rem;transition:all .15s;cursor:pointer;text-decoration:none}
+.suggest-cta:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.suggest-cta .suggest-icon{font-size:1.1rem}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}

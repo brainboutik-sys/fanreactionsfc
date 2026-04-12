@@ -651,7 +651,10 @@ function renderHome() {
       <div class="container">
         <div class="section-head">
           <h2 class="section-title">Top Creators</h2>
-          <a href="/discover?sort=rating" class="section-link">Browse all &rarr;</a>
+          <div style="display:flex;align-items:center;gap:12px">
+            <a href="/submit" class="btn btn-secondary btn-sm" style="font-size:.72rem">+ Suggest</a>
+            <a href="/discover?sort=rating" class="section-link">Browse all &rarr;</a>
+          </div>
         </div>
         <div class="top-creators-tabs">
           <button class="top-creators-tab active" onclick="switchTopCreators('subs',this)">By Subscribers</button>
@@ -742,8 +745,13 @@ function renderDiscover() {
 
   document.getElementById('app').innerHTML = `
     <div class="container" style="padding-top:32px">
-      <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:4px">Discover Creators</h1>
-      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:24px">${creators.length} creators across ${activeLeagues.length} leagues and ${teams.length} clubs</p>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap">
+        <div>
+          <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:4px">Discover Creators</h1>
+          <p style="color:var(--text-dim);font-size:.9rem">${creators.length} creators across ${activeLeagues.length} leagues and ${teams.length} clubs</p>
+        </div>
+        <a href="/submit" class="btn btn-secondary btn-sm">+ Suggest a Creator</a>
+      </div>
 
       <div class="discover-layout">
         <!-- Left sidebar: League/Club accordion -->
@@ -806,7 +814,7 @@ function renderDiscover() {
 
           <div class="card-grid">
             ${filtered.length ? filtered.map(c => creatorCard(c)).join('') :
-              '<div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">No creators found</div><p>Try adjusting your filters</p></div>'}
+              '<div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">No creators found</div><p style="color:var(--text-dim)">Try adjusting your filters or <a href="/submit">suggest a creator</a></p></div>'}
           </div>
         </div>
       </div>
@@ -980,6 +988,7 @@ async function renderProfile(slug) {
         <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">More ${escHtml(c.team)} creators</h3>
         <div class="card-grid">${similar.map(s => creatorCard(s)).join('')}</div>
       </div>` : ''}
+      <a href="/submit" class="suggest-cta"><span class="suggest-icon">+</span> Know a great ${escHtml(c.team)} creator we should add? Suggest them here</a>
     </div>
     ${renderFooter()}
   `;
@@ -1054,16 +1063,20 @@ function renderClubPage(club) {
       <a href="/discover${clubLeague !== 'Other' ? '?league=' + encodeURIComponent(clubLeague) : ''}" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; ${clubLeague !== 'Other' ? escHtml(clubLeague) : 'All clubs'}</a>
       <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:12px">${crestImg(club, 'crest-xl')} ${escHtml(club)}</h1>
       <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:16px;display:flex;align-items:center;gap:6px">${leagueInfo ? leagueChipImg(clubLeague) : ''} ${escHtml(clubLeague)} &bull; ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</p>
-      <div class="top-creators-tabs" style="margin-bottom:20px">
-        <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subscribers</button>
-        <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
-        <button class="top-creators-tab ${sort === 'rating' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=rating')">By Rating</button>
-        <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Latest Upload</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <div class="top-creators-tabs">
+          <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subscribers</button>
+          <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
+          <button class="top-creators-tab ${sort === 'rating' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=rating')">By Rating</button>
+          <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Latest Upload</button>
+        </div>
+        <a href="/submit" class="btn btn-secondary btn-sm">+ Suggest a Creator</a>
       </div>
       <div class="card-grid">
         ${clubCreators.length ? clubCreators.map(c => creatorCard(c)).join('') :
-          '<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great channel? <a href="/discover">Suggest one</a>.</p></div>'}
+          '<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px">Suggest a Creator</a></div>'}
       </div>
+      <a href="/submit" class="suggest-cta"><span class="suggest-icon">+</span> Know a ${escHtml(club)} YouTuber we're missing? Suggest them here</a>
     </div>
     ${renderFooter()}
   `;
@@ -1204,8 +1217,15 @@ async function submitCreator() {
 
   msg.innerHTML = '<span style="color:var(--text-dim)">Submitting...</span>';
 
-  var { error } = await sb.from('frfc_submissions').insert({ name: name, channel_url: channel, team: team, league: league });
+  var submission = { name: name, channel_url: channel, team: team, league: league };
+  var { error } = await sb.from('frfc_submissions').insert(submission);
   if (error) { msg.innerHTML = '<span style="color:var(--red)">' + escHtml(error.message) + '</span>'; return; }
+
+  // Notify admin (fire-and-forget)
+  fetch(SUPABASE_URL + '/functions/v1/notify-submission', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ record: submission })
+  }).catch(function() {});
 
   document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
 }

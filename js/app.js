@@ -557,7 +557,7 @@ function renderHome() {
             return `<a href="/clubs/${encodeURIComponent(team)}" class="club-tile">
               ${crestImg(team)}
               <div class="club-name">${escHtml(team)}</div>
-              <div class="club-meta">${l ? `<img src="${l.logo}" alt="" class="club-league-badge" onerror="this.style.display='none'">` : ''} ${count} creator${count !== 1 ? 's' : ''}</div>
+              <div class="club-meta"><strong>${count} creator${count !== 1 ? 's' : ''}</strong></div>
             </a>`;
           }).join('')}
         </div>

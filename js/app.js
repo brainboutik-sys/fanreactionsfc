@@ -391,6 +391,7 @@ async function loadCreators() {
     isLive: r.is_live || false,
     liveVideoId: r.live_video_id || '',
     uploadFrequency: r.upload_frequency || '',
+    channelCountry: r.channel_country || '',
     avgRating: 0,
     ratingCount: 0
   }));
@@ -449,6 +450,11 @@ function avatarImg(c, cls = 'cc-avatar') {
   return `<img class="${cls}" src="${url}" alt="" loading="lazy" onerror="avatarOnerror(this,'${escHtml(c.name.replace(/'/g, "\\'"))}')">`;
 }
 function creatorLink(c) { return `/creators/${c.slug || slugify(c.name)}`; }
+
+function countryFlag(code) {
+  if (!code || code.length !== 2) return '';
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+}
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -677,7 +683,7 @@ function creatorCard(c) {
         ${avatarImg(c, 'cc-avatar')}
         <div class="cc-info">
           <div class="cc-name">${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
-          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}</div>
+          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)} ${c.channelCountry ? '<span style="font-size:.7rem">' + countryFlag(c.channelCountry) + '</span>' : ''}</div>
         </div>
       </div>
       <div class="cc-meta">
@@ -860,7 +866,7 @@ async function renderProfile(slug) {
               ${c.verified ? '<span class="badge badge-green">Verified</span>' : ''}
               ${c.claimed ? '<span class="badge badge-dim">Claimed</span>' : ''}
             </h1>
-            <div class="profile-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+            <div class="profile-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.channelCountry ? '<span title="' + c.channelCountry + '" style="margin-left:4px">' + countryFlag(c.channelCountry) + '</span>' : ''}</div>
             ${c.description ? `<div class="profile-desc">${escHtml(c.description)}</div>` : ''}
             <div class="profile-actions">
               ${c.channel ? `<a href="${escHtml(c.channel)}" target="_blank" rel="noopener" class="btn btn-primary">Watch on YouTube</a>` : ''}

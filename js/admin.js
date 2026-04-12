@@ -482,6 +482,7 @@ async function runSync() {
           video_count: parseInt(stats.videoCount) || 0,
           channel_created_at: snippet.publishedAt || null,
           avatar_url: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || c.avatar_url,
+          channel_country: snippet.country || null,
           is_live: false,
           live_video_id: null,
           last_youtube_sync: new Date().toISOString()

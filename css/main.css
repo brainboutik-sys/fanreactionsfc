@@ -120,20 +120,29 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 /* ── Cards / Creator cards ─────────────────────────────────────────────── */
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-.creator-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:all .2s;cursor:pointer;position:relative}
+.creator-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;transition:all .2s;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:10px}
 .creator-card:hover{border-color:var(--text-muted);transform:translateY(-2px);box-shadow:var(--shadow)}
-.cc-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-.cc-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0}
+.cc-top{display:flex;align-items:center;gap:12px}
+.cc-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0}
 .avatar-fallback{display:flex;align-items:center;justify-content:center;background:var(--navy);color:var(--yellow);font-weight:700;font-size:.75em;letter-spacing:.02em;border-radius:50%;flex-shrink:0}
 .cc-info{flex:1;min-width:0}
 .cc-name{font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
 .cc-name .verified{color:var(--blue);font-size:.85rem}
-.cc-team{color:var(--text-dim);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cc-stats{display:flex;align-items:center;gap:12px;font-size:.78rem;color:var(--text-dim);margin-bottom:10px}
-.cc-rating{display:flex;align-items:center;gap:4px;color:var(--star);font-weight:600}
+.cc-team{color:var(--text-dim);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
+.cc-meta{display:flex;align-items:center;gap:10px;font-size:.78rem}
+.cc-rating{display:flex;align-items:center;gap:3px;color:var(--star);font-weight:700}
+.cc-rating-count{color:var(--text-muted);font-weight:400}
+.cc-subs{color:var(--text-dim);font-weight:600;display:flex;align-items:center;gap:4px}
+.cc-subs::before{content:'';display:inline-block;width:3px;height:3px;border-radius:50%;background:var(--border)}
 .cc-tags{display:flex;flex-wrap:wrap;gap:4px}
 .cc-tag{padding:2px 8px;border-radius:100px;background:var(--bg-hover);color:var(--text-dim);font-size:.7rem;font-weight:500}
 .cc-live{position:absolute;top:12px;right:12px}
+
+/* Top creators tab toggle */
+.top-creators-tabs{display:flex;gap:4px;margin-bottom:16px}
+.top-creators-tab{padding:7px 18px;border-radius:100px;font-size:.78rem;font-weight:600;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-dim);cursor:pointer;transition:all .15s}
+.top-creators-tab:hover{border-color:var(--text-muted);color:var(--text)}
+.top-creators-tab.active{background:var(--navy);color:var(--yellow);border-color:var(--navy)}
 
 /* ── Creator profile ───────────────────────────────────────────────────── */
 .profile-header{padding:40px 0 24px;border-bottom:1px solid var(--border)}

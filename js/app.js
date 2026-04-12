@@ -472,6 +472,7 @@ function renderHome() {
   const activeLeagues = getLeagues();
   const topRated = [...creators].filter(c => c.ratingCount > 0).sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 10);
   const topByRating = [...creators].sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 8);
+  const topBySubs = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
 
   // Top 20 clubs by creator count, across all leagues
   const clubCounts = {};
@@ -564,15 +565,19 @@ function renderHome() {
       </div>
     </section>
 
-    <!-- Top Creators by Rating -->
+    <!-- Top Creators -->
     <section class="section">
       <div class="container">
         <div class="section-head">
           <h2 class="section-title">Top Creators</h2>
           <a href="/discover?sort=rating" class="section-link">Browse all &rarr;</a>
         </div>
-        <div class="card-grid">
-          ${topByRating.map(c => creatorCard(c)).join('')}
+        <div class="top-creators-tabs">
+          <button class="top-creators-tab active" onclick="switchTopCreators('subs',this)">By Subscribers</button>
+          <button class="top-creators-tab" onclick="switchTopCreators('rating',this)">By Rating</button>
+        </div>
+        <div class="card-grid" id="topCreatorsGrid">
+          ${topBySubs.map(c => creatorCard(c)).join('')}
         </div>
       </div>
     </section>
@@ -581,21 +586,36 @@ function renderHome() {
   `;
 }
 
+function switchTopCreators(mode, btn) {
+  document.querySelectorAll('.top-creators-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const grid = document.getElementById('topCreatorsGrid');
+  let list;
+  if (mode === 'subs') {
+    list = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
+  } else {
+    list = [...creators].sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 8);
+  }
+  grid.innerHTML = list.map(c => creatorCard(c)).join('');
+}
+
 // ── Render: Creator Card ──────────────────────────────────────────────────
 function creatorCard(c) {
+  const subsStr = c.subscriberCount ? formatNum(c.subscriberCount) + ' sub' + (c.subscriberCount !== 1 ? 's' : '') : '';
   return `
     <a href="${creatorLink(c)}" class="creator-card">
       <div class="cc-top">
         ${avatarImg(c, 'cc-avatar')}
         <div class="cc-info">
           <div class="cc-name">${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
-          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)} <span style="opacity:.5;font-size:.68rem">${leagueFlag(c.league || getLeague(c.team))}</span></div>
+          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}</div>
         </div>
       </div>
-      <div class="cc-stats">
-        ${c.ratingCount > 0 ? `<span class="cc-rating">★ ${c.avgRating}</span> <span>(${c.ratingCount} rating${c.ratingCount !== 1 ? 's' : ''})</span>` : '<span>Not yet rated</span>'}
+      <div class="cc-meta">
+        ${c.ratingCount > 0 ? `<span class="cc-rating">★ ${c.avgRating} <span class="cc-rating-count">(${c.ratingCount})</span></span>` : ''}
+        ${subsStr ? `<span class="cc-subs">${subsStr}</span>` : ''}
       </div>
-      ${c.contentTypes.length ? `<div class="cc-tags">${c.contentTypes.map(t => `<span class="cc-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      ${c.contentTypes.length ? `<div class="cc-tags">${c.contentTypes.slice(0, 3).map(t => `<span class="cc-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
     </a>`;
 }
 

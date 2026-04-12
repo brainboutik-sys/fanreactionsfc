@@ -511,7 +511,8 @@ function _appendCh(id) {
 }
 
 function removeChannel(id) {
-  chData.splice(chData.findIndex(function(c) { return c.id === id; }), 1);
+  var idx = chData.findIndex(function(c) { return c.id === id; }); if (idx === -1) return;
+  chData.splice(idx, 1);
   var el = document.querySelector('.ch-row[data-chid="' + id + '"]'); if (el) el.remove();
   if (!chData.length) document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet \u2014 use the quick-add above or add manually.</div>';
 }
@@ -687,7 +688,7 @@ function copyField(id, btn) {
   navigator.clipboard.writeText(document.getElementById(id).textContent).then(function() {
     btn.textContent = '\u2713 Copied'; btn.classList.add('copied');
     setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-  });
+  }).catch(function() { btn.textContent = 'Failed'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); });
 }
 
 function copyAll(btn) {
@@ -701,7 +702,7 @@ function copyAll(btn) {
     var orig = btn.textContent || btn.innerHTML;
     btn.textContent = '\u2713 All Copied!'; btn.classList.add('copied');
     setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 2500);
-  });
+  }).catch(function() { alert('Copy failed. Try selecting the text manually.'); });
 }
 
 // ── Time input formatter ─────────────────────────────────────────────────────

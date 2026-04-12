@@ -156,10 +156,6 @@ function getLeague(team) {
   return TEAM_TO_LEAGUE[team] || 'Other';
 }
 
-function leagueFlag(name) {
-  const l = LEAGUES.find(lg => lg.name === name);
-  return l ? l.flag : '';
-}
 function leagueChipImg(name) {
   const l = LEAGUES.find(lg => lg.name === name);
   if (!l || !l.logo) return '';
@@ -219,7 +215,7 @@ function showLoading() {
   app.innerHTML = `
     <section class="hero">
       <div class="container" style="text-align:center">
-        <div class="skeleton" style="width:320px;height:36px;margin:0 auto 16px;border-radius:8px"></div>
+        <div class="skeleton" style="width:320px;max-width:100%;height:36px;margin:0 auto 16px;border-radius:8px"></div>
         <div class="skeleton" style="width:480px;max-width:100%;height:18px;margin:0 auto 28px;border-radius:6px"></div>
         <div class="skeleton" style="width:560px;max-width:100%;height:48px;margin:0 auto 20px;border-radius:100px"></div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
@@ -255,6 +251,7 @@ function handleRoute() {
   const path = location.pathname;
   const app = document.getElementById('app');
   closeModal();
+  document.querySelector('.user-menu')?.remove();
   if (typeof Gen !== 'undefined' && Gen.cleanup) Gen.cleanup();
   window.scrollTo(0, 0);
 
@@ -404,7 +401,8 @@ async function loadCreators() {
     ratingCount: 0
   }));
   // Load ratings
-  const { data: revs } = await sb.from('frfc_reviews').select('creator_id, rating');
+  const { data: revs, error: revErr } = await sb.from('frfc_reviews').select('creator_id, rating');
+  if (revErr) console.error('Failed to load ratings:', revErr.message);
   if (revs && revs.length) {
     const map = {};
     revs.forEach(r => {
@@ -447,7 +445,7 @@ async function toggleFavorite(id) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
-function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
 function avatarUrl(c) { return c.avatar || ''; }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
@@ -504,7 +502,7 @@ function initSearch() {
     const box = e.target.closest('.search-wrap').querySelector('.search-results');
     if (q.length < 2) { box.classList.remove('open'); return; }
     const matches = creators.filter(c =>
-      c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q) ||
+      c.name.toLowerCase().includes(q) || (c.team || '').toLowerCase().includes(q) ||
       c.contentTypes.some(t => t.toLowerCase().includes(q))
     ).slice(0, 8);
     if (!matches.length) { box.classList.remove('open'); return; }
@@ -724,7 +722,7 @@ function renderDiscover() {
 
   let filtered = creators.slice();
   if (q) filtered = filtered.filter(c =>
-    c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q) ||
+    c.name.toLowerCase().includes(q) || (c.team || '').toLowerCase().includes(q) ||
     (c.league || '').toLowerCase().includes(q) ||
     c.contentTypes.some(t => t.toLowerCase().includes(q))
   );
@@ -1223,7 +1221,8 @@ async function submitCreator() {
 
   // Notify admin (fire-and-forget)
   fetch(SUPABASE_URL + '/functions/v1/notify-submission', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
     body: JSON.stringify({ record: submission })
   }).catch(function() {});
 

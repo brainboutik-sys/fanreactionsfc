@@ -21,9 +21,12 @@ var PAGE_SIZE = 25;
 
 // ── Auth check ───────────────────────────────────────────────────────────────
 async function checkAdmin() {
-  const { data } = await sb.from('frfc_admin_roles').select('role').eq('user_id', currentUser?.id).single();
-  adminRole = data?.role || null;
-  return !!adminRole;
+  if (!currentUser) return false;
+  try {
+    const { data } = await sb.from('frfc_admin_roles').select('role').eq('user_id', currentUser.id).single();
+    adminRole = data?.role || null;
+    return !!adminRole;
+  } catch (e) { return false; }
 }
 
 // ── Toast ────────────────────────────────────────────────────────────────────
@@ -38,7 +41,9 @@ function toast(msg, type) {
 
 // ── Log action ───────────────────────────────────────────────────────────────
 async function logAction(action, entityType, entityId, details) {
-  await sb.from('frfc_admin_log').insert({ user_id: currentUser.id, action: action, entity_type: entityType, entity_id: entityId, details: details || null });
+  try {
+    await sb.from('frfc_admin_log').insert({ user_id: currentUser.id, action: action, entity_type: entityType, entity_id: entityId, details: details || null });
+  } catch (e) { console.error('logAction failed:', e); }
 }
 
 // ── Data loading ─────────────────────────────────────────────────────────────
@@ -235,7 +240,14 @@ function searchCreators(q) {
 function sortCreators(s) { creatorSort = s; creatorPage = 0; renderPage(); }
 function creatorGoPage(p) { creatorPage = p; renderPage(); }
 function creatorPrev() { if (creatorPage > 0) { creatorPage--; renderPage(); } }
-function creatorNext() { creatorPage++; renderPage(); }
+function creatorNext() {
+  var filtered = allCreators.filter(function(c) {
+    if (!creatorSearch) return true;
+    var q = creatorSearch.toLowerCase();
+    return c.name.toLowerCase().includes(q) || (c.team || '').toLowerCase().includes(q) || (c.league || '').toLowerCase().includes(q);
+  });
+  if (creatorPage < Math.ceil(filtered.length / PAGE_SIZE) - 1) { creatorPage++; renderPage(); }
+}
 
 // ── Creator CRUD ─────────────────────────────────────────────────────────────
 function openAddCreator() {
@@ -694,6 +706,8 @@ function closeModal() {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  var content = document.getElementById('adminContent');
+  if (content) content.innerHTML += '<div style="text-align:center;padding:60px;color:var(--text-dim)">Loading admin data...</div>';
   await loadAdminData();
   renderPage();
 }

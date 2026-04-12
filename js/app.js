@@ -276,6 +276,9 @@ function handleRoute() {
   } else if (path === '/tools/generator') {
     currentRoute = { page: 'generator' };
     renderGenerator();
+  } else if (path.startsWith('/admin')) {
+    currentRoute = { page: 'admin' };
+    renderAdmin();
   } else {
     currentRoute = { page: 'home' };
     renderHome();
@@ -330,6 +333,7 @@ function showUserMenu() {
   menu.innerHTML = `
     <div style="padding:8px 16px;font-size:.82rem;color:var(--text-dim);border-bottom:1px solid var(--border)">${currentUser.email}</div>
     <a href="/tools/generator" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Description Generator</a>
+    <a href="/admin" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Admin Panel</a>
     <button onclick="signOut()" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:.85rem;color:var(--accent);background:none;border:none;border-top:1px solid var(--border)">Sign Out</button>`;
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', function rem() { menu.remove(); document.removeEventListener('click', rem); }, { once: true }), 10);
@@ -1093,6 +1097,20 @@ async function renderGenerator() {
   if (!creators.length) await loadCreators();
   document.getElementById('app').innerHTML = Gen.renderHTML() + renderFooter();
   Gen.init();
+}
+
+// ── Render: Admin ────────────────────────────────────────────────────────
+async function renderAdmin() {
+  if (!currentUser) { openModal('signin'); return; }
+  if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module not loaded.</p></div>'; return; }
+  const isAdmin = await Admin.checkAdmin();
+  if (!isAdmin) {
+    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128274;</div><div class="es-title">Access Denied</div><p style="color:var(--text-dim)">You do not have admin privileges.</p><a href="/" class="btn btn-primary" style="margin-top:12px">Back to Home</a></div></div>';
+    return;
+  }
+  // Hide the main site header nav for admin (admin has its own sidebar)
+  document.getElementById('app').innerHTML = Admin.renderHTML();
+  await Admin.init();
 }
 
 // ── Auth Modal ────────────────────────────────────────────────────────────

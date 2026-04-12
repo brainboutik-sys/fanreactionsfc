@@ -93,7 +93,7 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* ── Hero ──────────────────────────────────────────────────────────────── */
 .hero{padding:60px 0 40px;text-align:center}
 .hero h1{font-size:2.4rem;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin-bottom:10px}
-.hero h1 .accent{color:var(--yellow)}
+.hero h1 .accent{color:#FF0000}
 .hero .subtitle{color:var(--text-dim);font-size:1.05rem;margin-bottom:28px}
 
 /* Search */

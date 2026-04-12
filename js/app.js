@@ -1028,15 +1028,30 @@ async function handleFavorite(id) {
 
 // ── Render: Club Page ─────────────────────────────────────────────────────
 function renderClubPage(club) {
-  const clubCreators = creators.filter(c => c.team === club).sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
+  const params = new URLSearchParams(location.search);
+  const sort = params.get('sort') || 'subs';
+  let clubCreators = creators.filter(c => c.team === club);
+
+  if (sort === 'name') clubCreators.sort((a, b) => a.name.localeCompare(b.name));
+  else if (sort === 'rating') clubCreators.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
+  else if (sort === 'recent') clubCreators.sort((a, b) => new Date(b.latestVideoDate || 0) - new Date(a.latestVideoDate || 0));
+  else clubCreators.sort((a, b) => b.subscriberCount - a.subscriberCount);
+
   const clubLeague = getLeague(club);
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
+  const clubUrl = '/clubs/' + encodeURIComponent(club);
 
   document.getElementById('app').innerHTML = `
     <div class="container" style="padding-top:40px">
       <a href="/discover${clubLeague !== 'Other' ? '?league=' + encodeURIComponent(clubLeague) : ''}" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; ${clubLeague !== 'Other' ? escHtml(clubLeague) : 'All clubs'}</a>
       <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:12px">${crestImg(club, 'crest-xl')} ${escHtml(club)}</h1>
-      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:28px">${leagueInfo ? leagueInfo.flag + ' ' : ''}${escHtml(clubLeague)} &bull; ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</p>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:16px">${leagueInfo ? leagueInfo.flag + ' ' : ''}${escHtml(clubLeague)} &bull; ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</p>
+      <div class="top-creators-tabs" style="margin-bottom:20px">
+        <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subscribers</button>
+        <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
+        <button class="top-creators-tab ${sort === 'rating' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=rating')">By Rating</button>
+        <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Latest Upload</button>
+      </div>
       <div class="card-grid">
         ${clubCreators.length ? clubCreators.map(c => creatorCard(c)).join('') :
           '<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great channel? <a href="/discover">Suggest one</a>.</p></div>'}

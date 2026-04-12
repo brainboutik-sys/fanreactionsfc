@@ -64,7 +64,7 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .nav-brand .brand-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}
 .nav-brand .brand-fan{color:var(--yellow);font-weight:800}
 .nav-brand .brand-reactions{color:var(--navy);font-weight:800}
-.nav-brand .brand-fc{color:var(--yellow);font-weight:700;font-size:.85em}
+.nav-brand .brand-fc{color:var(--yellow);font-weight:800}
 .nav-links{display:flex;align-items:center;gap:6px}
 .nav-link{padding:6px 14px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;color:var(--text-dim);transition:all .15s}
 .nav-link:hover,.nav-link.active{color:var(--text);background:var(--bg-hover)}

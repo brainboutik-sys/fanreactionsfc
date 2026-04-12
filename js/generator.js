@@ -22,6 +22,7 @@ var videoType = 'fan', counter = 0, homeGoals = 0, awayGoals = 0;
 var tsData = [], chData = [];
 var syncDismissed = false;
 var customTeams = [];
+var selectedLeague = '';
 var _keyHandler = null;
 
 // ── HTML Template ────────────────────────────────────────────────────────────
@@ -67,7 +68,12 @@ function renderHTML() {
     <!-- 2. Match Details -->
     <div class="gen-card">
       <div class="gen-card-title"><span class="step-num">2</span>Match Details</div>
-      <div class="gap">
+
+      <!-- League filter -->
+      <label class="field-label">League</label>
+      <div class="gen-league-chips" id="genLeagueChips"></div>
+
+      <div class="gap" style="margin-top:14px">
         <div class="score-row">
           <div class="score-field"><label class="field-label">Home Team</label><select id="teamA" onchange="Gen.onTeamSelect(this);Gen.updateGoalLabels();Gen.checkScoreSync()"><option value="">Select team...</option></select></div>
           <div class="score-vs">VS</div>
@@ -147,16 +153,16 @@ function renderHTML() {
     <!-- 4. Channels -->
     <div class="gen-card">
       <div class="gen-card-title"><span class="step-num">4</span>Featured YouTube Channels</div>
+      <div class="ch-batch" id="chBatch"></div>
       <div id="chList" class="ch-list"></div>
-      <button class="btn-add" onclick="Gen.addChannel()">+ Add Channel</button>
+      <button class="btn-add" onclick="Gen.addChannel()">+ Add Channel Manually</button>
     </div>
 
     <!-- 5. Social -->
     <div class="gen-card">
       <div class="gen-card-title"><span class="step-num">5</span>Social Links</div>
-      <div class="grid3">
+      <div class="grid2">
         <div><label class="field-label">Instagram</label><div class="social-locked"><span class="lock-icon">Locked</span>fanreactionsfc</div></div>
-        <div><label class="field-label">TikTok</label><input type="text" id="linkTT" placeholder="Your TikTok URL"></div>
         <div><label class="field-label">X / Twitter</label><div class="social-locked"><span class="lock-icon">Locked</span>FanReactionsFC</div></div>
       </div>
     </div>
@@ -202,19 +208,19 @@ function renderHTML() {
 
 // ── Init & Cleanup ───────────────────────────────────────────────────────────
 function init() {
-  // Reset state for fresh render
   videoType = 'fan'; counter = 0; homeGoals = 0; awayGoals = 0;
   tsData.length = 0; chData.length = 0;
   syncDismissed = false; customTeams.length = 0;
+  selectedLeague = '';
 
+  renderLeagueChips();
   renderEmotions();
   populateTeamDropdowns();
   autoSelectCompetition();
+  renderChannelBatch();
   document.getElementById('tsList').innerHTML = '<div class="empty-hint">No timestamps yet \u2014 add goals and events below.</div>';
-  document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet.</div>';
-  addChannel(); addChannel(); addChannel();
+  document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet \u2014 use the quick-add above or add manually.</div>';
 
-  // Keyboard shortcut: Ctrl+Enter to generate
   _keyHandler = function(e) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); generate(); }
   };
@@ -228,15 +234,36 @@ function cleanup() {
   }
 }
 
-// ── Teams (uses app.js globals: TEAM_TO_LEAGUE, creators) ────────────────────
-function getAllTeams() {
+// ── League chips (compact logo filter) ───────────────────────────────────────
+function renderLeagueChips() {
+  var container = document.getElementById('genLeagueChips');
+  container.innerHTML = '<button class="gen-league-chip' + (!selectedLeague ? ' active' : '') + '" onclick="Gen.setLeague(\'\')">All</button>' +
+    LEAGUES.map(function(l) {
+      return '<button class="gen-league-chip' + (selectedLeague === l.name ? ' active' : '') + '" onclick="Gen.setLeague(\'' + l.name.replace(/'/g, "\\'") + '\')" title="' + l.name + '"><img src="' + l.logo + '" alt="" class="gen-league-chip-logo" onerror="this.replaceWith(document.createTextNode(\'' + l.flag + '\'))"> ' + l.code + '</button>';
+    }).join('');
+}
+
+function setLeague(league) {
+  selectedLeague = league;
+  renderLeagueChips();
+  populateTeamDropdowns();
+}
+
+// ── Teams (filtered by league) ───────────────────────────────────────────────
+function getFilteredTeams() {
   var staticTeams = Object.keys(TEAM_TO_LEAGUE);
   var dbTeams = creators.map(function(c) { return c.team; }).filter(Boolean);
-  return [...new Set([...staticTeams, ...dbTeams, ...customTeams])].sort();
+  var all = [...new Set([...staticTeams, ...dbTeams, ...customTeams])].sort();
+  if (selectedLeague) {
+    all = all.filter(function(t) {
+      return (TEAM_TO_LEAGUE[t] || '') === selectedLeague;
+    });
+  }
+  return all;
 }
 
 function buildTeamOptions() {
-  return getAllTeams().map(function(t) {
+  return getFilteredTeams().map(function(t) {
     return '<option value="' + t + '">' + t + '</option>';
   }).join('') + '<option value="__add__">+ Add team\u2026</option>';
 }
@@ -409,7 +436,56 @@ function removeTs(id) {
   syncDismissed = false; checkScoreSync();
 }
 
-// ── Channels (uses app.js global: creators) ──────────────────────────────────
+// ── Channel batch (quick-add by team + count) ────────────────────────────────
+function renderChannelBatch() {
+  var map = channelsByTeam();
+  var teams = Object.keys(map).sort();
+  var container = document.getElementById('chBatch');
+  container.innerHTML =
+    '<div class="ch-batch-row">' +
+      '<select id="chBatchTeam" class="ch-batch-select"><option value="">Select team...</option>' +
+        teams.map(function(t) { return '<option value="' + t + '">' + t + ' (' + map[t].length + ')</option>'; }).join('') +
+      '</select>' +
+      '<label class="field-label" style="margin:0;white-space:nowrap;align-self:center">Channels</label>' +
+      '<input type="number" id="chBatchCount" min="1" max="20" value="3" style="width:60px">' +
+      '<button class="btn-add" onclick="Gen.batchAddChannels()">Add</button>' +
+    '</div>';
+}
+
+function batchAddChannels() {
+  var teamSel = document.getElementById('chBatchTeam');
+  var team = teamSel.value;
+  if (!team) { teamSel.focus(); return; }
+  var count = parseInt(document.getElementById('chBatchCount').value) || 3;
+  var map = channelsByTeam();
+  var channels = map[team] || [];
+  var sorted = channels.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+  var toAdd = sorted.slice(0, count);
+
+  toAdd.forEach(function(ch) {
+    var id = ++counter;
+    chData.push({ id: id, preTeam: team, preUrl: ch.url });
+    _appendChPrefilled(id, team, ch.url, ch.name);
+  });
+}
+
+function _appendChPrefilled(id, team, url, name) {
+  var list = document.getElementById('chList');
+  var hint = list.querySelector('.empty-hint'); if (hint) hint.remove();
+  var map = channelsByTeam();
+  var teamOpts = Object.keys(map).sort().map(function(t) { return '<option value="' + t + '"' + (t === team ? ' selected' : '') + '>' + t + '</option>'; }).join('');
+  var chanOpts = '';
+  if (team && map[team]) {
+    var sorted = map[team].slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+    chanOpts = '<option value="">Select channel...</option>' + sorted.map(function(c) { return '<option value="' + c.url + '"' + (c.url === url ? ' selected' : '') + '>' + c.name + '</option>'; }).join('');
+  }
+  var div = document.createElement('div');
+  div.className = 'ch-row'; div.dataset.chid = id;
+  div.innerHTML = '<select class="ch-team" data-id="' + id + '" onchange="Gen.onTeamChange(this,' + id + ')"><option value="">Select team...</option>' + teamOpts + '</select><select class="ch-chan" data-id="' + id + '" onchange="Gen.onChanChange(this,' + id + ')">' + chanOpts + '</select><a href="' + (url || '#') + '" class="ch-link' + (url ? '' : ' empty') + '" id="chLink' + id + '" target="_blank" rel="noopener" title="Open channel">\u2197</a><button class="btn-remove" onclick="Gen.removeChannel(' + id + ')">&times;</button>';
+  list.appendChild(div);
+}
+
+// ── Channels (manual add, uses app.js global: creators) ──────────────────────
 function channelsByTeam() {
   var m = {};
   creators.forEach(function(c) {
@@ -437,7 +513,7 @@ function _appendCh(id) {
 function removeChannel(id) {
   chData.splice(chData.findIndex(function(c) { return c.id === id; }), 1);
   var el = document.querySelector('.ch-row[data-chid="' + id + '"]'); if (el) el.remove();
-  if (!chData.length) document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet.</div>';
+  if (!chData.length) document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet \u2014 use the quick-add above or add manually.</div>';
 }
 
 function onTeamChange(sel, id) {
@@ -502,16 +578,19 @@ function confirmReset() {
 function resetAll() {
   tsData.length = 0; chData.length = 0;
   homeGoals = 0; awayGoals = 0; counter = 0; syncDismissed = false;
-  ['teamA', 'teamB', 'emotion', 'rivalTeam', 'transferName', 'linkTT'].forEach(function(id) {
+  selectedLeague = '';
+  ['teamA', 'teamB', 'emotion', 'rivalTeam', 'transferName'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
+  renderLeagueChips();
   populateTeamDropdowns();
   document.getElementById('scoreA').value = 0;
   document.getElementById('scoreB').value = 0;
   autoSelectCompetition();
   document.querySelectorAll('.etag').forEach(function(e) { e.classList.remove('active'); });
   document.getElementById('tsList').innerHTML = '<div class="empty-hint">No timestamps yet \u2014 add goals and events below.</div>';
-  document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet.</div>';
+  document.getElementById('chList').innerHTML = '<div class="empty-hint">No channels added yet \u2014 use the quick-add above or add manually.</div>';
+  renderChannelBatch();
   document.getElementById('outputSection').classList.remove('visible');
   document.getElementById('statusBar').classList.remove('visible');
   document.getElementById('validationBanner').classList.remove('visible');
@@ -519,7 +598,6 @@ function resetAll() {
   document.getElementById('goalALabel').textContent = 'Home';
   document.getElementById('goalBLabel').textContent = 'Away';
   setType('fan');
-  addChannel(); addChannel(); addChannel();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -536,7 +614,6 @@ function generate() {
   var rival = document.getElementById('rivalTeam').value.trim() || 'Rival';
   var tName = document.getElementById('transferName').value.trim() || 'Player';
   var tType = document.getElementById('transferType').value;
-  var tt = document.getElementById('linkTT').value.trim();
 
   var lines = [{ time: '00:00', label: 'Introduction' }];
   tsData.forEach(function(ts, i) {
@@ -554,7 +631,7 @@ function generate() {
     return '\u26BD ' + name + ' \u2014 ' + url;
   }).filter(Boolean);
   var chBlock = chLines.length ? chLines.join('\n') : '\u26BD [Add channel credits above]';
-  var social = ['\u{1F4F8} Instagram: ' + FIXED_IG, tt ? '\u{1F3B5} TikTok: ' + tt : '', '\u{1F426} X: ' + FIXED_X].filter(Boolean).join('\n');
+  var social = ['\u{1F4F8} Instagram: ' + FIXED_IG, '\u{1F426} X: ' + FIXED_X].join('\n');
 
   var title = '', desc = '', tags = [];
   if (videoType === 'fan') {
@@ -721,6 +798,7 @@ window.Gen = {
   init: init,
   cleanup: cleanup,
   setType: setType,
+  setLeague: setLeague,
   onTeamSelect: onTeamSelect,
   updateGoalLabels: updateGoalLabels,
   checkScoreSync: checkScoreSync,
@@ -737,6 +815,7 @@ window.Gen = {
   removeChannel: removeChannel,
   onTeamChange: onTeamChange,
   onChanChange: onChanChange,
+  batchAddChannels: batchAddChannels,
   generate: generate,
   confirmReset: confirmReset,
   scrollToOutput: scrollToOutput,

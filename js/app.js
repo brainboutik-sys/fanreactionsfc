@@ -273,8 +273,8 @@ function handleRoute() {
     currentRoute = { page: 'rankings' };
     renderRankings();
   } else if (path === '/tools/generator') {
-    currentRoute = { page: 'generator' };
-    renderToolPage();
+    window.location.href = '/generator.html';
+    return;
   } else {
     currentRoute = { page: 'home' };
     renderHome();
@@ -353,7 +353,7 @@ async function signOut() {
   currentUser = null;
   favorites = new Set();
   updateAuthUI();
-  if (currentRoute.page === 'generator') navigate('/');
+  handleRoute();
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────
@@ -942,27 +942,7 @@ function renderRankings() {
   `;
 }
 
-// ── Render: Tools page ────────────────────────────────────────────────────
-function renderToolPage() {
-  if (!currentUser) {
-    document.getElementById('app').innerHTML = `
-      <div class="container" style="padding-top:60px">
-        <div class="empty-state">
-          <div class="es-icon">&#128274;</div>
-          <div class="es-title">Sign in to access tools</div>
-          <p style="color:var(--text-dim);margin-bottom:16px">The Description Generator is available for signed-in users.</p>
-          <button class="btn btn-primary" onclick="openModal('signin')">Sign In</button>
-        </div>
-      </div>`;
-    return;
-  }
-  document.getElementById('app').innerHTML = `
-    <div class="container" style="padding-top:32px">
-      <a href="/" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; Home</a>
-      <h1 style="font-size:1.4rem;font-weight:800;margin-bottom:20px">Description Generator</h1>
-      <iframe src="/generator.html" style="width:100%;height:calc(100vh - 180px);border:1px solid var(--border);border-radius:var(--radius)"></iframe>
-    </div>`;
-}
+// ── Tools page — redirects to standalone generator.html ──────────────────
 
 // ── Auth Modal ────────────────────────────────────────────────────────────
 function openModal(type = 'signin') {
@@ -1024,7 +1004,7 @@ function renderFooter() {
           </div>
           <div class="footer-col">
             <h4>Community</h4>
-            <a href="#" onclick="event.preventDefault();currentUser?navigate('/tools/generator'):openModal('signin')">Description Generator</a>
+            <a href="/tools/generator">Description Generator</a>
             <a href="#" onclick="event.preventDefault();openModal('signin')">Sign In / Sign Up</a>
           </div>
           <div class="footer-col">

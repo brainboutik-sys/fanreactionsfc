@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fan Reactions FC — Content Generator</title>
+<title>FanReactionsFC — Description Generator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -235,9 +235,44 @@ select option{background:#1a1a2e;color:#fff}
 .str-count{font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 .str-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 @media(max-width:600px){.str-form-grid{grid-template-columns:1fr}.str-row{grid-template-columns:auto 1fr auto auto;row-gap:8px}.str-row .str-link,.str-row .btn-remove,.str-row .str-fav{grid-column:auto}}
+
+/* ── Site nav (dark-adapted) ── */
+.site-header{position:sticky;top:0;z-index:200;background:rgba(6,8,16,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px;max-width:1200px;margin:0 auto;padding:0 20px}
+.nav-brand{display:flex;align-items:center;gap:8px;font-size:1.15rem;font-weight:700;color:#fff;white-space:nowrap;text-decoration:none}
+.nav-brand .brand-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}
+.nav-brand .brand-fan{color:#F6BE06;font-weight:800}
+.nav-brand .brand-reactions{color:#fff;font-weight:800}
+.nav-brand .brand-fc{color:#F6BE06;font-weight:700;font-size:.85em}
+.nav-links{display:flex;align-items:center;gap:6px}
+.nav-link{padding:6px 14px;border-radius:6px;font-size:.85rem;font-weight:500;color:rgba(255,255,255,.6);transition:all .15s;text-decoration:none}
+.nav-link:hover,.nav-link.active{color:#fff;background:rgba(255,255,255,.08)}
+.nav-toggle{display:none;background:none;border:none;color:#fff;font-size:1.4rem;padding:6px;cursor:pointer}
+@media(max-width:768px){
+  .nav-links{display:none;position:absolute;top:60px;left:0;right:0;flex-direction:column;background:rgba(6,8,16,.95);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;gap:4px}
+  .nav-links.open{display:flex}
+  .nav-toggle{display:block}
+}
+.site-footer-gen{border-top:1px solid rgba(255,255,255,.08);padding:32px 0;margin-top:40px;text-align:center;font-size:.78rem;color:rgba(255,255,255,.3)}
+.site-footer-gen a{color:rgba(255,255,255,.45);text-decoration:none}
+.site-footer-gen a:hover{color:#F6BE06}
 </style>
 </head>
 <body>
+<!-- Site nav -->
+<header class="site-header">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand"><img src="/img/logo.png" alt="" class="brand-logo"><span class="brand-fan">Fan</span><span class="brand-reactions">Reactions</span><span class="brand-fc">FC</span></a>
+    <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">&#9776;</button>
+    <nav class="nav-links">
+      <a href="/" class="nav-link">Home</a>
+      <a href="/discover" class="nav-link">Discover</a>
+      <a href="/rankings" class="nav-link">Rankings</a>
+      <a href="/tools/generator" class="nav-link active">Description Generator</a>
+    </nav>
+  </div>
+</header>
+
 <div class="bg"></div>
 <div class="bg-orb bg-orb-1"></div>
 <div class="bg-orb bg-orb-2"></div>
@@ -256,7 +291,7 @@ select option{background:#1a1a2e;color:#fff}
 <div class="wrap">
   <div class="header">
     <div class="header-badge"><span class="badge-dot"></span>Fan Reactions FC</div>
-    <h1>Video Content Generator</h1>
+    <h1>Description Generator</h1>
     <p>Title · Description · Tags — ready to paste</p>
     <div class="header-actions">
       <button class="btn-new" onclick="confirmReset()">↺ New Video</button>
@@ -525,8 +560,8 @@ const CHANNELS={
   "Leicester":[{name:"LeicesterTillIDieTV",url:"https://www.youtube.com/@LeicesterTillIDieTV"},{name:"BlueTintedGlasses",url:"https://www.youtube.com/@BlueTintedGlassesLCFC"},{name:"LeicesterFanTV",url:"https://www.youtube.com/@LeicesterFanTv"},{name:"LeeChappy",url:"https://www.youtube.com/@LeeChappy"}],
   "Liverpool":[{name:"DonHusam",url:"https://www.youtube.com/@don_husam"},{name:"TheRedmenTV",url:"https://www.youtube.com/@theredmentv"},{name:"AnfieldAgenda",url:"https://www.youtube.com/@AnfieldAgenda"},{name:"LeosGoals",url:"https://www.youtube.com/@LeosGoals"},{name:"TyDenty",url:"https://www.youtube.com/@TyDenty"},{name:"AnfieldIndex",url:"https://www.youtube.com/@AnfieldIndexTV"},{name:"FuIzzy",url:"https://www.youtube.com/@fu_izzy"},{name:"RedsAllezTV",url:"https://www.youtube.com/@redsalleztv"},{name:"PremierLeagueDad",url:"https://www.youtube.com/@PremierLeagueDad"},{name:"TheFootballStorey",url:"https://www.youtube.com/@thefootballstorey"},{name:"AnfieldRoadTV",url:"https://www.youtube.com/@anfieldroadtv"},{name:"TheKopTV",url:"https://www.youtube.com/@TheKopTV"},{name:"AllRedShow",url:"https://www.youtube.com/@AllRedShow"},{name:"NothingButReds",url:"https://www.youtube.com/@NothingButReds"},{name:"NathanConnorTV",url:"https://www.youtube.com/@nathanconnortv"},{name:"FinchStreams",url:"https://www.youtube.com/@FinchStreams/streams"},{name:"TogJamie",url:"https://www.youtube.com/@togjamie"},{name:"LiverpoolChats",url:"https://www.youtube.com/@liverpoolchats"},{name:"LiverpoolJapan",url:"https://www.youtube.com/@liverpooljapan"}],
   "Luton":[{name:"TBoysTV",url:"https://www.youtube.com/@T_Boys_TV"}],
-  "Manchester City":[{name:"TypicalCity",url:"https://www.youtube.com/@typicalcity9320"},{name:"ItsLB",url:"https://www.youtube.com/@Its-LB"},{name:"JSGC",url:"https://www.youtube.com/@JSGC171"},{name:"Nobbins",url:"https://www.youtube.com/@Nobbins"},{name:"NathanielKnowsBall",url:"https://www.youtube.com/@NathanielKnowsBall"},{name:"HamzaTalksFootball",url:"https://www.youtube.com/@HamzaTalksFootballMCFC"},{name:"CityUnplugged",url:"https://www.youtube.com/@cityunplugged3618"},{name:"MCFCConnect",url:"https://www.youtube.com/@MCFC_Connect"},{name:"LawrenceTalksFootball",url:"https://www.youtube.com/@LawrenceTalksFootball"},{name:"EsteemedKompany",url:"https://www.youtube.com/@EsteemedKompany"},{name:"CityXtra",url:"https://www.youtube.com/@CityXtra"}],
-  "Manchester United":[{name:"UnitedStand",url:"https://www.youtube.com/@UnitedStand"},{name:"FlyingPigUnited",url:"https://www.youtube.com/@FlyingPigUnited"},{name:"SaeedTV",url:"https://www.youtube.com/@SaeedTV_"},{name:"UnitedCommunity",url:"https://www.youtube.com/@unitedcommunitychannel"},{name:"UnitedViewTV",url:"https://www.youtube.com/@UnitedViewTV"},{name:"KGRecklessSport",url:"https://www.youtube.com/@KGRecklessSport"},{name:"TheCasualFan",url:"https://www.youtube.com/@TheCasual_Fan"},{name:"HollyCashin",url:"https://www.youtube.com/@HollyCashinMUFC"},{name:"RedUnitedTV",url:"https://www.youtube.com/@RedUnitedTV"},{name:"FullTimeDevils",url:"https://www.youtube.com/@FullTimeDevils"},{name:"RantsNBants",url:"https://www.youtube.com/@RantsNBants"},{name:"UCATTFC",url:"https://www.youtube.com/@UCATTFC"},{name:"RNADec",url:"https://www.youtube.com/@RNA_Dec"},{name:"Gamst",url:"https://www.youtube.com/@gamst6217"},{name:"MusseMagasin",url:"https://www.youtube.com/@mussesmagasin4894"},{name:"GoodVibesJohn",url:"https://www.youtube.com/@GoodVibesJohn"},{name:"TheUnitedWave",url:"https://www.youtube.com/@theunitedwave"}],
+  "Man City":[{name:"TypicalCity",url:"https://www.youtube.com/@typicalcity9320"},{name:"ItsLB",url:"https://www.youtube.com/@Its-LB"},{name:"JSGC",url:"https://www.youtube.com/@JSGC171"},{name:"Nobbins",url:"https://www.youtube.com/@Nobbins"},{name:"NathanielKnowsBall",url:"https://www.youtube.com/@NathanielKnowsBall"},{name:"HamzaTalksFootball",url:"https://www.youtube.com/@HamzaTalksFootballMCFC"},{name:"CityUnplugged",url:"https://www.youtube.com/@cityunplugged3618"},{name:"MCFCConnect",url:"https://www.youtube.com/@MCFC_Connect"},{name:"LawrenceTalksFootball",url:"https://www.youtube.com/@LawrenceTalksFootball"},{name:"EsteemedKompany",url:"https://www.youtube.com/@EsteemedKompany"},{name:"CityXtra",url:"https://www.youtube.com/@CityXtra"}],
+  "Man United":[{name:"UnitedStand",url:"https://www.youtube.com/@UnitedStand"},{name:"FlyingPigUnited",url:"https://www.youtube.com/@FlyingPigUnited"},{name:"SaeedTV",url:"https://www.youtube.com/@SaeedTV_"},{name:"UnitedCommunity",url:"https://www.youtube.com/@unitedcommunitychannel"},{name:"UnitedViewTV",url:"https://www.youtube.com/@UnitedViewTV"},{name:"KGRecklessSport",url:"https://www.youtube.com/@KGRecklessSport"},{name:"TheCasualFan",url:"https://www.youtube.com/@TheCasual_Fan"},{name:"HollyCashin",url:"https://www.youtube.com/@HollyCashinMUFC"},{name:"RedUnitedTV",url:"https://www.youtube.com/@RedUnitedTV"},{name:"FullTimeDevils",url:"https://www.youtube.com/@FullTimeDevils"},{name:"RantsNBants",url:"https://www.youtube.com/@RantsNBants"},{name:"UCATTFC",url:"https://www.youtube.com/@UCATTFC"},{name:"RNADec",url:"https://www.youtube.com/@RNA_Dec"},{name:"Gamst",url:"https://www.youtube.com/@gamst6217"},{name:"MusseMagasin",url:"https://www.youtube.com/@mussesmagasin4894"},{name:"GoodVibesJohn",url:"https://www.youtube.com/@GoodVibesJohn"},{name:"TheUnitedWave",url:"https://www.youtube.com/@theunitedwave"}],
   "Newcastle":[{name:"TheToonReview",url:"https://www.youtube.com/@TheToonReview"},{name:"NUFCTalkTV",url:"https://www.youtube.com/@NUFCTalkTV"},{name:"GeordieJosh",url:"https://www.youtube.com/@Geordiejosh_"},{name:"ThroughBlackAndWhiteEyes",url:"https://www.youtube.com/@throughblackandwhiteeyes"},{name:"TheKickOff",url:"https://www.youtube.com/@TheKickOff"},{name:"GeordieDreadTV",url:"https://www.youtube.com/@GeordieDreadTV"},{name:"LoadedMagnUFC",url:"https://www.youtube.com/@LOADEDMAGNUFC"},{name:"GallowgateShots",url:"https://www.youtube.com/@GallowgateShots"},{name:"CashTalksFootball",url:"https://www.youtube.com/@cashtalksfootball1013"}],
   "Nottm Forest":[{name:"ForestFanTV",url:"https://www.youtube.com/@ForestFanTV"}],
   "Sheffield Utd":[{name:"SheffUnitedWay",url:"https://www.youtube.com/@SheffUnitedWay"}],
@@ -542,7 +577,7 @@ const customTeams=[];
 
 // ── League → Teams mapping ──────────────────────────────────────────────────
 const LEAGUE_TEAMS={
-  'Premier League':['Arsenal','Aston Villa','Bournemouth','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Ipswich','Leeds United','Leicester','Liverpool','Luton','Manchester City','Manchester United','Newcastle','Nottm Forest','Sheffield Utd','Southampton','Tottenham','West Ham','Wolves'],
+  'Premier League':['Arsenal','Aston Villa','Bournemouth','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Ipswich','Leeds United','Leicester','Liverpool','Luton','Man City','Man United','Newcastle','Nottm Forest','Sheffield Utd','Southampton','Tottenham','West Ham','Wolves'],
   'La Liga':['Alaves','Athletic Bilbao','Atletico Madrid','Barcelona','Celta Vigo','Espanyol','Getafe','Girona','Las Palmas','Leganes','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia','Valladolid','Villarreal'],
   'Serie A':['AC Milan','Atalanta','Bologna','Cagliari','Como','Empoli','Fiorentina','Genoa','Hellas Verona','Inter Milan','Juventus','Lazio','Lecce','Monza','Napoli','Parma','Roma','Torino','Udinese','Venezia'],
   'Bundesliga':['Augsburg','Bayer Leverkusen','Bayern Munich','Bochum','Borussia Dortmund','Borussia Monchengladbach','Eintracht Frankfurt','Freiburg','Heidenheim','Hoffenheim','Holstein Kiel','Mainz','RB Leipzig','St. Pauli','Stuttgart','Union Berlin','Werder Bremen','Wolfsburg'],
@@ -1443,5 +1478,13 @@ loadStreamers();
 refreshAuth();
 sb.auth.onAuthStateChange((_e,_session)=>{ refreshAuth(); });
 </script>
+
+<!-- Site footer -->
+<footer class="site-footer-gen">
+  <div style="max-width:860px;margin:0 auto;padding:0 20px">
+    <div style="margin-bottom:8px"><a href="/">Home</a> &bull; <a href="/discover">Discover</a> &bull; <a href="/rankings">Rankings</a> &bull; <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube</a></div>
+    <div>&copy; 2026 FanReactionsFC.com &bull; Description Generator</div>
+  </div>
+</footer>
 </body>
 </html>

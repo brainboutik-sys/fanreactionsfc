@@ -160,6 +160,11 @@ function leagueFlag(name) {
   const l = LEAGUES.find(lg => lg.name === name);
   return l ? l.flag : '';
 }
+function leagueChipImg(name) {
+  const l = LEAGUES.find(lg => lg.name === name);
+  if (!l || !l.logo) return '';
+  return '<img src="' + l.logo + '" alt="" class="chip-league-logo" onerror="this.style.display=\'none\'">';
+}
 function leagueLogo(name, cls = 'league-logo') {
   const l = LEAGUES.find(lg => lg.name === name);
   if (!l || !l.logo) return '';
@@ -609,7 +614,7 @@ function renderHome() {
               ${avatarImg(c, 'trending-avatar')}
               <div class="trending-info">
                 <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
-                <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} <span style="opacity:.5;font-size:.68rem">${leagueFlag(c.league || getLeague(c.team))}</span></div>
+                <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
               </div>
               <div class="trending-score">${stars(c.avgRating)} <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">(${c.ratingCount})</span></div>
             </a>
@@ -790,7 +795,7 @@ function renderDiscover() {
           <!-- Active filters + result count -->
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">
             <span class="discover-result-count">${filtered.length} creator${filtered.length !== 1 ? 's' : ''}</span>
-            ${leagueFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('league','')">${leagueFlag(leagueFilter)} ${escHtml(leagueFilter)} &times;</span>` : ''}
+            ${leagueFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('league','')">${leagueChipImg(leagueFilter)} ${escHtml(leagueFilter)} &times;</span>` : ''}
             ${teamFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('team','')">${escHtml(teamFilter)} &times;</span>` : ''}
             ${typeFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('type','')">${escHtml(typeFilter)} &times;</span>` : ''}
             ${favOnly ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('favs','')">Favorites &times;</span>` : ''}
@@ -1045,7 +1050,7 @@ function renderClubPage(club) {
     <div class="container" style="padding-top:40px">
       <a href="/discover${clubLeague !== 'Other' ? '?league=' + encodeURIComponent(clubLeague) : ''}" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; ${clubLeague !== 'Other' ? escHtml(clubLeague) : 'All clubs'}</a>
       <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:12px">${crestImg(club, 'crest-xl')} ${escHtml(club)}</h1>
-      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:16px">${leagueInfo ? leagueInfo.flag + ' ' : ''}${escHtml(clubLeague)} &bull; ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</p>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:16px;display:flex;align-items:center;gap:6px">${leagueInfo ? leagueChipImg(clubLeague) : ''} ${escHtml(clubLeague)} &bull; ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</p>
       <div class="top-creators-tabs" style="margin-bottom:20px">
         <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subscribers</button>
         <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
@@ -1091,7 +1096,7 @@ function renderRankings() {
       <div class="chip-row" style="justify-content:flex-start;margin-bottom:24px">
         <span class="chip ${!leagueFilter ? 'active' : ''}" onclick="navigate('/rankings${mode === 'subs' ? '?mode=subs' : ''}')">All leagues</span>
         ${LEAGUES.map(l =>
-          `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}${modeParam}')">${l.flag} ${l.name}</span>`
+          `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}${modeParam}')">${leagueChipImg(l.name)} ${l.name}</span>`
         ).join('')}
       </div>
       ${ranked.length ? `<div class="trending-list">${ranked.map((c, i) => `
@@ -1191,7 +1196,7 @@ function renderFooter() {
             <h4>Browse</h4>
             <a href="/discover">All Creators</a>
             <a href="/rankings">Rankings</a>
-            ${LEAGUES.slice(0, 3).map(l => `<a href="/discover?league=${encodeURIComponent(l.name)}">${l.flag} ${l.name}</a>`).join('')}
+            ${LEAGUES.slice(0, 3).map(l => `<a href="/discover?league=${encodeURIComponent(l.name)}" style="display:flex;align-items:center;gap:6px">${leagueChipImg(l.name)} ${l.name}</a>`).join('')}
           </div>
           <div class="footer-col">
             <h4>Community</h4>

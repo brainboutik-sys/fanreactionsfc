@@ -683,7 +683,7 @@ function creatorCard(c) {
         ${avatarImg(c, 'cc-avatar')}
         <div class="cc-info">
           <div class="cc-name">${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
-          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)} ${c.channelCountry ? '<span style="font-size:.7rem">' + countryFlag(c.channelCountry) + '</span>' : ''}</div>
+          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}</div>
         </div>
       </div>
       <div class="cc-meta">
@@ -866,7 +866,7 @@ async function renderProfile(slug) {
               ${c.verified ? '<span class="badge badge-green">Verified</span>' : ''}
               ${c.claimed ? '<span class="badge badge-dim">Claimed</span>' : ''}
             </h1>
-            <div class="profile-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.channelCountry ? '<span title="' + c.channelCountry + '" style="margin-left:4px">' + countryFlag(c.channelCountry) + '</span>' : ''}</div>
+            <div class="profile-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
             ${c.description ? `<div class="profile-desc">${escHtml(c.description)}</div>` : ''}
             <div class="profile-actions">
               ${c.channel ? `<a href="${escHtml(c.channel)}" target="_blank" rel="noopener" class="btn btn-primary">Watch on YouTube</a>` : ''}
@@ -889,6 +889,7 @@ async function renderProfile(slug) {
           ${c.videoCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.videoCount)}</div><div class="ps-label">Videos</div></div>` : ''}
           ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `<div class="ps-item"><div class="ps-num" style="font-size:1rem">${c.uploadFrequency}</div><div class="ps-label">Uploads</div></div>` : ''}
           ${c.channelCreatedAt ? `<div class="ps-item"><div class="ps-num" style="font-size:1rem">${channelYear(c.channelCreatedAt)}</div><div class="ps-label">Channel</div></div>` : ''}
+          ${c.channelCountry ? `<div class="ps-item"><div class="ps-num" style="font-size:1.4rem">${countryFlag(c.channelCountry)}</div><div class="ps-label">Based in</div></div>` : ''}
         </div>
       </div>
     </div>

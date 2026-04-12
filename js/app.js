@@ -250,6 +250,7 @@ function handleRoute() {
   const path = location.pathname;
   const app = document.getElementById('app');
   closeModal();
+  if (typeof Gen !== 'undefined' && Gen.cleanup) Gen.cleanup();
   window.scrollTo(0, 0);
 
   // Update nav active state
@@ -273,8 +274,8 @@ function handleRoute() {
     currentRoute = { page: 'rankings' };
     renderRankings();
   } else if (path === '/tools/generator') {
-    window.location.href = '/generator.html';
-    return;
+    currentRoute = { page: 'generator' };
+    renderGenerator();
   } else {
     currentRoute = { page: 'home' };
     renderHome();
@@ -942,7 +943,12 @@ function renderRankings() {
   `;
 }
 
-// ── Tools page — redirects to standalone generator.html ──────────────────
+// ── Render: Generator ────────────────────────────────────────────────────
+async function renderGenerator() {
+  if (!creators.length) await loadCreators();
+  document.getElementById('app').innerHTML = Gen.renderHTML() + renderFooter();
+  Gen.init();
+}
 
 // ── Auth Modal ────────────────────────────────────────────────────────────
 function openModal(type = 'signin') {

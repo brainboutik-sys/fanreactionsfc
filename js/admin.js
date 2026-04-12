@@ -215,7 +215,18 @@ function renderCreators() {
   '</div>';
 }
 
-function searchCreators(q) { creatorSearch = q; creatorPage = 0; renderPage(); }
+var _searchTimer = null;
+function searchCreators(q) {
+  creatorSearch = q; creatorPage = 0;
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(function() {
+    var el = document.querySelector('.admin-table-search');
+    var pos = el ? el.selectionStart : 0;
+    renderPage();
+    var el2 = document.querySelector('.admin-table-search');
+    if (el2) { el2.focus(); el2.setSelectionRange(pos, pos); }
+  }, 150);
+}
 function sortCreators(s) { creatorSort = s; creatorPage = 0; renderPage(); }
 function creatorGoPage(p) { creatorPage = p; renderPage(); }
 function creatorPrev() { if (creatorPage > 0) { creatorPage--; renderPage(); } }
@@ -231,6 +242,43 @@ function editCreator(id) {
   if (c) openCreatorForm(c);
 }
 
+function buildTeamSelect(selectedLeague, selectedTeam) {
+  var leagues = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'];
+  var teamsByLeague = {};
+  // Build from TEAM_TO_LEAGUE (app.js global)
+  Object.entries(TEAM_TO_LEAGUE).forEach(function(e) {
+    var team = e[0], league = e[1];
+    if (!teamsByLeague[league]) teamsByLeague[league] = [];
+    teamsByLeague[league].push(team);
+  });
+  // Add Multi-Club / Other
+  teamsByLeague['Other'] = ['Multi-Club / Other'];
+  // Sort teams within each league
+  Object.keys(teamsByLeague).forEach(function(l) { teamsByLeague[l].sort(); });
+
+  var html = '<option value="">Select team...</option>';
+  var leagueOrder = selectedLeague ? [selectedLeague] : leagues.concat(['Other']);
+  if (selectedLeague) leagueOrder.push('Other');
+
+  leagueOrder.forEach(function(l) {
+    var teams = teamsByLeague[l];
+    if (!teams || !teams.length) return;
+    html += '<optgroup label="' + l + '">';
+    teams.forEach(function(t) {
+      html += '<option value="' + escHtml(t) + '"' + (t === selectedTeam ? ' selected' : '') + '>' + escHtml(t) + '</option>';
+    });
+    html += '</optgroup>';
+  });
+  return html;
+}
+
+function onLeagueChange() {
+  var league = document.getElementById('cf_league').value;
+  var teamSel = document.getElementById('cf_team');
+  var curTeam = teamSel.value;
+  teamSel.innerHTML = buildTeamSelect(league, curTeam);
+}
+
 function openCreatorForm(c) {
   var isEdit = !!c;
   var modal = document.getElementById('adminModal');
@@ -238,19 +286,12 @@ function openCreatorForm(c) {
     '<button class="admin-modal-close" onclick="Admin.closeModal()">&times;</button>' +
     '<div class="admin-modal-title">' + (isEdit ? 'Edit Creator' : 'Add Creator') + '</div>' +
     '<div class="admin-modal-sub">' + (isEdit ? 'Update ' + escHtml(c.name) : 'Add a new YouTube creator to the database') + '</div>' +
+    formField('Channel Name', 'cf_name', c?.name || '') +
+    formField('Channel URL', 'cf_channel', c?.channel_url || '') +
     '<div class="admin-form-grid">' +
-      formField('Name', 'cf_name', c?.name || '') +
-      formField('Team', 'cf_team', c?.team || '') +
+      formField('League', 'cf_league', c?.league || '', 'select', ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'], 'Admin.onLeagueChange()') +
+      '<div class="admin-form-row"><label class="admin-form-label" for="cf_team">Team</label><select class="admin-form-select" id="cf_team">' + buildTeamSelect(c?.league || '', c?.team || '') + '</select></div>' +
     '</div>' +
-    '<div class="admin-form-grid">' +
-      formField('Channel URL', 'cf_channel', c?.channel_url || '') +
-      formField('League', 'cf_league', c?.league || '', 'select', ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1']) +
-    '</div>' +
-    '<div class="admin-form-grid">' +
-      formField('Slug', 'cf_slug', c?.slug || '') +
-      formField('Live URL', 'cf_live', c?.live_url || '') +
-    '</div>' +
-    formField('Description', 'cf_desc', c?.description || '', 'textarea') +
     '<div class="admin-form-grid">' +
       formCheck('Verified', 'cf_verified', c?.verified) +
       formCheck('Featured', 'cf_featured', c?.featured) +
@@ -263,19 +304,22 @@ function openCreatorForm(c) {
 }
 
 async function saveCreator(id) {
+  var channelUrl = document.getElementById('cf_channel').value.trim();
+  var name = document.getElementById('cf_name').value.trim();
+  // Auto-generate live_url from channel_url (append /streams)
+  var liveUrl = channelUrl ? channelUrl.replace(/\/+$/, '') + '/streams' : null;
   var data = {
-    name: document.getElementById('cf_name').value.trim(),
-    team: document.getElementById('cf_team').value.trim(),
-    channel_url: document.getElementById('cf_channel').value.trim(),
+    name: name,
+    team: document.getElementById('cf_team').value,
+    channel_url: channelUrl,
     league: document.getElementById('cf_league').value,
-    slug: document.getElementById('cf_slug').value.trim() || slugify(document.getElementById('cf_name').value.trim()),
-    live_url: document.getElementById('cf_live').value.trim() || null,
-    description: document.getElementById('cf_desc').value.trim() || null,
+    slug: slugify(name),
+    live_url: liveUrl,
     verified: document.getElementById('cf_verified').checked,
     featured: document.getElementById('cf_featured').checked,
     updated_at: new Date().toISOString()
   };
-  if (!data.name) { toast('Name is required', 'error'); return; }
+  if (!data.name) { toast('Channel name is required', 'error'); return; }
   if (!data.team) { toast('Team is required', 'error'); return; }
 
   var err;
@@ -432,11 +476,11 @@ function renderActivityList(items) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formField(label, id, value, type, options) {
+function formField(label, id, value, type, options, onchange) {
   type = type || 'text';
   var html = '<div class="admin-form-row"><label class="admin-form-label" for="' + id + '">' + label + '</label>';
   if (type === 'select') {
-    html += '<select class="admin-form-select" id="' + id + '">' + (options||[]).map(function(o){return '<option' + (o===value?' selected':'') + '>' + o + '</option>';}).join('') + '</select>';
+    html += '<select class="admin-form-select" id="' + id + '"' + (onchange ? ' onchange="' + onchange + '"' : '') + '>' + (options||[]).map(function(o){return '<option' + (o===value?' selected':'') + '>' + o + '</option>';}).join('') + '</select>';
   } else if (type === 'textarea') {
     html += '<textarea class="admin-form-input" id="' + id + '" rows="3" style="resize:vertical">' + escHtml(value) + '</textarea>';
   } else {
@@ -467,6 +511,7 @@ window.Admin = {
   go: go,
   openAddCreator: openAddCreator,
   editCreator: editCreator,
+  onLeagueChange: onLeagueChange,
   saveCreator: saveCreator,
   deleteCreator: deleteCreator,
   searchCreators: searchCreators,

@@ -10,6 +10,7 @@ var adminRole = null;
 var adminPage = 'dashboard';
 var allCreators = [];
 var allReviews = [];
+var allSubmissions = [];
 var allUsers = [];
 var adminLog = [];
 var creatorSearch = '';
@@ -42,14 +43,16 @@ async function logAction(action, entityType, entityId, details) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
-  var [creatorsRes, reviewsRes, logRes] = await Promise.all([
+  var [creatorsRes, reviewsRes, logRes, subsRes] = await Promise.all([
     sb.from('frfc_streamers').select('*').order('name'),
     sb.from('frfc_reviews').select('*').order('created_at', { ascending: false }),
-    sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50)
+    sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
+    sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false })
   ]);
   allCreators = creatorsRes.data || [];
   allReviews = reviewsRes.data || [];
   adminLog = logRes.data || [];
+  allSubmissions = subsRes.data || [];
 }
 
 // ── Render shell ─────────────────────────────────────────────────────────────
@@ -57,6 +60,7 @@ function renderHTML() {
   var navItems = [
     { id: 'dashboard', icon: '&#9632;', label: 'Dashboard' },
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
+    { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
     { id: 'reviews',   icon: '&#9998;', label: 'Reviews', badge: allReviews.length },
     { id: 'users',     icon: '&#9823;', label: 'Users' },
     { id: 'settings',  icon: '&#9881;', label: 'Settings' },
@@ -106,6 +110,7 @@ function renderPage() {
   var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
   if (adminPage === 'dashboard')  content.innerHTML = toggle + renderDashboard();
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
+  else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'reviews')  content.innerHTML = toggle + renderReviews();
   else if (adminPage === 'users')    content.innerHTML = toggle + renderUsers();
   else if (adminPage === 'settings') content.innerHTML = toggle + renderSettings();
@@ -347,6 +352,75 @@ async function deleteCreator(id, name) {
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'creator', id, { name: name });
   toast('Creator deleted', 'success');
+  await loadAdminData();
+  renderPage();
+}
+
+// ── Submissions page ─────────────────────────────────────────────────────────
+function renderSubmissions() {
+  var pending = allSubmissions.filter(function(s){return s.status==='pending'});
+  var reviewed = allSubmissions.filter(function(s){return s.status!=='pending'});
+
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Submissions</h1><div class="admin-page-subtitle">' + pending.length + ' pending review</div></div></div>' +
+
+  (pending.length ? '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Pending Review</span></div><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Channel Name</th><th>Channel URL</th><th>Team</th><th>League</th><th>Submitted</th><th>Actions</th></tr></thead><tbody>' +
+    pending.map(function(s) {
+      return '<tr>' +
+        '<td class="row-name">' + escHtml(s.name) + '</td>' +
+        '<td><a href="' + escHtml(s.channel_url) + '" target="_blank" rel="noopener" style="color:var(--accent);font-size:.82rem">' + escHtml(s.channel_url).substring(0, 40) + '...</a></td>' +
+        '<td>' + escHtml(s.team) + '</td>' +
+        '<td><span class="admin-badge admin-badge-dim">' + escHtml(s.league) + '</span></td>' +
+        '<td class="row-dim">' + timeAgo(s.submitted_at) + '</td>' +
+        '<td><div class="row-actions">' +
+          '<button class="btn-admin btn-admin-success" onclick="Admin.approveSubmission(\'' + s.id + '\')">Approve</button>' +
+          '<button class="btn-admin btn-admin-danger" onclick="Admin.rejectSubmission(\'' + s.id + '\')">Reject</button>' +
+        '</div></td></tr>';
+    }).join('') +
+  '</tbody></table></div></div>' : '<div class="admin-card"><div class="admin-card-body" style="text-align:center;color:var(--text-dim);padding:32px">No pending submissions</div></div>') +
+
+  (reviewed.length ? '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Previously Reviewed</span></div><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Channel</th><th>Team</th><th>Status</th><th>Reviewed</th></tr></thead><tbody>' +
+    reviewed.slice(0, 20).map(function(s) {
+      return '<tr><td class="row-name">' + escHtml(s.name) + '</td><td>' + escHtml(s.team) + '</td><td>' +
+        (s.status === 'approved' ? '<span class="admin-badge admin-badge-green">Approved</span>' : '<span class="admin-badge admin-badge-red">Rejected</span>') +
+        '</td><td class="row-dim">' + (s.reviewed_at ? timeAgo(s.reviewed_at) : '—') + '</td></tr>';
+    }).join('') +
+  '</tbody></table></div></div>' : '');
+}
+
+async function approveSubmission(id) {
+  var s = allSubmissions.find(function(x){return x.id===id});
+  if (!s) return;
+
+  // Create the creator in frfc_streamers
+  var slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  var liveUrl = s.channel_url ? s.channel_url.replace(/\/+$/, '') + '/streams' : null;
+  var { error } = await sb.from('frfc_streamers').insert({
+    name: s.name,
+    channel_url: s.channel_url,
+    team: s.team,
+    league: s.league,
+    slug: slug,
+    live_url: liveUrl,
+    created_by: currentUser.id
+  });
+  if (error) { toast('Failed to create creator: ' + error.message, 'error'); return; }
+
+  // Mark submission as approved
+  await sb.from('frfc_submissions').update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
+  await logAction('approve', 'submission', id, { name: s.name });
+  toast(s.name + ' approved and added to database', 'success');
+  await loadAdminData();
+  renderPage();
+}
+
+async function rejectSubmission(id) {
+  var s = allSubmissions.find(function(x){return x.id===id});
+  if (!s) return;
+  if (!confirm('Reject submission "' + s.name + '"?')) return;
+
+  await sb.from('frfc_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
+  await logAction('reject', 'submission', id, { name: s.name });
+  toast(s.name + ' rejected', 'info');
   await loadAdminData();
   renderPage();
 }
@@ -640,6 +714,8 @@ window.Admin = {
   creatorGoPage: creatorGoPage,
   creatorPrev: creatorPrev,
   creatorNext: creatorNext,
+  approveSubmission: approveSubmission,
+  rejectSubmission: rejectSubmission,
   searchReviews: searchReviews,
   deleteReview: deleteReview,
   runSync: runSync,

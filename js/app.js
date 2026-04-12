@@ -281,6 +281,9 @@ function handleRoute() {
   } else if (path === '/tools/generator') {
     currentRoute = { page: 'generator' };
     renderGenerator();
+  } else if (path === '/submit') {
+    currentRoute = { page: 'submit' };
+    renderSubmit();
   } else if (path.startsWith('/admin')) {
     currentRoute = { page: 'admin' };
     renderAdmin();
@@ -1126,6 +1129,87 @@ async function renderGenerator() {
   Gen.init();
 }
 
+// ── Render: Submit Creator ────────────────────────────────────────────────
+function renderSubmit() {
+  // Build team options grouped by league (same logic as admin)
+  function teamSelect() {
+    var html = '<option value="">Select team...</option>';
+    var leagueOrder = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'];
+    var teamsByLeague = {};
+    Object.entries(TEAM_TO_LEAGUE).forEach(function(e) {
+      if (!teamsByLeague[e[1]]) teamsByLeague[e[1]] = [];
+      teamsByLeague[e[1]].push(e[0]);
+    });
+    leagueOrder.forEach(function(l) {
+      var teams = (teamsByLeague[l] || []).sort();
+      html += '<optgroup label="' + l + '">' + teams.map(function(t) { return '<option value="' + escHtml(t) + '">' + escHtml(t) + '</option>'; }).join('') + '</optgroup>';
+    });
+    html += '<optgroup label="Other"><option value="Multi-Club / Other">Multi-Club / Other</option></optgroup>';
+    return html;
+  }
+
+  document.getElementById('app').innerHTML = `
+    <div class="container" style="max-width:560px;padding-top:48px;padding-bottom:60px">
+      <div style="text-align:center;margin-bottom:32px">
+        <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:6px">Submit a Creator</h1>
+        <p style="color:var(--text-dim);font-size:.9rem">Know a great football YouTuber? Suggest them for the database. Submissions are reviewed before being published.</p>
+      </div>
+      <div id="submitForm">
+        <div class="gen-card" style="margin-bottom:0">
+          <div style="margin-bottom:14px">
+            <label class="field-label">Channel Name</label>
+            <input type="text" id="sub_name" class="admin-form-input" placeholder="e.g. AFTVmedia">
+          </div>
+          <div style="margin-bottom:14px">
+            <label class="field-label">YouTube Channel URL</label>
+            <input type="text" id="sub_channel" class="admin-form-input" placeholder="e.g. https://www.youtube.com/@AFTVmedia">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div>
+              <label class="field-label">League</label>
+              <select id="sub_league" class="admin-form-select" onchange="document.getElementById('sub_team').innerHTML = submitTeamOpts(this.value)">
+                <option>Premier League</option><option>La Liga</option><option>Serie A</option><option>Bundesliga</option><option>Ligue 1</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Team</label>
+              <select id="sub_team" class="admin-form-select">${teamSelect()}</select>
+            </div>
+          </div>
+          <button class="btn-generate" onclick="submitCreator()" style="margin-top:8px">Submit for Review</button>
+          <div id="submitMsg" style="text-align:center;margin-top:12px;font-size:.85rem"></div>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+// Helper for league-filtered team options in submit form
+function submitTeamOpts(league) {
+  var teams = Object.entries(TEAM_TO_LEAGUE).filter(function(e) { return e[1] === league; }).map(function(e) { return e[0]; }).sort();
+  return '<option value="">Select team...</option>' + teams.map(function(t) { return '<option value="' + escHtml(t) + '">' + escHtml(t) + '</option>'; }).join('') + '<option value="Multi-Club / Other">Multi-Club / Other</option>';
+}
+
+async function submitCreator() {
+  var name = document.getElementById('sub_name').value.trim();
+  var channel = document.getElementById('sub_channel').value.trim();
+  var team = document.getElementById('sub_team').value;
+  var league = document.getElementById('sub_league').value;
+  var msg = document.getElementById('submitMsg');
+
+  if (!name) { msg.innerHTML = '<span style="color:var(--red)">Please enter the channel name.</span>'; return; }
+  if (!channel) { msg.innerHTML = '<span style="color:var(--red)">Please enter the YouTube channel URL.</span>'; return; }
+  if (!team) { msg.innerHTML = '<span style="color:var(--red)">Please select a team.</span>'; return; }
+
+  msg.innerHTML = '<span style="color:var(--text-dim)">Submitting...</span>';
+
+  var { error } = await sb.from('frfc_submissions').insert({ name: name, channel_url: channel, team: team, league: league });
+  if (error) { msg.innerHTML = '<span style="color:var(--red)">' + escHtml(error.message) + '</span>'; return; }
+
+  document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
+}
+
 // ── Render: Admin ────────────────────────────────────────────────────────
 async function renderAdmin() {
   if (!currentUser) { openModal('signin'); return; }
@@ -1201,6 +1285,7 @@ function renderFooter() {
           <div class="footer-col">
             <h4>Community</h4>
             <a href="/tools/generator">Description Generator</a>
+            <a href="/submit">Submit a Creator</a>
             <a href="#" onclick="event.preventDefault();openModal('signin')">Sign In / Sign Up</a>
           </div>
           <div class="footer-col">

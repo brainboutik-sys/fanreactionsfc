@@ -330,6 +330,38 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .cc-crest{width:18px;height:18px;object-fit:contain;margin-right:2px;vertical-align:middle}
 .trending-crest{width:24px;height:24px;object-fit:contain;flex-shrink:0}
 
+/* ── Live indicators ──────────────────────────────────────────────────── */
+.live-dot-sm{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:6px;animation:pulse-live 1.8s infinite;vertical-align:middle}
+.creator-card.is-live{border-color:var(--red);box-shadow:0 0 0 1px rgba(230,57,70,.2)}
+
+/* ── Creator card: frequency + video thumb ────────────────────────────── */
+.cc-freq{color:var(--text-muted);font-size:.72rem;font-weight:500}
+.cc-freq::before{content:'';display:inline-block;width:3px;height:3px;border-radius:50%;background:var(--border);margin-right:6px;vertical-align:middle}
+.cc-video{border-top:1px solid var(--border);margin-top:8px;padding-top:8px;display:flex;align-items:center;gap:10px;overflow:hidden}
+.cc-video img{width:100px;height:56px;object-fit:cover;border-radius:var(--radius-sm);flex-shrink:0;background:var(--bg-hover)}
+.cc-video-title{font-size:.72rem;color:var(--text-dim);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* ── Profile: live banner ─────────────────────────────────────────────── */
+.live-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(230,57,70,.08);border:1px solid rgba(230,57,70,.2);border-radius:var(--radius);margin-bottom:20px;font-size:.88rem;color:var(--text)}
+
+/* ── Profile: latest video card ───────────────────────────────────────── */
+.latest-video-section{margin-bottom:28px}
+.latest-video-card{display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);transition:all .15s;text-decoration:none;color:var(--text)}
+.latest-video-card:hover{border-color:var(--text-muted);transform:translateY(-1px);box-shadow:var(--shadow)}
+.lv-thumb{width:200px;height:112px;object-fit:cover;border-radius:var(--radius-sm);flex-shrink:0;background:var(--bg-hover)}
+.lv-info{flex:1;min-width:0}
+.lv-title{font-size:.92rem;font-weight:600;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lv-meta{font-size:.78rem;color:var(--text-dim)}
+@media(max-width:600px){
+  .latest-video-card{flex-direction:column;align-items:stretch}
+  .lv-thumb{width:100%;height:auto;aspect-ratio:16/9}
+}
+
+/* ── Profile: subscriber growth ───────────────────────────────────────── */
+.ps-growth{font-size:.65rem;font-weight:700;margin-left:4px}
+.ps-growth.up{color:var(--green)}
+.ps-growth.down{color:var(--red)}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}

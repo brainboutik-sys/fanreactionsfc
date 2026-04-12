@@ -376,6 +376,17 @@ async function loadCreators() {
     contentTypes: r.content_types || [],
     subscriberCount: r.subscriber_count || 0,
     featured: r.featured || false,
+    totalViews: r.total_view_count || 0,
+    videoCount: r.video_count || 0,
+    channelCreatedAt: r.channel_created_at || null,
+    latestVideoId: r.latest_video_id || '',
+    latestVideoTitle: r.latest_video_title || '',
+    latestVideoDate: r.latest_video_date || null,
+    latestVideoViews: r.latest_video_views || 0,
+    latestVideoThumbnail: r.latest_video_thumbnail || '',
+    isLive: r.is_live || false,
+    liveVideoId: r.live_video_id || '',
+    uploadFrequency: r.upload_frequency || '',
     avgRating: 0,
     ratingCount: 0
   }));
@@ -435,6 +446,38 @@ function avatarImg(c, cls = 'cc-avatar') {
 }
 function creatorLink(c) { return `/creators/${c.slug || slugify(c.name)}`; }
 
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  const months = Math.floor(days / 30);
+  if (months < 12) return months + 'mo ago';
+  return Math.floor(months / 12) + 'y ago';
+}
+
+function channelYear(dateStr) {
+  if (!dateStr) return '';
+  return 'Est. ' + new Date(dateStr).getFullYear();
+}
+
+async function loadSubscriberGrowth(creatorId) {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await sb.from('frfc_subscriber_history')
+      .select('subscriber_count, recorded_at')
+      .eq('creator_id', creatorId)
+      .gte('recorded_at', thirtyDaysAgo)
+      .order('recorded_at', { ascending: true });
+    if (!data || data.length < 2) return null;
+    return data[data.length - 1].subscriber_count - data[0].subscriber_count;
+  } catch (e) { return null; }
+}
+
 // ── Search ────────────────────────────────────────────────────────────────
 function initSearch() {
   document.addEventListener('input', e => {
@@ -473,6 +516,7 @@ function renderHome() {
   const topRated = [...creators].filter(c => c.ratingCount > 0).sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 10);
   const topByRating = [...creators].sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 8);
   const topBySubs = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
+  const liveNow = creators.filter(c => c.isLive);
 
   // Top 20 clubs by creator count, across all leagues
   const clubCounts = {};
@@ -505,6 +549,25 @@ function renderHome() {
         </div>
       </div>
     </section>
+
+    <!-- Live Now -->
+    ${liveNow.length ? `
+    <section class="section" style="padding-top:0;padding-bottom:0">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title"><span class="live-dot-sm"></span> Live Now</h2>
+        </div>
+        <div class="live-strip">
+          ${liveNow.map(c => `
+            <a href="https://youtube.com/watch?v=${c.liveVideoId || ''}" target="_blank" rel="noopener" class="live-card">
+              ${avatarImg(c, 'cc-avatar')}
+              <div class="lc-name">${escHtml(c.name)}</div>
+              <div class="lc-team">${escHtml(c.team)}</div>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+    </section>` : ''}
 
     <!-- FRFC Channel banner -->
     <section class="section" style="padding-top:0">
@@ -602,8 +665,10 @@ function switchTopCreators(mode, btn) {
 // ── Render: Creator Card ──────────────────────────────────────────────────
 function creatorCard(c) {
   const subsStr = c.subscriberCount ? formatNum(c.subscriberCount) + ' sub' + (c.subscriberCount !== 1 ? 's' : '') : '';
+  const freqStr = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
   return `
-    <a href="${creatorLink(c)}" class="creator-card">
+    <a href="${creatorLink(c)}" class="creator-card${c.isLive ? ' is-live' : ''}">
+      ${c.isLive ? '<span class="cc-live badge badge-live">LIVE</span>' : ''}
       <div class="cc-top">
         ${avatarImg(c, 'cc-avatar')}
         <div class="cc-info">
@@ -614,8 +679,10 @@ function creatorCard(c) {
       <div class="cc-meta">
         ${c.ratingCount > 0 ? `<span class="cc-rating">★ ${c.avgRating} <span class="cc-rating-count">(${c.ratingCount})</span></span>` : ''}
         ${subsStr ? `<span class="cc-subs">${subsStr}</span>` : ''}
+        ${freqStr ? `<span class="cc-freq">${freqStr}</span>` : ''}
       </div>
-      ${c.contentTypes.length ? `<div class="cc-tags">${c.contentTypes.slice(0, 3).map(t => `<span class="cc-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      ${c.latestVideoThumbnail ? `<div class="cc-video"><img src="${c.latestVideoThumbnail}" alt="" loading="lazy"><span class="cc-video-title">${escHtml((c.latestVideoTitle || '').substring(0, 50))}${(c.latestVideoTitle || '').length > 50 ? '...' : ''}</span></div>` : ''}
+      ${!c.latestVideoThumbnail && c.contentTypes.length ? `<div class="cc-tags">${c.contentTypes.slice(0, 3).map(t => `<span class="cc-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
     </a>`;
 }
 
@@ -628,6 +695,8 @@ function renderDiscover() {
   const typeFilter = params.get('type') || '';
   const sort = params.get('sort') || 'name';
   const favOnly = params.get('favs') === '1';
+  const activeOnly = params.get('active') === '1';
+  const liveOnly = params.get('live') === '1';
   const teams = getTeams();
   const teamsByLeague = getTeamsByLeague();
   const activeLeagues = getLeagues();
@@ -642,9 +711,12 @@ function renderDiscover() {
   if (teamFilter) filtered = filtered.filter(c => c.team === teamFilter);
   if (typeFilter) filtered = filtered.filter(c => c.contentTypes.includes(typeFilter));
   if (favOnly) filtered = filtered.filter(c => favorites.has(c.id));
+  if (activeOnly) filtered = filtered.filter(c => c.latestVideoDate && (Date.now() - new Date(c.latestVideoDate).getTime()) < 30 * 24 * 60 * 60 * 1000);
+  if (liveOnly) filtered = filtered.filter(c => c.isLive);
 
   if (sort === 'rating') filtered.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
   else if (sort === 'reviews') filtered.sort((a, b) => b.ratingCount - a.ratingCount);
+  else if (sort === 'subs') filtered.sort((a, b) => b.subscriberCount - a.subscriberCount);
   else filtered.sort((a, b) => a.name.localeCompare(b.name));
 
   // Build accordion: which league should be open?
@@ -695,7 +767,9 @@ function renderDiscover() {
             <span class="bar-label">Quick</span>
             <span class="filter-chip ${favOnly ? 'active' : ''}" onclick="applyFilter('favs','${favOnly ? '' : '1'}')">&#9733; Favorites${favOnly ? ' <span class=chip-x>&times;</span>' : ''}</span>
             <span class="filter-chip ${sort === 'rating' ? 'active' : ''}" onclick="applyFilter('sort','${sort === 'rating' ? 'name' : 'rating'}')">&#127942; Top Rated</span>
-            <span class="filter-chip ${sort === 'reviews' ? 'active' : ''}" onclick="applyFilter('sort','${sort === 'reviews' ? 'name' : 'reviews'}')">&#128172; Most Reviewed</span>
+            <span class="filter-chip ${sort === 'subs' ? 'active' : ''}" onclick="applyFilter('sort','${sort === 'subs' ? 'name' : 'subs'}')">&#128200; Most Subs</span>
+            <span class="filter-chip ${activeOnly ? 'active' : ''}" onclick="applyFilter('active','${activeOnly ? '' : '1'}')">&#9889; Active (30d)${activeOnly ? ' <span class=chip-x>&times;</span>' : ''}</span>
+            ${creators.some(c => c.isLive) ? `<span class="filter-chip ${liveOnly ? 'active' : ''}" onclick="applyFilter('live','${liveOnly ? '' : '1'}')"><span class="live-dot-sm"></span> Live Now${liveOnly ? ' <span class=chip-x>&times;</span>' : ''}</span>` : ''}
             <span class="bar-sep"></span>
             <span class="bar-label">Type</span>
             ${CONTENT_TYPES.slice(0, 6).map(t =>
@@ -800,12 +874,34 @@ async function renderProfile(slug) {
             <div class="ps-num">${c.ratingCount}</div>
             <div class="ps-label">Reviews</div>
           </div>
-          ${c.subscriberCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.subscriberCount)}</div><div class="ps-label">Subscribers</div></div>` : ''}
+          ${c.subscriberCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.subscriberCount)} <span id="subGrowth" class="ps-growth"></span></div><div class="ps-label">Subscribers</div></div>` : ''}
+          ${c.totalViews ? `<div class="ps-item"><div class="ps-num">${formatNum(c.totalViews)}</div><div class="ps-label">Total Views</div></div>` : ''}
+          ${c.videoCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.videoCount)}</div><div class="ps-label">Videos</div></div>` : ''}
+          ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `<div class="ps-item"><div class="ps-num" style="font-size:1rem">${c.uploadFrequency}</div><div class="ps-label">Uploads</div></div>` : ''}
+          ${c.channelCreatedAt ? `<div class="ps-item"><div class="ps-num" style="font-size:1rem">${channelYear(c.channelCreatedAt)}</div><div class="ps-label">Channel</div></div>` : ''}
         </div>
       </div>
     </div>
 
     <div class="container" style="padding-top:24px">
+      ${c.isLive ? `
+      <div class="live-banner">
+        <span class="live-dot-sm"></span> <strong>${escHtml(c.name)} is live now</strong>
+        <a href="https://youtube.com/watch?v=${c.liveVideoId || ''}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto">Watch Live</a>
+      </div>` : ''}
+
+      ${c.latestVideoId ? `
+      <div class="latest-video-section">
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Latest Video</h3>
+        <a href="https://youtube.com/watch?v=${c.latestVideoId}" target="_blank" rel="noopener" class="latest-video-card">
+          <img src="${c.latestVideoThumbnail || ''}" alt="" class="lv-thumb" loading="lazy">
+          <div class="lv-info">
+            <div class="lv-title">${escHtml(c.latestVideoTitle || '')}</div>
+            <div class="lv-meta">${c.latestVideoViews ? formatNum(c.latestVideoViews) + ' views' : ''} ${c.latestVideoDate ? '&middot; ' + timeAgo(c.latestVideoDate) : ''}</div>
+          </div>
+        </a>
+      </div>` : ''}
+
       <!-- Rating distribution + write review -->
       <div class="profile-rating-grid">
         <div>
@@ -870,6 +966,17 @@ async function renderProfile(slug) {
   `;
 
   selectedRating = 0;
+
+  // Async: load subscriber growth
+  if (c.subscriberCount) {
+    loadSubscriberGrowth(c.id).then(growth => {
+      const el = document.getElementById('subGrowth');
+      if (!el || !growth) return;
+      const dir = growth >= 0 ? 'up' : 'down';
+      el.className = 'ps-growth ' + dir;
+      el.textContent = (growth >= 0 ? '+' : '') + formatNum(Math.abs(growth));
+    });
+  }
 }
 
 let selectedRating = 0;
@@ -932,18 +1039,33 @@ function renderClubPage(club) {
 function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
-  let ranked = [...creators].filter(c => c.ratingCount > 0);
-  if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
-  ranked.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
+  const mode = params.get('mode') || 'rating';
+
+  let ranked;
+  if (mode === 'subs') {
+    ranked = [...creators].filter(c => c.subscriberCount > 0);
+    if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
+    ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
+  } else {
+    ranked = [...creators].filter(c => c.ratingCount > 0);
+    if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
+    ranked.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
+  }
+
+  const modeParam = mode === 'subs' ? '&mode=subs' : '';
 
   document.getElementById('app').innerHTML = `
     <div class="container" style="padding-top:40px">
       <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px">Creator Rankings</h1>
-      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:12px">Ranked by community ratings. Rate your favorites to influence the leaderboard.</p>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:12px">${mode === 'subs' ? 'Ranked by YouTube subscriber count.' : 'Ranked by community ratings. Rate your favorites to influence the leaderboard.'}</p>
+      <div class="top-creators-tabs" style="margin-bottom:16px">
+        <button class="top-creators-tab ${mode === 'rating' ? 'active' : ''}" onclick="navigate('/rankings${leagueFilter ? '?league=' + encodeURIComponent(leagueFilter) : ''}')">By Rating</button>
+        <button class="top-creators-tab ${mode === 'subs' ? 'active' : ''}" onclick="navigate('/rankings?mode=subs${leagueFilter ? '&league=' + encodeURIComponent(leagueFilter) : ''}')">By Subscribers</button>
+      </div>
       <div class="chip-row" style="justify-content:flex-start;margin-bottom:24px">
-        <span class="chip ${!leagueFilter ? 'active' : ''}" onclick="navigate('/rankings')">All leagues</span>
+        <span class="chip ${!leagueFilter ? 'active' : ''}" onclick="navigate('/rankings${mode === 'subs' ? '?mode=subs' : ''}')">All leagues</span>
         ${LEAGUES.map(l =>
-          `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}')">${l.flag} ${l.name}</span>`
+          `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}${modeParam}')">${l.flag} ${l.name}</span>`
         ).join('')}
       </div>
       ${ranked.length ? `<div class="trending-list">${ranked.map((c, i) => `
@@ -951,13 +1073,16 @@ function renderRankings() {
           <span class="trending-rank">${i + 1}</span>
           ${avatarImg(c, 'trending-avatar')}
           <div class="trending-info">
-            <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
+            <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''} ${c.isLive ? '<span class="badge badge-live" style="font-size:.6rem;padding:2px 6px">LIVE</span>' : ''}</div>
             <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
           </div>
-          <div class="trending-score">${stars(c.avgRating)} <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">${c.avgRating} (${c.ratingCount})</span></div>
+          <div class="trending-score">${mode === 'subs'
+            ? `<span style="font-weight:700">${formatNum(c.subscriberCount)}</span> <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">subs</span>`
+            : `${stars(c.avgRating)} <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">${c.avgRating} (${c.ratingCount})</span>`
+          }</div>
         </a>
       `).join('')}</div>` :
-        '<div class="empty-state"><div class="es-icon">&#127942;</div><div class="es-title">No ratings yet</div><p style="color:var(--text-dim)">Be the first to rate a creator and start the rankings!</p></div>'}
+        `<div class="empty-state"><div class="es-icon">&#127942;</div><div class="es-title">No rankings yet</div><p style="color:var(--text-dim)">${mode === 'subs' ? 'No subscriber data available.' : 'Be the first to rate a creator and start the rankings!'}</p></div>`}
     </div>
     ${renderFooter()}
   `;

@@ -506,14 +506,12 @@ function getLastSync() {
   return timeAgo(synced[0].last_youtube_sync);
 }
 
-// ── In-browser YouTube Sync ──────────────────────────────────────────────────
-var YT_KEY = 'AIzaSyCLZDo4mNC0ohtvU_lRyXClXcT6uw-xcNA';
-var YT_BASE = 'https://www.googleapis.com/youtube/v3';
+// ── In-browser YouTube Sync (via server-side proxy) ─────────────────────────
 var syncRunning = false;
 
 async function ytFetch(endpoint, params) {
-  params.key = YT_KEY;
-  var url = YT_BASE + '/' + endpoint + '?' + new URLSearchParams(params);
+  params.endpoint = endpoint;
+  var url = '/.netlify/functions/youtube-proxy?' + new URLSearchParams(params);
   var res = await fetch(url);
   if (!res.ok) { var e = await res.json().catch(function(){return {}}); throw new Error(e.error?.message || res.statusText); }
   return res.json();

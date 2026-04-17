@@ -314,7 +314,7 @@ async function refreshAuth() {
     } else {
       favorites = new Set();
     }
-  } catch (e) { console.error('refreshAuth:', e); }
+  } catch (e) { /* auth refresh failed silently — user will see sign-in */ }
   updateAuthUI();
 }
 
@@ -372,7 +372,7 @@ async function signOut() {
 // ── Data loading ──────────────────────────────────────────────────────────
 async function loadCreators() {
   const { data, error } = await sb.from('frfc_streamers').select('*').order('team').order('name');
-  if (error) { console.error(error); creators = []; return; }
+  if (error) { creators = []; return; }
   creators = data.map(r => ({
     id: r.id,
     name: r.name,
@@ -425,9 +425,9 @@ async function loadFavorites() {
   if (!currentUser) return;
   try {
     const { data, error } = await sb.from('frfc_streamer_favorites').select('streamer_id').eq('user_id', currentUser.id);
-    if (error) { console.error('loadFavorites:', error.message); return; }
+    if (error) return;
     favorites = new Set((data || []).map(r => r.streamer_id));
-  } catch (e) { console.error('loadFavorites:', e); }
+  } catch (e) { /* favorites load failed — non-critical */ }
 }
 
 async function toggleFavorite(id) {
@@ -442,12 +442,14 @@ async function toggleFavorite(id) {
       if (error) throw error;
       favorites.add(id);
     }
-  } catch (e) { console.error('toggleFavorite:', e.message || e); }
+  } catch (e) { /* favorite toggle failed silently */ }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function safeId(s) { return (s || '').replace(/[^A-Za-z0-9_-]/g, ''); }
+function safeUrl(s) { try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
 function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
 function avatarUrl(c) { return c.avatar || ''; }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
@@ -497,26 +499,41 @@ async function loadSubscriberGrowth(creatorId) {
 }
 
 // ── Search ────────────────────────────────────────────────────────────────
+let _searchTimer = null;
 function initSearch() {
   document.addEventListener('input', e => {
     if (!e.target.classList.contains('search-input')) return;
-    const q = e.target.value.trim().toLowerCase();
-    const box = e.target.closest('.search-wrap').querySelector('.search-results');
-    if (q.length < 2) { box.classList.remove('open'); return; }
-    const matches = creators.filter(c =>
-      c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q) ||
-      c.contentTypes.some(t => t.toLowerCase().includes(q))
-    ).slice(0, 8);
-    if (!matches.length) { box.classList.remove('open'); return; }
-    box.innerHTML = matches.map(c => `
-      <a href="${creatorLink(c)}" class="search-result">
-        ${avatarImg(c, 'cc-avatar')}
-        <div>
-          <div class="sr-name">${escHtml(c.name)}</div>
-          <div class="sr-team">${escHtml(c.team)}</div>
-        </div>
-      </a>`).join('');
-    box.classList.add('open');
+    clearTimeout(_searchTimer);
+    const input = e.target;
+    _searchTimer = setTimeout(() => {
+      const q = input.value.trim().toLowerCase();
+      const box = input.closest('.search-wrap').querySelector('.search-results');
+      if (q.length < 2) { box.classList.remove('open'); return; }
+      const matches = creators.filter(c =>
+        c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q) ||
+        c.contentTypes.some(t => t.toLowerCase().includes(q))
+      ).slice(0, 8);
+      if (!matches.length) {
+        box.innerHTML = '<div class="search-empty">No results found</div>';
+        box.classList.add('open');
+        return;
+      }
+      box.innerHTML = matches.map(c => `
+        <a href="${creatorLink(c)}" class="search-result">
+          ${avatarImg(c, 'cc-avatar')}
+          <div>
+            <div class="sr-name">${escHtml(c.name)}</div>
+            <div class="sr-team">${escHtml(c.team)}</div>
+          </div>
+        </a>`).join('');
+      box.classList.add('open');
+    }, 250);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const box = document.querySelector('.search-results.open');
+      if (box) box.classList.remove('open');
+    }
   });
   document.addEventListener('focusout', e => {
     if (e.target.classList.contains('search-input')) {
@@ -577,7 +594,7 @@ function renderHome() {
         </div>
         <div class="live-strip">
           ${liveNow.map(c => `
-            <a href="https://youtube.com/watch?v=${c.liveVideoId || ''}" target="_blank" rel="noopener" class="live-card">
+            <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card">
               ${avatarImg(c, 'cc-avatar')}
               <div class="lc-name">${escHtml(c.name)}</div>
               <div class="lc-team">${escHtml(c.team)}</div>
@@ -885,8 +902,8 @@ async function renderProfile(slug) {
             <div class="profile-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
             ${c.description ? `<div class="profile-desc">${escHtml(c.description)}</div>` : ''}
             <div class="profile-actions">
-              ${c.channel ? `<a href="${escHtml(c.channel)}" target="_blank" rel="noopener" class="btn btn-primary">Watch on YouTube</a>` : ''}
-              ${c.live ? `<a href="${escHtml(c.live)}" target="_blank" rel="noopener" class="btn btn-secondary">Live / Streams</a>` : ''}
+              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-primary">Watch on YouTube</a>` : ''}
+              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-secondary">Live / Streams</a>` : ''}
               <button class="btn btn-secondary" onclick="handleFavorite('${c.id}')" id="favBtn">${isFav ? '&#9733; Favorited' : '&#9734; Favorite'}</button>
             </div>
           </div>
@@ -914,13 +931,13 @@ async function renderProfile(slug) {
       ${c.isLive ? `
       <div class="live-banner">
         <span class="live-dot-sm"></span> <strong>${escHtml(c.name)} is live now</strong>
-        <a href="https://youtube.com/watch?v=${c.liveVideoId || ''}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto">Watch Live</a>
+        <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto">Watch Live</a>
       </div>` : ''}
 
       ${c.latestVideoId ? `
       <div class="latest-video-section">
         <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Latest Video</h3>
-        <a href="https://youtube.com/watch?v=${c.latestVideoId}" target="_blank" rel="noopener" class="latest-video-card">
+        <a href="https://youtube.com/watch?v=${safeId(c.latestVideoId)}" target="_blank" rel="noopener" class="latest-video-card">
           <img src="${c.latestVideoThumbnail || ''}" alt="" class="lv-thumb" loading="lazy">
           <div class="lv-info">
             <div class="lv-title">${escHtml(c.latestVideoTitle || '')}</div>
@@ -1221,11 +1238,11 @@ async function submitCreator() {
   var { error } = await sb.from('frfc_submissions').insert(submission);
   if (error) { msg.innerHTML = '<span style="color:var(--red)">' + escHtml(error.message) + '</span>'; return; }
 
-  // Notify admin (fire-and-forget)
+  // Notify admin (best-effort, log failures)
   fetch(SUPABASE_URL + '/functions/v1/notify-submission', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ record: submission })
-  }).catch(function() {});
+  }).catch(function() { /* notification delivery is non-critical */ });
 
   document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
 }

@@ -367,6 +367,9 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .suggest-cta:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .suggest-cta .suggest-icon{font-size:1.1rem}
 
+/* ── Search empty state ───────────────────────────────────────────────── */
+.search-empty{padding:12px 16px;color:var(--text-dim);font-size:.85rem;text-align:center}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}

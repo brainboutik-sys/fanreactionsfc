@@ -1332,6 +1332,7 @@ function renderFooter() {
           <div class="footer-col">
             <h4>FanReactionsFC</h4>
             <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube Channel</a>
+            <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener">X (Twitter)</a>
             <a href="https://frfcstreamwall.netlify.app/" target="_blank" rel="noopener">Streamwall</a>
           </div>
         </div>

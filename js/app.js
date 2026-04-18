@@ -1107,31 +1107,31 @@ function renderClubPage(club) {
 function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
-  const mode = params.get('mode') || 'rating';
+  const mode = params.get('mode') || 'subs';
 
   let ranked;
-  if (mode === 'subs') {
-    ranked = [...creators].filter(c => c.subscriberCount > 0);
-    if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
-    ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
-  } else {
+  if (mode === 'rating') {
     ranked = [...creators].filter(c => c.ratingCount > 0);
     if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
     ranked.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
+  } else {
+    ranked = [...creators].filter(c => c.subscriberCount > 0);
+    if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
+    ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
   }
 
-  const modeParam = mode === 'subs' ? '&mode=subs' : '';
+  const modeParam = mode === 'rating' ? '&mode=rating' : '';
 
   document.getElementById('app').innerHTML = `
     <div class="container" style="padding-top:40px">
       <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px">Creator Rankings</h1>
       <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:12px">${mode === 'subs' ? 'Ranked by YouTube subscriber count.' : 'Ranked by community ratings. Rate your favorites to influence the leaderboard.'}</p>
       <div class="top-creators-tabs" style="margin-bottom:16px">
-        <button class="top-creators-tab ${mode === 'rating' ? 'active' : ''}" onclick="navigate('/rankings${leagueFilter ? '?league=' + encodeURIComponent(leagueFilter) : ''}')">By Rating</button>
-        <button class="top-creators-tab ${mode === 'subs' ? 'active' : ''}" onclick="navigate('/rankings?mode=subs${leagueFilter ? '&league=' + encodeURIComponent(leagueFilter) : ''}')">By Subscribers</button>
+        <button class="top-creators-tab ${mode === 'subs' ? 'active' : ''}" onclick="navigate('/rankings${leagueFilter ? '?league=' + encodeURIComponent(leagueFilter) : ''}')">By Subscribers</button>
+        <button class="top-creators-tab ${mode === 'rating' ? 'active' : ''}" onclick="navigate('/rankings?mode=rating${leagueFilter ? '&league=' + encodeURIComponent(leagueFilter) : ''}')">By Rating</button>
       </div>
       <div class="chip-row" style="justify-content:flex-start;margin-bottom:24px">
-        <span class="chip ${!leagueFilter ? 'active' : ''}" onclick="navigate('/rankings${mode === 'subs' ? '?mode=subs' : ''}')">All leagues</span>
+        <span class="chip ${!leagueFilter ? 'active' : ''}" onclick="navigate('/rankings${mode === 'rating' ? '?mode=rating' : ''}')">All leagues</span>
         ${LEAGUES.map(l =>
           `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}${modeParam}')">${leagueChipImg(l.name)} ${l.name}</span>`
         ).join('')}

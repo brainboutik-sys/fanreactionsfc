@@ -70,6 +70,14 @@ exports.handler = async () => {
         last_youtube_sync: new Date().toISOString(),
       };
 
+      // Default: no upcoming stream found. We NULL these out every sync so
+      // stale data doesn't linger once a scheduled stream has started or
+      // been cancelled.
+      update.upcoming_video_id = null;
+      update.upcoming_video_title = null;
+      update.upcoming_video_thumbnail = null;
+      update.upcoming_video_scheduled_at = null;
+
       // 2. Latest uploads
       if (uploadsPlaylist) {
         try {
@@ -94,15 +102,43 @@ exports.handler = async () => {
             update.latest_video_date = latest.publishedAt;
             update.latest_video_thumbnail = `https://i.ytimg.com/vi/${latest.videoId}/mqdefault.jpg`;
 
-            // 3. Latest video view count
+            // 3. Batch-fetch details for all up-to-5 recent videos — same
+            // cost as a single-ID request, and lets us detect upcoming
+            // scheduled livestreams in the process.
             try {
               quota += 1;
-              const vidData = await ytFetch(ytKey, 'videos', { id: latest.videoId, part: 'statistics' });
-              const vidDetail = vidData.items && vidData.items[0];
-              if (vidDetail) {
-                update.latest_video_views = parseInt(vidDetail.statistics && vidDetail.statistics.viewCount) || 0;
+              const ids = vids.map(v => v.videoId).join(',');
+              const vidData = await ytFetch(ytKey, 'videos', { id: ids, part: 'snippet,statistics,liveStreamingDetails' });
+              const items = vidData.items || [];
+
+              // Latest video stats from the first returned item whose id matches latest
+              const latestDetail = items.find(it => it.id === latest.videoId);
+              if (latestDetail) {
+                update.latest_video_views = parseInt(latestDetail.statistics && latestDetail.statistics.viewCount) || 0;
               }
-            } catch (e) { /* view count fetch failed, continue */ }
+
+              // Find the soonest upcoming scheduled livestream across the 5 items
+              const now = Date.now();
+              let soonest = null;
+              for (const it of items) {
+                const sched = it.liveStreamingDetails && it.liveStreamingDetails.scheduledStartTime;
+                const state = it.snippet && it.snippet.liveBroadcastContent;
+                if (state !== 'upcoming' || !sched) continue;
+                const schedMs = new Date(sched).getTime();
+                if (!schedMs || schedMs < now) continue; // already passed
+                if (!soonest || schedMs < soonest.ms) {
+                  soonest = { ms: schedMs, it: it, sched: sched };
+                }
+              }
+              if (soonest) {
+                const it = soonest.it;
+                const sn = it.snippet || {};
+                update.upcoming_video_id = it.id;
+                update.upcoming_video_title = sn.title || '';
+                update.upcoming_video_thumbnail = `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`;
+                update.upcoming_video_scheduled_at = soonest.sched;
+              }
+            } catch (e) { /* video detail fetch failed, continue with playlist-only data */ }
 
             // 4. Upload frequency
             const dates = vids.map(v => v.publishedAt).filter(Boolean);

@@ -408,6 +408,10 @@ async function loadCreators() {
     liveVideoId: r.live_video_id || '',
     uploadFrequency: r.upload_frequency || '',
     channelCountry: r.channel_country || '',
+    upcomingVideoId: r.upcoming_video_id || '',
+    upcomingVideoTitle: r.upcoming_video_title || '',
+    upcomingVideoThumbnail: r.upcoming_video_thumbnail || '',
+    upcomingVideoScheduledAt: r.upcoming_video_scheduled_at || null,
     avgRating: 0,
     ratingCount: 0
   }));
@@ -498,6 +502,26 @@ function timeAgo(dateStr) {
 function channelYear(dateStr) {
   if (!dateStr) return '';
   return 'Est. ' + new Date(dateStr).getFullYear();
+}
+
+// Human-friendly future time — "In 2h", "Tonight 8 PM", "Tomorrow 3 PM",
+// "Sat 14 Apr · 8 PM" for anything further out.
+function whenUpcoming(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const diffMs = d.getTime() - Date.now();
+  const diffHrs = diffMs / 3_600_000;
+  const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: d.getMinutes() ? '2-digit' : undefined });
+  if (diffMs < 0) return 'Starting soon';
+  if (diffHrs < 1) return 'In ' + Math.max(1, Math.round(diffMs / 60000)) + ' min';
+  if (diffHrs < 6) return 'In ' + Math.round(diffHrs) + 'h';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today.getTime() + 86400000);
+  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (dDay.getTime() === today.getTime()) return 'Today · ' + timeStr;
+  if (dDay.getTime() === tomorrow.getTime()) return 'Tomorrow · ' + timeStr;
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' + timeStr;
 }
 
 // Returns last-30-day subscriber history for a creator as an array of
@@ -593,6 +617,15 @@ function renderHome() {
   const topBySubs = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
   const liveNow = creators.filter(c => c.isLive);
 
+  // Upcoming scheduled livestreams — soonest first, within the next 14 days.
+  const now = Date.now();
+  const upcoming = [...creators]
+    .filter(c => c.upcomingVideoId && c.upcomingVideoScheduledAt)
+    .map(c => ({ c, ms: new Date(c.upcomingVideoScheduledAt).getTime() }))
+    .filter(u => u.ms > now && u.ms < now + 14 * 24 * 60 * 60 * 1000)
+    .sort((a, b) => a.ms - b.ms)
+    .slice(0, 4);
+
   // All clubs with ≥1 creator, sorted by creator count.
   // Display is capped to 18 tiles at a time (≈ 2 rows on desktop) and
   // filtered client-side via the league chips — see filterClubs().
@@ -659,6 +692,36 @@ function renderHome() {
         </div>
       </div>
     </section>
+
+    <!-- Upcoming streams -->
+    ${upcoming.length ? `
+    <section class="section" style="padding-top:0">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">&#128197; Upcoming streams</h2>
+        </div>
+        <div class="upcoming-grid">
+          ${upcoming.map(({ c }) => `
+            <a href="https://youtube.com/watch?v=${safeId(c.upcomingVideoId)}" target="_blank" rel="noopener" class="upcoming-card">
+              <div class="up-thumb-wrap">
+                <img class="up-thumb" src="${c.upcomingVideoThumbnail || ''}" alt="" loading="lazy">
+                <span class="up-when-badge">${escHtml(whenUpcoming(c.upcomingVideoScheduledAt))}</span>
+              </div>
+              <div class="up-body">
+                <div class="up-title">${escHtml(c.upcomingVideoTitle || 'Upcoming stream')}</div>
+                <div class="up-creator">
+                  ${avatarImg(c, 'up-avatar')}
+                  <div class="up-creator-info">
+                    <div class="up-creator-name">${escHtml(c.name)}</div>
+                    <div class="up-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+                  </div>
+                </div>
+              </div>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+    </section>` : ''}
 
     <!-- Top Rated -->
     ${topRated.length ? `

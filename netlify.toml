@@ -2,6 +2,25 @@
   publish = "."
   functions = "netlify/functions"
 
+# Bundle index.html with the creator-og function so it can read and
+# rewrite the meta tags per creator.
+[functions."creator-og"]
+  included_files = ["index.html"]
+
+# Dynamic sitemap generated from the Supabase creator list.
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+
+# Per-creator OG cards — serve HTML with creator-specific meta tags
+# for social crawlers. Human users still get the SPA since the
+# function returns the same index.html structure with scripts intact.
+[[redirects]]
+  from = "/creators/*"
+  to = "/.netlify/functions/creator-og"
+  status = 200
+
 # SPA fallback — Netlify serves real files first, then falls back to index.html
 [[redirects]]
   from = "/*"

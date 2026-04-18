@@ -387,6 +387,12 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .ps-growth{font-size:.65rem;font-weight:700;margin-left:4px}
 .ps-growth.up{color:var(--green)}
 .ps-growth.down{color:var(--red)}
+.sub-sparkline-wrap{margin-top:16px;display:flex;align-items:center;gap:12px}
+.sub-sparkline-wrap:empty{display:none}
+.sub-sparkline-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);white-space:nowrap}
+.sub-sparkline{display:block;max-width:100%}
+.report-link{color:var(--text-muted);font-weight:500;padding:5px 10px}
+.report-link:hover{color:var(--red);background:rgba(230,57,70,.06)}
 
 /* ── Suggest creator CTA ──────────────────────────────────────────────── */
 .suggest-cta{display:flex;align-items:center;justify-content:center;gap:8px;padding:24px;margin-top:24px;background:var(--bg-card);border:1.5px dashed var(--border);border-radius:var(--radius);color:var(--text-dim);font-size:.9rem;font-weight:500;transition:all .18s cubic-bezier(.4,0,.2,1);cursor:pointer;text-decoration:none}

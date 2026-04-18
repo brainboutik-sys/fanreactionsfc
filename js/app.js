@@ -489,17 +489,42 @@ function channelYear(dateStr) {
   return 'Est. ' + new Date(dateStr).getFullYear();
 }
 
-async function loadSubscriberGrowth(creatorId) {
+// Returns last-30-day subscriber history for a creator as an array of
+// { subscriber_count, recorded_at } ordered oldest → newest. Uses direct
+// fetch instead of supabase-js for consistency with the rest of the app.
+async function loadSubscriberHistory(creatorId) {
   try {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await sb.from('frfc_subscriber_history')
-      .select('subscriber_count, recorded_at')
-      .eq('creator_id', creatorId)
-      .gte('recorded_at', thirtyDaysAgo)
-      .order('recorded_at', { ascending: true });
-    if (!data || data.length < 2) return null;
-    return data[data.length - 1].subscriber_count - data[0].subscriber_count;
-  } catch (e) { return null; }
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const url = `${SUPABASE_URL}/rest/v1/frfc_subscriber_history?select=subscriber_count,recorded_at&creator_id=eq.${creatorId}&recorded_at=gte.${since}&order=recorded_at.asc`;
+    const res = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch { return []; }
+}
+
+// Builds a compact SVG sparkline for the subscriber history. Returns an
+// empty string if we don't have enough points for a meaningful line.
+function subscriberSparkline(series, width = 220, height = 48) {
+  if (!series || series.length < 2) return '';
+  const values = series.map(s => s.subscriber_count);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pad = 2;
+  const step = (width - pad * 2) / (values.length - 1);
+  const points = values.map((v, i) => {
+    const x = pad + i * step;
+    const y = height - pad - ((v - min) / range) * (height - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const path = `M ${points.join(' L ')}`;
+  const areaPath = `${path} L ${width - pad},${height} L ${pad},${height} Z`;
+  const trendUp = values[values.length - 1] >= values[0];
+  const stroke = trendUp ? 'var(--green)' : 'var(--red)';
+  return `<svg class="sub-sparkline" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true">
+    <path d="${areaPath}" fill="${stroke}" fill-opacity="0.08" stroke="none"/>
+    <path d="${path}" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
 }
 
 // ── Search ────────────────────────────────────────────────────────────────
@@ -935,6 +960,7 @@ async function renderProfile(slug) {
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-primary">Watch on YouTube</a>` : ''}
               ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-secondary">Live / Streams</a>` : ''}
               <button class="btn btn-secondary" onclick="handleFavorite('${c.id}')" id="favBtn">${isFav ? '&#9733; Favorited' : '&#9734; Favorite'}</button>
+              <button class="btn btn-ghost btn-sm report-link" onclick="openReportModal('${c.id}','${escHtml(c.name).replace(/'/g, "\\'")}')">Report issue</button>
             </div>
           </div>
         </div>
@@ -954,6 +980,7 @@ async function renderProfile(slug) {
           ${c.channelCreatedAt ? `<div class="ps-item"><div class="ps-num ps-num-sm">${channelYear(c.channelCreatedAt)}</div><div class="ps-label">Channel</div></div>` : ''}
           ${c.channelCountry ? `<div class="ps-item"><div class="ps-num ps-num-sm">${countryFlag(c.channelCountry)}</div><div class="ps-label">Based in</div></div>` : ''}
         </div>
+        ${c.subscriberCount ? '<div id="subSparkline" class="sub-sparkline-wrap"></div>' : ''}
       </div>
     </div>
 
@@ -1042,14 +1069,24 @@ async function renderProfile(slug) {
 
   selectedRating = 0;
 
-  // Async: load subscriber growth
+  // Async: load subscriber history for growth delta + sparkline
   if (c.subscriberCount) {
-    loadSubscriberGrowth(c.id).then(growth => {
-      const el = document.getElementById('subGrowth');
-      if (!el || !growth) return;
-      const dir = growth >= 0 ? 'up' : 'down';
-      el.className = 'ps-growth ' + dir;
-      el.textContent = (growth >= 0 ? '+' : '') + formatNum(Math.abs(growth));
+    loadSubscriberHistory(c.id).then(series => {
+      if (!series.length) return;
+      if (series.length >= 2) {
+        const growth = series[series.length - 1].subscriber_count - series[0].subscriber_count;
+        const el = document.getElementById('subGrowth');
+        if (el) {
+          const dir = growth >= 0 ? 'up' : 'down';
+          el.className = 'ps-growth ' + dir;
+          el.textContent = (growth >= 0 ? '+' : '') + formatNum(Math.abs(growth));
+        }
+      }
+      const sparkEl = document.getElementById('subSparkline');
+      if (sparkEl) {
+        const svg = subscriberSparkline(series);
+        if (svg) sparkEl.innerHTML = `<div class="sub-sparkline-label">Last 30 days</div>${svg}`;
+      }
     });
   }
 }
@@ -1372,6 +1409,62 @@ function openModal(type = 'signin') {
 
 function closeModal() {
   document.getElementById('authOverlay')?.classList.remove('open');
+}
+
+// Report-issue modal — reuses the auth modal overlay DOM so we don't need
+// to add a second overlay to index.html.
+function openReportModal(creatorId, creatorName) {
+  const overlay = document.getElementById('authOverlay');
+  const modal = document.getElementById('authModal');
+  if (!overlay || !modal) return;
+  modal.innerHTML = `
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <h2>Report an issue</h2>
+    <p class="modal-sub">Help keep <strong>${escHtml(creatorName)}</strong>'s info accurate.</p>
+    <label>What's wrong?</label>
+    <select id="reportReason" class="admin-form-select" style="margin-bottom:14px">
+      <option value="wrong_team">Wrong team / club</option>
+      <option value="inactive">Channel is inactive or deleted</option>
+      <option value="not_football">Not a football creator</option>
+      <option value="duplicate">Duplicate of another creator</option>
+      <option value="other">Something else</option>
+    </select>
+    <label>Details (optional)</label>
+    <textarea id="reportDetails" placeholder="Anything that would help us verify..." style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical;margin-bottom:14px"></textarea>
+    <button class="btn btn-primary" onclick="submitReport('${creatorId}')">Submit report</button>
+    <div class="auth-msg" id="reportMsg"></div>`;
+  overlay.classList.add('open');
+}
+
+async function submitReport(creatorId) {
+  const reason = document.getElementById('reportReason').value;
+  const details = document.getElementById('reportDetails').value.trim() || null;
+  const msg = document.getElementById('reportMsg');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Sending…';
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/frfc_creator_reports', {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ creator_id: creatorId, reason, details }),
+    });
+    if (!res.ok) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'Could not submit (' + res.status + '). Please try again.';
+      return;
+    }
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Thanks — we\'ll review this shortly.';
+    setTimeout(closeModal, 1400);
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error. Please try again.';
+  }
 }
 
 async function handleAuth(type) {

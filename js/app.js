@@ -557,14 +557,15 @@ function renderHome() {
   const topBySubs = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
   const liveNow = creators.filter(c => c.isLive);
 
-  // Top 20 clubs by creator count, across all leagues
+  // All clubs with ≥1 creator, sorted by creator count.
+  // Display is capped to 18 tiles at a time (≈ 2 rows on desktop) and
+  // filtered client-side via the league chips — see filterClubs().
   const clubCounts = {};
   creators.forEach(c => {
     if (c.team && c.team !== 'Multi-Club / Other') clubCounts[c.team] = (clubCounts[c.team] || 0) + 1;
   });
-  const topClubs = Object.entries(clubCounts)
+  const allClubs = Object.entries(clubCounts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
     .map(([team, count]) => ({ team, count, league: getLeague(team) }));
 
   document.getElementById('app').innerHTML = `
@@ -654,10 +655,13 @@ function renderHome() {
           <h2 class="section-title">Top Clubs</h2>
           <a href="/discover" class="section-link">View all &rarr;</a>
         </div>
-        <div class="club-grid">
-          ${topClubs.map(({ team, count, league }) => {
-            const l = LEAGUES.find(lg => lg.name === league);
-            return `<a href="/clubs/${encodeURIComponent(team)}" class="club-tile">
+        <div class="club-filter-row">
+          <span class="chip club-filter active" onclick="filterClubs(this,'')">All leagues</span>
+          ${LEAGUES.map(l => `<span class="chip club-filter" onclick="filterClubs(this,'${escHtml(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
+        </div>
+        <div class="club-grid" id="topClubsGrid">
+          ${allClubs.map(({ team, count, league }) => {
+            return `<a href="/clubs/${encodeURIComponent(team)}" class="club-tile" data-league="${escHtml(league || '')}">
               ${crestImg(team)}
               <div class="club-name">${escHtml(team)}</div>
               <div class="club-meta"><strong>${count} creator${count !== 1 ? 's' : ''}</strong></div>
@@ -689,6 +693,10 @@ function renderHome() {
 
     ${renderFooter()}
   `;
+
+  // Cap Top Clubs to ~2 rows on initial render (matches filterClubs MAX_VISIBLE).
+  const defaultClubFilter = document.querySelector('.club-filter.active');
+  if (defaultClubFilter) filterClubs(defaultClubFilter, '');
 }
 
 function switchTopCreators(mode, btn) {
@@ -702,6 +710,24 @@ function switchTopCreators(mode, btn) {
     list = [...creators].sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 8);
   }
   grid.innerHTML = list.map(c => creatorCard(c)).join('');
+}
+
+// Filter Top Clubs tiles by league, capping visible tiles to ~2 rows.
+function filterClubs(el, league) {
+  document.querySelectorAll('.club-filter').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  const tiles = document.querySelectorAll('#topClubsGrid .club-tile');
+  const MAX_VISIBLE = 18;
+  let shown = 0;
+  tiles.forEach(t => {
+    const matches = !league || t.dataset.league === league;
+    if (matches && shown < MAX_VISIBLE) {
+      t.style.display = '';
+      shown++;
+    } else {
+      t.style.display = 'none';
+    }
+  });
 }
 
 // ── Render: Creator Card ──────────────────────────────────────────────────

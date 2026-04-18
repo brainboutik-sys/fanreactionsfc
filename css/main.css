@@ -229,6 +229,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .live-card .lc-team{color:var(--text-dim);font-size:.72rem}
 
 /* ── Club grid ─────────────────────────────────────────────────────────── */
+.club-filter-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.club-filter{font-size:.78rem;padding:6px 14px}
 .club-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:14px}
 .club-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 8px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);cursor:pointer;transition:all .2s cubic-bezier(.4,0,.2,1);text-align:center;box-shadow:var(--shadow-sm)}
 .club-tile:hover{border-color:var(--border);transform:translateY(-3px);box-shadow:var(--shadow-md)}

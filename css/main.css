@@ -405,6 +405,21 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* ── Search empty state ───────────────────────────────────────────────── */
 .search-empty{padding:12px 16px;color:var(--text-dim);font-size:.85rem;text-align:center}
 
+/* ── Team Latest Videos page ──────────────────────────────────────────── */
+.team-video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+.team-video-card{display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);overflow:hidden;text-decoration:none;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
+.team-video-card:hover{border-color:var(--border);transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.tv-thumb-wrap{position:relative;aspect-ratio:16/9;background:var(--bg-hover)}
+.tv-thumb{width:100%;height:100%;object-fit:cover;display:block}
+.tv-live-badge{position:absolute;top:8px;left:8px;font-size:.6rem;padding:3px 8px}
+.tv-body{padding:12px 14px 14px}
+.tv-title{font-size:.92rem;font-weight:600;line-height:1.35;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tv-creator{display:flex;align-items:center;gap:10px}
+.tv-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0}
+.tv-creator-info{min-width:0}
+.tv-creator-name{font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tv-meta{font-size:.72rem;color:var(--text-muted);margin-top:1px}
+
 /* ── Rankings page ────────────────────────────────────────────────────── */
 .rankings-summary{display:flex;gap:20px;flex-wrap:wrap;padding:12px 20px;margin-bottom:16px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-sm);font-size:.85rem;color:var(--text-dim)}
 .rankings-summary strong{color:var(--text);font-weight:700}

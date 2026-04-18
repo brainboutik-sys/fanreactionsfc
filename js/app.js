@@ -272,9 +272,17 @@ function handleRoute() {
     currentRoute = { page: 'profile', slug };
     renderProfile(slug);
   } else if (path.startsWith('/clubs/')) {
-    const club = decodeURIComponent(path.split('/clubs/')[1].replace(/\/$/, ''));
-    currentRoute = { page: 'club', club };
-    renderClubPage(club);
+    const tail = path.split('/clubs/')[1].replace(/\/$/, '');
+    // /clubs/:team/videos -> team videos page; otherwise the club page
+    if (tail.endsWith('/videos')) {
+      const club = decodeURIComponent(tail.slice(0, -'/videos'.length));
+      currentRoute = { page: 'clubVideos', club };
+      renderClubVideos(club);
+    } else {
+      const club = decodeURIComponent(tail);
+      currentRoute = { page: 'club', club };
+      renderClubPage(club);
+    }
   } else if (path === '/rankings') {
     currentRoute = { page: 'rankings' };
     renderRankings();
@@ -1157,13 +1165,59 @@ function renderClubPage(club) {
           <button class="top-creators-tab ${sort === 'rating' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=rating')">By Rating</button>
           <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Latest Upload</button>
         </div>
-        <a href="/submit" class="btn btn-secondary btn-sm">+ Suggest a Creator</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a href="/clubs/${encodeURIComponent(club)}/videos" class="btn btn-secondary btn-sm">📺 Latest videos</a>
+          <a href="/submit" class="btn btn-secondary btn-sm">+ Suggest a Creator</a>
+        </div>
       </div>
       <div class="card-grid">
         ${clubCreators.length ? clubCreators.map(c => creatorCard(c)).join('') :
           '<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px">Suggest a Creator</a></div>'}
       </div>
       <a href="/submit" class="suggest-cta"><span class="suggest-icon">+</span> Know a ${escHtml(club)} YouTuber we're missing? Suggest them here</a>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+// ── Render: Club Latest Videos ────────────────────────────────────────────
+function renderClubVideos(club) {
+  const clubCreators = creators.filter(c => c.team === club);
+  // Use each creator's latest_video_* as a single "card". Hide creators
+  // with no recent upload data. Sort newest first.
+  const videos = clubCreators
+    .filter(c => c.latestVideoId && c.latestVideoDate)
+    .map(c => ({ c, publishedAt: new Date(c.latestVideoDate).getTime() }))
+    .sort((a, b) => b.publishedAt - a.publishedAt);
+
+  const clubLeague = getLeague(club);
+  const clubUrl = '/clubs/' + encodeURIComponent(club);
+
+  document.getElementById('app').innerHTML = `
+    <div class="container" style="padding-top:40px">
+      <a href="${clubUrl}" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; ${escHtml(club)}</a>
+      <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:12px">${crestImg(club, 'crest-xl')} Latest ${escHtml(club)} videos</h1>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:24px">${videos.length} recent upload${videos.length !== 1 ? 's' : ''} from ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}${clubLeague !== 'Other' ? ' in ' + escHtml(clubLeague) : ''}.</p>
+
+      ${videos.length ? `<div class="team-video-grid">
+        ${videos.map(({ c }) => `
+          <a href="https://youtube.com/watch?v=${safeId(c.latestVideoId)}" target="_blank" rel="noopener" class="team-video-card">
+            <div class="tv-thumb-wrap">
+              <img class="tv-thumb" src="${c.latestVideoThumbnail || ''}" alt="" loading="lazy">
+              ${c.isLive ? '<span class="tv-live-badge badge badge-live">LIVE</span>' : ''}
+            </div>
+            <div class="tv-body">
+              <div class="tv-title">${escHtml(c.latestVideoTitle || 'Untitled')}</div>
+              <div class="tv-creator">
+                ${avatarImg(c, 'tv-avatar')}
+                <div class="tv-creator-info">
+                  <div class="tv-creator-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
+                  <div class="tv-meta">${c.latestVideoViews ? formatNum(c.latestVideoViews) + ' views' : ''}${c.latestVideoViews && c.latestVideoDate ? ' · ' : ''}${c.latestVideoDate ? timeAgo(c.latestVideoDate) : ''}</div>
+                </div>
+              </div>
+            </div>
+          </a>`).join('')}
+      </div>` : `<div class="empty-state"><div class="es-icon">📺</div><div class="es-title">No recent videos yet</div><p style="color:var(--text-dim)">Creator video data will appear here after the next sync.</p></div>`}
     </div>
     ${renderFooter()}
   `;

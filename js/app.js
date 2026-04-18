@@ -1230,12 +1230,9 @@ function renderSubmit() {
       <div id="submitForm">
         <div class="gen-card" style="margin-bottom:0">
           <div style="margin-bottom:14px">
-            <label class="field-label">Channel Name</label>
-            <input type="text" id="sub_name" class="admin-form-input" placeholder="e.g. AFTVmedia">
-          </div>
-          <div style="margin-bottom:14px">
             <label class="field-label">YouTube Channel URL</label>
             <input type="text" id="sub_channel" class="admin-form-input" placeholder="e.g. https://www.youtube.com/@AFTVmedia">
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">We'll fetch the channel name automatically.</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <div>
@@ -1265,27 +1262,57 @@ function submitTeamOpts(league) {
 }
 
 async function submitCreator() {
-  var name = document.getElementById('sub_name').value.trim();
   var channel = document.getElementById('sub_channel').value.trim();
   var team = document.getElementById('sub_team').value;
   var league = document.getElementById('sub_league').value;
   var msg = document.getElementById('submitMsg');
+  var err = function(text) { msg.innerHTML = '<span style="color:var(--red)">' + escHtml(text) + '</span>'; };
+  var info = function(text) { msg.innerHTML = '<span style="color:var(--text-dim)">' + escHtml(text) + '</span>'; };
 
-  if (!name) { msg.innerHTML = '<span style="color:var(--red)">Please enter the channel name.</span>'; return; }
-  if (!channel) { msg.innerHTML = '<span style="color:var(--red)">Please enter the YouTube channel URL.</span>'; return; }
-  if (!team) { msg.innerHTML = '<span style="color:var(--red)">Please select a team.</span>'; return; }
+  if (!channel) return err('Please enter the YouTube channel URL.');
+  if (!team) return err('Please select a team.');
 
-  msg.innerHTML = '<span style="color:var(--text-dim)">Submitting...</span>';
+  var handleMatch = channel.match(/@([A-Za-z0-9_.-]+)/);
+  if (!handleMatch) return err('URL must include an @handle — e.g. youtube.com/@ChannelName');
+  var handle = handleMatch[1];
 
+  info('Looking up channel…');
+
+  // 1. Resolve the channel name from YouTube via our serverless proxy.
+  var name;
+  try {
+    var proxyUrl = '/.netlify/functions/youtube-proxy?' + new URLSearchParams({
+      endpoint: 'channels', forHandle: handle, part: 'snippet',
+    });
+    var ytRes = await fetch(proxyUrl);
+    if (!ytRes.ok) throw new Error('YouTube lookup failed (' + ytRes.status + ')');
+    var ytData = await ytRes.json();
+    var ch = ytData.items && ytData.items[0];
+    if (!ch) return err('Channel not found on YouTube. Please check the URL.');
+    name = (ch.snippet && ch.snippet.title) || handle;
+  } catch (e) {
+    return err('Could not look up channel: ' + (e.message || 'unknown error'));
+  }
+
+  info('Submitting ' + name + '…');
+
+  // 2. Insert the submission row. Timeout after 15s so the UI never hangs silently.
   var submission = { name: name, channel_url: channel, team: team, league: league };
-  var { error } = await sb.from('frfc_submissions').insert(submission);
-  if (error) { msg.innerHTML = '<span style="color:var(--red)">' + escHtml(error.message) + '</span>'; return; }
+  var insertPromise = sb.from('frfc_submissions').insert(submission).then(function(r) { return r; });
+  var timeout = new Promise(function(_, reject) { setTimeout(function() { reject(new Error('Request timed out — please try again.')); }, 15000); });
+  var result;
+  try {
+    result = await Promise.race([insertPromise, timeout]);
+  } catch (e) {
+    return err(e.message);
+  }
+  if (result && result.error) return err(result.error.message);
 
-  // Notify admin (best-effort, log failures)
+  // 3. Notify admin — best-effort, no UI blocking.
   fetch(SUPABASE_URL + '/functions/v1/notify-submission', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ record: submission })
-  }).catch(function() { /* notification delivery is non-critical */ });
+    body: JSON.stringify({ record: submission }),
+  }).catch(function() { /* non-critical */ });
 
   document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
 }

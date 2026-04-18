@@ -153,10 +153,12 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .profile-team{color:var(--text-dim);font-size:.95rem;margin-top:2px}
 .profile-desc{color:var(--text-dim);font-size:.9rem;margin-top:8px;max-width:600px}
 .profile-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-.profile-stats{display:flex;gap:24px;margin-top:20px;flex-wrap:wrap}
-.ps-item{text-align:center}
+.profile-stats{display:flex;gap:24px;margin-top:20px;flex-wrap:wrap;align-items:flex-end}
+.ps-item{text-align:center;display:flex;flex-direction:column;justify-content:flex-end;min-height:48px}
 .ps-num{font-size:1.5rem;font-weight:800;line-height:1}
+.ps-num-sm{font-size:1rem}
 .ps-label{font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.country-flag{height:1.4em;width:auto;border-radius:3px;vertical-align:middle;box-shadow:0 0 0 1px rgba(255,255,255,.1)}
 
 .profile-rating-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:32px}
 @media(max-width:600px){

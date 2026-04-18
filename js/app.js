@@ -463,7 +463,11 @@ function creatorLink(c) { return `/creators/${c.slug || slugify(c.name)}`; }
 
 function countryFlag(code) {
   if (!code || code.length !== 2) return '';
-  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+  const cc = code.toLowerCase();
+  const up = code.toUpperCase();
+  // Use flagcdn.com SVG instead of Unicode flag emoji — Windows Chrome/Edge
+  // don't render flag emojis and fall back to showing the country code.
+  return `<img src="https://flagcdn.com/${cc}.svg" alt="${up}" title="${up}" class="country-flag">`;
 }
 
 function timeAgo(dateStr) {
@@ -920,9 +924,9 @@ async function renderProfile(slug) {
           ${c.subscriberCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.subscriberCount)} <span id="subGrowth" class="ps-growth"></span></div><div class="ps-label">Subscribers</div></div>` : ''}
           ${c.totalViews ? `<div class="ps-item"><div class="ps-num">${formatNum(c.totalViews)}</div><div class="ps-label">Total Views</div></div>` : ''}
           ${c.videoCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.videoCount)}</div><div class="ps-label">Videos</div></div>` : ''}
-          ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `<div class="ps-item"><div class="ps-num" style="font-size:1rem">${c.uploadFrequency}</div><div class="ps-label">Uploads</div></div>` : ''}
-          ${c.channelCreatedAt ? `<div class="ps-item"><div class="ps-num" style="font-size:1rem">${channelYear(c.channelCreatedAt)}</div><div class="ps-label">Channel</div></div>` : ''}
-          ${c.channelCountry ? `<div class="ps-item"><div class="ps-num" style="font-size:1.4rem">${countryFlag(c.channelCountry)}</div><div class="ps-label">Based in</div></div>` : ''}
+          ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `<div class="ps-item"><div class="ps-num ps-num-sm">${c.uploadFrequency}</div><div class="ps-label">Uploads</div></div>` : ''}
+          ${c.channelCreatedAt ? `<div class="ps-item"><div class="ps-num ps-num-sm">${channelYear(c.channelCreatedAt)}</div><div class="ps-label">Channel</div></div>` : ''}
+          ${c.channelCountry ? `<div class="ps-item"><div class="ps-num ps-num-sm">${countryFlag(c.channelCountry)}</div><div class="ps-label">Based in</div></div>` : ''}
         </div>
       </div>
     </div>

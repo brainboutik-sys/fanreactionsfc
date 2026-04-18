@@ -14,8 +14,8 @@
 .gen-header-actions{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px}
 
 /* ── Step card ────────────────────────────────────────────────────────────── */
-.gen-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:14px;transition:border-color .2s}
-.gen-card:hover{border-color:var(--text-muted)}
+.gen-card{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);padding:24px;margin-bottom:16px;transition:border-color .2s,box-shadow .2s;box-shadow:var(--shadow-sm)}
+.gen-card:hover{border-color:var(--border);box-shadow:var(--shadow-md)}
 .gen-card-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:18px;display:flex;align-items:center;gap:8px}
 .gen-card-title::after{content:'';flex:1;height:1px;background:var(--border)}
 .step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--navy);font-size:.65rem;font-weight:800;color:var(--yellow);flex-shrink:0}
@@ -46,9 +46,9 @@
 .field-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:5px}
 .gen-card input[type=text],.gen-card input[type=number],.gen-card select{
   width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);
-  color:var(--text);font-size:.88rem;padding:10px 14px;outline:none;transition:border-color .2s}
+  color:var(--text);font-size:.88rem;padding:11px 14px;outline:none;transition:border-color .2s,box-shadow .2s,background .2s}
 .gen-card input[type=text]::placeholder{color:var(--text-muted)}
-.gen-card input[type=text]:focus,.gen-card input[type=number]:focus,.gen-card select:focus{border-color:var(--accent)}
+.gen-card input[type=text]:focus,.gen-card input[type=number]:focus,.gen-card select:focus{border-color:var(--accent);box-shadow:var(--focus-ring);background:var(--bg-card)}
 .gen-card select{cursor:pointer}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}

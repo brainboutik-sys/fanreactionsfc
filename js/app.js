@@ -1296,17 +1296,34 @@ async function submitCreator() {
 
   info('Submitting ' + name + '…');
 
-  // 2. Insert the submission row. Timeout after 15s so the UI never hangs silently.
+  // 2. Insert via direct PostgREST fetch (bypasses supabase-js, which has
+  //    been observed hanging on this insert in production for unclear
+  //    reasons). Direct REST call with the publishable key returns 201.
   var submission = { name: name, channel_url: channel, team: team, league: league };
-  var insertPromise = sb.from('frfc_submissions').insert(submission).then(function(r) { return r; });
-  var timeout = new Promise(function(_, reject) { setTimeout(function() { reject(new Error('Request timed out — please try again.')); }, 15000); });
-  var result;
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
   try {
-    result = await Promise.race([insertPromise, timeout]);
+    var insertRes = await fetch(SUPABASE_URL + '/rest/v1/frfc_submissions', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(submission),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!insertRes.ok) {
+      var errText = await insertRes.text().catch(function() { return ''; });
+      return err('Submission failed (' + insertRes.status + '): ' + (errText.slice(0, 200) || insertRes.statusText));
+    }
   } catch (e) {
-    return err(e.message);
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') return err('Request timed out — please try again.');
+    return err('Submission failed: ' + (e.message || 'unknown error'));
   }
-  if (result && result.error) return err(result.error.message);
 
   // 3. Notify admin — best-effort, no UI blocking.
   fetch(SUPABASE_URL + '/functions/v1/notify-submission', {

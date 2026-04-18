@@ -394,6 +394,39 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* ── Search empty state ───────────────────────────────────────────────── */
 .search-empty{padding:12px 16px;color:var(--text-dim);font-size:.85rem;text-align:center}
 
+/* ── Rankings page ────────────────────────────────────────────────────── */
+.rankings-summary{display:flex;gap:20px;flex-wrap:wrap;padding:12px 20px;margin-bottom:16px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-sm);font-size:.85rem;color:var(--text-dim)}
+.rankings-summary strong{color:var(--text);font-weight:700}
+
+.rankings-card{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+.rk-row{display:grid;grid-template-columns:56px 48px 1fr auto auto 16px;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--border-soft);text-decoration:none;color:var(--text);transition:background .15s}
+.rk-row:last-child{border-bottom:none}
+.rk-row:hover{background:var(--bg-hover)}
+.rk-rank{display:flex;align-items:center;justify-content:center;height:36px;border-radius:var(--radius-sm);font-size:1.05rem;font-weight:800;color:var(--text-muted);background:var(--bg-hover);letter-spacing:-.02em}
+.rk-row--top1 .rk-rank{background:linear-gradient(135deg,#FFD700,#F6BE06);color:#7A5A00;box-shadow:inset 0 0 0 1px rgba(246,190,6,.4)}
+.rk-row--top2 .rk-rank{background:linear-gradient(135deg,#E8EBF2,#C8CDD9);color:#4B5563;box-shadow:inset 0 0 0 1px rgba(148,163,184,.4)}
+.rk-row--top3 .rk-rank{background:linear-gradient(135deg,#E8A87C,#CD7F32);color:#5C3317;box-shadow:inset 0 0 0 1px rgba(205,127,50,.4)}
+.rk-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:var(--bg-hover)}
+.rk-info{min-width:0}
+.rk-name{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk-verified{color:var(--blue);font-size:.85rem;flex-shrink:0}
+.rk-live{font-size:.6rem;padding:2px 6px;flex-shrink:0}
+.rk-team{color:var(--text-dim);font-size:.8rem;margin-top:2px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk-meta{font-size:.78rem;color:var(--text-muted);white-space:nowrap;text-align:right}
+.rk-score{text-align:right;min-width:110px}
+.rk-score-num{font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1;letter-spacing:-.02em}
+.rk-score-star{color:var(--star);font-size:.95rem}
+.rk-score-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-weight:600}
+.rk-arrow{color:var(--text-muted);font-size:1.2rem;transition:transform .15s,color .15s}
+.rk-row:hover .rk-arrow{color:var(--accent);transform:translateX(2px)}
+@media(max-width:700px){
+  .rk-row{grid-template-columns:44px 40px 1fr auto;gap:10px;padding:12px 14px}
+  .rk-meta,.rk-arrow{display:none}
+  .rk-rank{height:32px;font-size:.95rem}
+  .rk-avatar{width:40px;height:40px}
+  .rk-score-num{font-size:1rem}
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}

@@ -1136,20 +1136,33 @@ function renderRankings() {
           `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}${modeParam}')">${leagueChipImg(l.name)} ${l.name}</span>`
         ).join('')}
       </div>
-      ${ranked.length ? `<div class="trending-list">${ranked.map((c, i) => `
-        <a href="${creatorLink(c)}" class="trending-row">
-          <span class="trending-rank">${i + 1}</span>
-          ${avatarImg(c, 'trending-avatar')}
-          <div class="trending-info">
-            <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''} ${c.isLive ? '<span class="badge badge-live" style="font-size:.6rem;padding:2px 6px">LIVE</span>' : ''}</div>
-            <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+      ${ranked.length ? `
+      <div class="rankings-summary">
+        <span><strong>${ranked.length}</strong> creator${ranked.length !== 1 ? 's' : ''}${leagueFilter ? ` in ${escHtml(leagueFilter)}` : ''}</span>
+        ${mode === 'subs' ? `<span>Combined <strong>${formatNum(ranked.reduce((a, c) => a + (c.subscriberCount || 0), 0))}</strong> subscribers</span>` : `<span><strong>${ranked.reduce((a, c) => a + (c.ratingCount || 0), 0)}</strong> reviews total</span>`}
+      </div>
+      <div class="rankings-card">${ranked.map((c, i) => {
+        const rankClass = i < 3 ? ' rk-row--top rk-row--top' + (i + 1) : '';
+        const freq = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
+        const videos = c.videoCount ? formatNum(c.videoCount) + ' videos' : '';
+        const metaParts = [freq, videos].filter(Boolean);
+        return `
+        <a href="${creatorLink(c)}" class="rk-row${rankClass}">
+          <div class="rk-rank">${i + 1}</div>
+          ${avatarImg(c, 'rk-avatar')}
+          <div class="rk-info">
+            <div class="rk-name">${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}${c.isLive ? ' <span class="badge badge-live rk-live">LIVE</span>' : ''}</div>
+            <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
           </div>
-          <div class="trending-score">${mode === 'subs'
-            ? `<span style="font-weight:700">${formatNum(c.subscriberCount)}</span> <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">subs</span>`
-            : `${stars(c.avgRating)} <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">${c.avgRating} (${c.ratingCount})</span>`
-          }</div>
+          <div class="rk-meta">${metaParts.join(' &middot; ')}</div>
+          <div class="rk-score">
+            ${mode === 'subs'
+              ? `<div class="rk-score-num">${formatNum(c.subscriberCount)}</div><div class="rk-score-label">subscribers</div>`
+              : `<div class="rk-score-num">${c.avgRating || '—'} <span class="rk-score-star">&#9733;</span></div><div class="rk-score-label">${c.ratingCount} review${c.ratingCount !== 1 ? 's' : ''}</div>`}
+          </div>
+          <span class="rk-arrow">&rsaquo;</span>
         </a>
-      `).join('')}</div>` :
+      `;}).join('')}</div>` :
         `<div class="empty-state"><div class="es-icon">&#127942;</div><div class="es-title">No rankings yet</div><p style="color:var(--text-dim)">${mode === 'subs' ? 'No subscriber data available.' : 'Be the first to rate a creator and start the rankings!'}</p></div>`}
     </div>
     ${renderFooter()}

@@ -358,6 +358,9 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 /* ── Live indicators ──────────────────────────────────────────────────── */
 .live-dot-sm{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:6px;animation:pulse-live 1.8s infinite;vertical-align:middle}
+/* Inline live dot used next to creator names site-wide. Slightly smaller
+   and with a soft red halo so it reads as "active" without shouting. */
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:6px;vertical-align:middle;box-shadow:0 0 0 2px rgba(230,57,70,.18);animation:pulse-live 1.8s infinite;flex-shrink:0;position:relative;top:-1px}
 .creator-card.is-live{border-color:var(--red);box-shadow:0 0 0 1px rgba(230,57,70,.2)}
 
 /* ── Creator card: frequency + video thumb ────────────────────────────── */

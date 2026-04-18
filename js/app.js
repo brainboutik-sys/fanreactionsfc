@@ -450,6 +450,9 @@ function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace
 function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function safeId(s) { return (s || '').replace(/[^A-Za-z0-9_-]/g, ''); }
 function safeUrl(s) { try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
+// Subtle, pulsing red dot used next to a creator's name site-wide when
+// they're currently livestreaming on YouTube.
+function liveDot(isLive) { return isLive ? '<span class="live-dot" title="Live now" aria-label="Live now"></span>' : ''; }
 function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
 function avatarUrl(c) { return c.avatar || ''; }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
@@ -551,7 +554,7 @@ function initSearch() {
         <a href="${creatorLink(c)}" class="search-result">
           ${avatarImg(c, 'cc-avatar')}
           <div>
-            <div class="sr-name">${escHtml(c.name)}</div>
+            <div class="sr-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
             <div class="sr-team">${escHtml(c.team)}</div>
           </div>
         </a>`).join('');
@@ -663,7 +666,7 @@ function renderHome() {
               <span class="trending-rank">${i + 1}</span>
               ${avatarImg(c, 'trending-avatar')}
               <div class="trending-info">
-                <div class="trending-name">${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
+                <div class="trending-name">${liveDot(c.isLive)}${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
                 <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
               </div>
               <div class="trending-score">${stars(c.avgRating)} <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">(${c.ratingCount})</span></div>
@@ -765,7 +768,7 @@ function creatorCard(c) {
       <div class="cc-top">
         ${avatarImg(c, 'cc-avatar')}
         <div class="cc-info">
-          <div class="cc-name">${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
+          <div class="cc-name">${liveDot(c.isLive)}${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
           <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}</div>
         </div>
       </div>
@@ -950,7 +953,7 @@ async function renderProfile(slug) {
           ${avatarImg(c, 'profile-avatar')}
           <div class="profile-info">
             <h1 class="profile-name">
-              ${escHtml(c.name)}
+              ${liveDot(c.isLive)}${escHtml(c.name)}
               ${c.verified ? '<span class="badge badge-green">Verified</span>' : ''}
               ${c.claimed ? '<span class="badge badge-dim">Claimed</span>' : ''}
             </h1>
@@ -1214,7 +1217,7 @@ function renderRankings() {
           <div class="rk-rank">${i + 1}</div>
           ${avatarImg(c, 'rk-avatar')}
           <div class="rk-info">
-            <div class="rk-name">${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}${c.isLive ? ' <span class="badge badge-live rk-live">LIVE</span>' : ''}</div>
+            <div class="rk-name">${liveDot(c.isLive)}${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}</div>
             <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
           </div>
           <div class="rk-meta">${metaParts.join(' &middot; ')}</div>

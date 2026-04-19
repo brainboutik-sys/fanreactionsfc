@@ -1964,14 +1964,36 @@ async function saveAccount() {
 async function renderAdmin() {
   if (!currentUser) return renderAuthRequired('open the admin panel');
   if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module not loaded.</p></div>'; return; }
-  const isAdmin = await Admin.checkAdmin();
+
+  // Show an immediate loading state so the user knows the click registered,
+  // even while the async admin-role check is in flight.
+  document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><div style="color:var(--text-dim);font-size:.9rem">Loading admin…</div></div>';
+
+  // Use direct PostgREST fetch instead of supabase-js — the latter has
+  // been observed hanging on production for certain reads.
+  let isAdmin = false;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${currentUser.id}`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${(await sb.auth.getSession()).data.session?.access_token || SUPABASE_KEY}` } }
+    );
+    if (res.ok) {
+      const rows = await res.json();
+      isAdmin = rows.length > 0 && !!rows[0].role;
+    }
+  } catch { /* fall through — renders Access Denied */ }
+
   if (!isAdmin) {
     document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128274;</div><div class="es-title">Access Denied</div><p style="color:var(--text-dim)">You do not have admin privileges.</p><a href="/" class="btn btn-primary" style="margin-top:12px">Back to Home</a></div></div>';
     return;
   }
-  // Hide the main site header nav for admin (admin has its own sidebar)
+  // Render admin chrome, then hand off to the Admin module for data loading.
   document.getElementById('app').innerHTML = Admin.renderHTML();
-  await Admin.init();
+  try {
+    await Admin.init();
+  } catch (e) {
+    document.getElementById('app').innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#9888;</div><div class="es-title">Admin failed to load</div><p style="color:var(--text-dim);margin-bottom:16px">${escHtml(e.message || String(e))}</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div></div>`;
+  }
 }
 
 // ── Auth Modal ────────────────────────────────────────────────────────────

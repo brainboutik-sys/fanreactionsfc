@@ -86,6 +86,7 @@ function renderHTML() {
         <div><label class="field-label">Competition</label>
           <select id="competition">
             <option>Premier League</option>
+            <option>Championship</option>
             <option>Champions League</option>
             <option>Europa League</option>
             <option>FA Cup</option>

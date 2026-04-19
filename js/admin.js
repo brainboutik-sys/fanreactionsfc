@@ -248,7 +248,7 @@ function editCreator(id) {
 }
 
 function buildTeamSelect(selectedLeague, selectedTeam) {
-  var leagues = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'];
+  var leagues = ['Premier League','Championship','La Liga','Serie A','Bundesliga','Ligue 1'];
   var teamsByLeague = {};
   // Build from TEAM_TO_LEAGUE (app.js global)
   Object.entries(TEAM_TO_LEAGUE).forEach(function(e) {
@@ -294,7 +294,7 @@ function openCreatorForm(c) {
     formField('Channel Name', 'cf_name', c?.name || '') +
     formField('Channel URL', 'cf_channel', c?.channel_url || '') +
     '<div class="admin-form-grid">' +
-      formField('League', 'cf_league', c?.league || '', 'select', ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'], 'Admin.onLeagueChange()') +
+      formField('League', 'cf_league', c?.league || '', 'select', ['Premier League','Championship','La Liga','Serie A','Bundesliga','Ligue 1'], 'Admin.onLeagueChange()') +
       '<div class="admin-form-row"><label class="admin-form-label" for="cf_team">Team</label><select class="admin-form-select" id="cf_team">' + buildTeamSelect(c?.league || '', c?.team || '') + '</select></div>' +
     '</div>' +
     '<div class="admin-form-grid">' +

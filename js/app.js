@@ -23,11 +23,12 @@ const CONTENT_TYPES = [
 
 // ── Leagues ───────────────────────────────────────────────────────────────
 const LEAGUES = [
-  { name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'PL', logo: 'https://crests.football-data.org/PL.png' },
-  { name: 'La Liga', flag: '🇪🇸', code: 'LL', logo: 'https://crests.football-data.org/PD.png' },
-  { name: 'Serie A', flag: '🇮🇹', code: 'SA', logo: 'https://crests.football-data.org/SA.png' },
-  { name: 'Bundesliga', flag: '🇩🇪', code: 'BL', logo: 'https://crests.football-data.org/BL1.png' },
-  { name: 'Ligue 1', flag: '🇫🇷', code: 'L1', logo: 'https://crests.football-data.org/FL1.png' }
+  { name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'PL',  logo: 'https://crests.football-data.org/PL.png' },
+  { name: 'Championship',   flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'ELC', logo: 'https://crests.football-data.org/ELC.png' },
+  { name: 'La Liga',         flag: '🇪🇸', code: 'LL',  logo: 'https://crests.football-data.org/PD.png' },
+  { name: 'Serie A',         flag: '🇮🇹', code: 'SA',  logo: 'https://crests.football-data.org/SA.png' },
+  { name: 'Bundesliga',      flag: '🇩🇪', code: 'BL',  logo: 'https://crests.football-data.org/BL1.png' },
+  { name: 'Ligue 1',         flag: '🇫🇷', code: 'L1',  logo: 'https://crests.football-data.org/FL1.png' }
 ];
 
 // ── Club crests (football-data.org SVGs) ──────────────────────────────────
@@ -36,26 +37,51 @@ const TEAM_CRESTS = {
   'Arsenal': 'https://crests.football-data.org/57.svg',
   'Aston Villa': 'https://crests.football-data.org/58.svg',
   'Bournemouth': 'https://crests.football-data.org/1044.svg',
+  'Brentford': 'https://a.espncdn.com/i/teamlogos/soccer/500/337.png',
   'Brighton': 'https://crests.football-data.org/397.svg',
   'Burnley': 'https://crests.football-data.org/328.svg',
   'Chelsea': 'https://crests.football-data.org/61.svg',
   'Crystal Palace': 'https://crests.football-data.org/354.svg',
   'Everton': 'https://crests.football-data.org/62.svg',
   'Fulham': 'https://crests.football-data.org/63.svg',
-  'Ipswich': 'https://crests.football-data.org/349.svg',
   'Leeds United': 'https://crests.football-data.org/341.svg',
-  'Leicester': 'https://crests.football-data.org/338.svg',
   'Liverpool': 'https://crests.football-data.org/64.svg',
-  'Luton': 'https://crests.football-data.org/389.svg',
   'Man City': 'https://crests.football-data.org/65.svg',
   'Man United': 'https://crests.football-data.org/66.svg',
   'Newcastle': 'https://crests.football-data.org/67.svg',
   'Nottm Forest': 'https://crests.football-data.org/351.svg',
-  'Sheffield Utd': 'https://crests.football-data.org/356.svg',
-  'Southampton': 'https://crests.football-data.org/340.svg',
+  'Sunderland': 'https://a.espncdn.com/i/teamlogos/soccer/500/366.png',
   'Tottenham': 'https://crests.football-data.org/73.svg',
   'West Ham': 'https://crests.football-data.org/563.svg',
   'Wolves': 'https://crests.football-data.org/76.svg',
+  // ── Championship (EFL) ──
+  'Birmingham': 'https://a.espncdn.com/i/teamlogos/soccer/500/392.png',
+  'Blackburn': 'https://a.espncdn.com/i/teamlogos/soccer/500/365.png',
+  'Bristol City': 'https://a.espncdn.com/i/teamlogos/soccer/500/333.png',
+  'Charlton': 'https://a.espncdn.com/i/teamlogos/soccer/500/372.png',
+  'Coventry': 'https://a.espncdn.com/i/teamlogos/soccer/500/388.png',
+  'Derby': 'https://a.espncdn.com/i/teamlogos/soccer/500/374.png',
+  'Hull': 'https://a.espncdn.com/i/teamlogos/soccer/500/306.png',
+  'Ipswich': 'https://crests.football-data.org/349.svg',
+  'Leicester': 'https://crests.football-data.org/338.svg',
+  'Middlesbrough': 'https://a.espncdn.com/i/teamlogos/soccer/500/369.png',
+  'Millwall': 'https://a.espncdn.com/i/teamlogos/soccer/500/391.png',
+  'Norwich': 'https://a.espncdn.com/i/teamlogos/soccer/500/381.png',
+  'Oxford Utd': 'https://a.espncdn.com/i/teamlogos/soccer/500/311.png',
+  'Portsmouth': 'https://a.espncdn.com/i/teamlogos/soccer/500/385.png',
+  'Preston': 'https://a.espncdn.com/i/teamlogos/soccer/500/394.png',
+  'QPR': 'https://a.espncdn.com/i/teamlogos/soccer/500/334.png',
+  'Sheffield Utd': 'https://crests.football-data.org/356.svg',
+  'Sheffield Wed': 'https://a.espncdn.com/i/teamlogos/soccer/500/399.png',
+  'Southampton': 'https://crests.football-data.org/340.svg',
+  'Stoke': 'https://a.espncdn.com/i/teamlogos/soccer/500/336.png',
+  'Swansea': 'https://a.espncdn.com/i/teamlogos/soccer/500/318.png',
+  'Watford': 'https://a.espncdn.com/i/teamlogos/soccer/500/395.png',
+  'West Brom': 'https://a.espncdn.com/i/teamlogos/soccer/500/383.png',
+  'Wrexham': 'https://a.espncdn.com/i/teamlogos/soccer/500/352.png',
+  // Luton Town — recently relegated; crest kept so legacy creator rows
+  // still render a logo even though Luton isn't in either league list.
+  'Luton': 'https://crests.football-data.org/389.svg',
   // ── La Liga ──
   'Barcelona': 'https://crests.football-data.org/81.svg',
   'Real Madrid': 'https://crests.football-data.org/86.svg',
@@ -142,7 +168,8 @@ const TEAM_CRESTS = {
 const TEAM_TO_LEAGUE = {};
 (function buildLeagueMap() {
   const map = {
-    'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Ipswich','Leeds United','Leicester','Liverpool','Luton','Man City','Man United','Newcastle','Nottm Forest','Sheffield Utd','Southampton','Tottenham','West Ham','Wolves'],
+    'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brentford','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Leeds United','Liverpool','Man City','Man United','Newcastle','Nottm Forest','Sunderland','Tottenham','West Ham','Wolves'],
+    'Championship': ['Birmingham','Blackburn','Bristol City','Charlton','Coventry','Derby','Hull','Ipswich','Leicester','Middlesbrough','Millwall','Norwich','Oxford Utd','Portsmouth','Preston','QPR','Sheffield Utd','Sheffield Wed','Southampton','Stoke','Swansea','Watford','West Brom','Wrexham'],
     'La Liga': ['Barcelona','Real Madrid','Atletico Madrid','Sevilla','Real Betis','Real Sociedad','Villarreal','Athletic Bilbao','Valencia','Celta Vigo','Espanyol','Getafe','Osasuna','Mallorca','Rayo Vallecano','Girona','Las Palmas','Alaves','Valladolid','Leganes'],
     'Serie A': ['Juventus','AC Milan','Inter Milan','Napoli','Roma','Lazio','Atalanta','Fiorentina','Bologna','Torino','Udinese','Monza','Empoli','Genoa','Cagliari','Lecce','Hellas Verona','Parma','Venezia','Como'],
     'Bundesliga': ['Bayern Munich','Borussia Dortmund','RB Leipzig','Bayer Leverkusen','Union Berlin','Freiburg','Eintracht Frankfurt','Wolfsburg','Mainz','Borussia Monchengladbach','Hoffenheim','Werder Bremen','Augsburg','Bochum','Heidenheim','Stuttgart','Holstein Kiel','St. Pauli'],
@@ -1580,7 +1607,7 @@ function renderSubmit() {
   // Build team options grouped by league (same logic as admin)
   function teamSelect() {
     var html = '<option value="">Select team...</option>';
-    var leagueOrder = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'];
+    var leagueOrder = ['Premier League','Championship','La Liga','Serie A','Bundesliga','Ligue 1'];
     var teamsByLeague = {};
     Object.entries(TEAM_TO_LEAGUE).forEach(function(e) {
       if (!teamsByLeague[e[1]]) teamsByLeague[e[1]] = [];
@@ -1611,7 +1638,7 @@ function renderSubmit() {
             <div>
               <label class="field-label">League</label>
               <select id="sub_league" class="admin-form-select" onchange="document.getElementById('sub_team').innerHTML = submitTeamOpts(this.value)">
-                <option>Premier League</option><option>La Liga</option><option>Serie A</option><option>Bundesliga</option><option>Ligue 1</option>
+                <option>Premier League</option><option>Championship</option><option>La Liga</option><option>Serie A</option><option>Bundesliga</option><option>Ligue 1</option>
               </select>
             </div>
             <div>
@@ -1750,7 +1777,7 @@ async function renderAccount() {
 
   // Team options grouped by league (same logic as submit form)
   let teamOpts = '<option value="">No favourite</option>';
-  const leagueOrder = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'];
+  const leagueOrder = ['Premier League','Championship','La Liga','Serie A','Bundesliga','Ligue 1'];
   const teamsByLeague = {};
   Object.entries(TEAM_TO_LEAGUE).forEach(([t, l]) => { (teamsByLeague[l] = teamsByLeague[l] || []).push(t); });
   leagueOrder.forEach(l => {
@@ -2102,7 +2129,7 @@ function renderFooter() {
         <div class="footer-grid">
           <div>
             <div class="footer-brand"><span style="color:var(--yellow)">Fan</span><span style="color:var(--navy)">Reactions</span><span style="color:var(--yellow)">FC</span></div>
-            <div class="footer-desc">The definitive database of football YouTubers across Europe's top 5 leagues. Community-rated, creator-claimed, editorially curated by @fanreactionsfc.</div>
+            <div class="footer-desc">The definitive database of football YouTubers across Europe's top leagues. Community-rated, creator-claimed, editorially curated by @fanreactionsfc.</div>
           </div>
           <div class="footer-col">
             <h4>Browse</h4>

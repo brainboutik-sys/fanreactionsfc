@@ -6,50 +6,61 @@
 /* ── Reset & Base ──────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  /* ── Brand colours ── */
+  /* Aligned 1:1 with the FRFC Design System handoff (Apr 2026).
+     Key rules (do not drift without updating the design system too):
+       • Navy + yellow duo only. One gradient: 135deg navy → navy-deep.
+       • Cards have NO resting shadow. Hover only: translateY(-2px)
+         + border darkens to text-muted + the soft shadow below.
+       • The system leans on borders, not shadows.
+  */
+  /* ── Brand ── */
   --navy:     #061A5D;
   --yellow:   #F6BE06;
   --star:     #F6BE06;
   /* ── Light palette ── */
-  --bg:       #F5F7FA;
+  --bg:       #F0F2F7;
   --bg-card:  #FFFFFF;
-  --bg-hover: #EEF1F6;
-  --bg-input: #F7F9FC;
-  --border:   #E5E7EB;
-  --border-soft:#EEF1F6;
-  --text:     #0F172A;
-  --text-dim: #475569;
-  --text-muted:#94A3B8;
+  --bg-hover: #E8EBF2;
+  --bg-input: #F5F7FB;
+  --border:   #D0D5E0;
+  --text:     #111827;
+  --text-dim: #4B5563;
+  --text-muted:#9CA3AF;
   --accent:   #061A5D;
   --accent-hover:#0A2478;
-  --accent-soft:rgba(6,26,93,.06);
+  --accent-soft:rgba(6,26,93,.07);
   --accent-text:#FFFFFF;
   --red:      #E63946;
-  --green:    #10B981;
-  --blue:     #3b82f6;
-  /* ── Radius scale ── */
-  --radius:   12px;
-  --radius-sm:8px;
+  --green:    #2ECC71;
+  --blue:     #3B82F6;
+  /* ── Radii ── */
+  --radius-sm:6px;
+  --radius:   10px;
   --radius-lg:16px;
-  --radius-pill:999px;
-  /* ── Shadow scale ── */
-  --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.03);
-  --shadow-md: 0 4px 12px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
-  --shadow-lg: 0 12px 32px rgba(15,23,42,.10), 0 4px 10px rgba(15,23,42,.05);
-  --shadow:    var(--shadow-md);   /* legacy alias */
-  --focus-ring: 0 0 0 3px rgba(6,26,93,.12);
-  /* ── Spacing scale ── */
+  --radius-pill:100px;
+  /* ── Elevation ── */
+  --shadow:   0 2px 12px rgba(0,0,0,.06);
+  --focus-ring: 0 0 0 3px rgba(6,26,93,.08);
+  /* ── Spacing (4px base) ── */
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
   --s-4: 16px;
-  --s-5: 24px;
-  --s-6: 32px;
-  --s-7: 48px;
-  --s-8: 64px;
-  --header-bg:rgba(255,255,255,.85);
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-9: 36px;
+  --s-10:40px;
+  --header-bg:rgba(255,255,255,.92);
   --font:     'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --max-w:    1200px;
+  /* Back-compat aliases kept for .rankings-card and any other recent
+     additions that still reference the old shadow / border-soft names.
+     These resolve to the single --shadow / --border tokens above. */
+  --shadow-sm: none;
+  --shadow-md: var(--shadow);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,.16);
+  --border-soft: var(--border);
 }
 html{font-size:15px;scroll-behavior:smooth}
 body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased}
@@ -70,13 +81,13 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .badge-dim{background:var(--bg-hover);color:var(--text-dim);border:1px solid var(--border)}
 .badge-live{background:var(--red);color:#fff;animation:pulse-live 1.8s infinite}
 @keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.65}}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:var(--radius-pill);background:var(--bg-card);color:var(--text-dim);font-size:.82rem;font-weight:500;border:1px solid var(--border);transition:all .18s cubic-bezier(.4,0,.2,1);cursor:pointer}
-.chip:hover{background:var(--bg-hover);color:var(--text);border-color:var(--border)}
-.chip.active{background:var(--navy);color:var(--yellow);border-color:var(--navy);font-weight:600;box-shadow:var(--shadow-sm)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:var(--radius-pill);background:var(--bg-hover);color:var(--text-dim);font-size:.82rem;font-weight:500;border:1px solid var(--border);transition:all .15s;cursor:pointer}
+.chip:hover{background:var(--bg-input);color:var(--text)}
+.chip.active{background:var(--navy);color:var(--yellow);border-color:var(--navy);font-weight:600}
 .chip-league-logo{width:18px;height:18px;object-fit:contain;display:inline-block}
 
 /* ── Header / Nav ──────────────────────────────────────────────────────── */
-.site-header{position:sticky;top:0;z-index:100;background:var(--header-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border-soft)}
+.site-header{position:sticky;top:0;z-index:100;background:var(--header-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
 .nav-brand{display:flex;align-items:center;gap:8px;font-size:1.15rem;font-weight:700;color:var(--text);white-space:nowrap}
 .nav-brand .brand-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}
@@ -84,9 +95,9 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .nav-brand .brand-reactions{color:var(--navy);font-weight:800}
 .nav-brand .brand-fc{color:var(--yellow);font-weight:800}
 .nav-links{display:flex;align-items:center;gap:6px}
-.nav-link{padding:7px 14px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;color:var(--text-dim);transition:all .15s}
+.nav-link{padding:7px 14px;border-radius:var(--radius-sm);font-size:.86rem;font-weight:500;color:var(--text-dim);transition:all .15s}
 .nav-link:hover{color:var(--text);background:var(--bg-hover)}
-.nav-link.active{color:var(--accent);background:var(--accent-soft);font-weight:600}
+.nav-link.active{color:var(--text);background:var(--bg-hover);font-weight:600}
 .nav-link.live-dot::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:6px;animation:pulse-live 1.8s infinite}
 .nav-actions{display:flex;align-items:center;gap:8px}
 
@@ -98,17 +109,21 @@ input,select,textarea{font-family:inherit;font-size:inherit}
   .nav-toggle{display:block}
 }
 
-/* ── Buttons ───────────────────────────────────────────────────────────── */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:600;border:1px solid transparent;transition:all .18s cubic-bezier(.4,0,.2,1);line-height:1.2;white-space:nowrap}
+/* ── Buttons ─────────────────────────────────────────────────────────────
+   Spec: no shadows, no translateY. Color-only hover. Navy + yellow duo.
+*/
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 20px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:600;border:1px solid transparent;transition:background .15s,border-color .15s,color .15s;line-height:1.2;white-space:nowrap;font-family:inherit;cursor:pointer}
 .btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
-.btn-primary{background:var(--navy);color:var(--yellow);font-weight:700;box-shadow:var(--shadow-sm)}
-.btn-primary:hover{background:var(--accent-hover);color:var(--yellow);transform:translateY(-1px);box-shadow:var(--shadow-md)}
-.btn-primary:active{transform:translateY(0);box-shadow:var(--shadow-sm)}
-.btn-secondary{background:var(--bg-card);color:var(--text);border-color:var(--border)}
-.btn-secondary:hover{border-color:var(--text-muted);background:var(--bg-card);box-shadow:var(--shadow-sm);color:var(--text)}
-.btn-ghost{background:transparent;color:var(--text-dim);padding:7px 12px;border-color:transparent}
+.btn-primary{background:var(--navy);color:var(--yellow);font-weight:700}
+.btn-primary:hover{background:var(--accent-hover);color:var(--yellow)}
+.btn-secondary{background:var(--bg-hover);color:var(--text);border-color:var(--border)}
+.btn-secondary:hover{border-color:var(--text-dim);background:var(--bg-input)}
+.btn-ghost{background:transparent;color:var(--text-dim);padding:6px 12px;border-color:transparent}
 .btn-ghost:hover{color:var(--text);background:var(--bg-hover)}
-.btn-sm{padding:6px 12px;font-size:.78rem}
+/* On-navy variant — yellow fill, navy text. Used on the FRFC banner. */
+.btn-yellow{background:var(--yellow);color:var(--navy);font-weight:700}
+.btn-yellow:hover{background:#FFD033;color:var(--navy)}
+.btn-sm{padding:5px 12px;font-size:.78rem}
 .btn-icon{width:36px;height:36px;padding:0;border-radius:50%}
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */
@@ -119,8 +134,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 /* Search */
 .search-wrap{position:relative;max-width:560px;margin:0 auto 20px}
-.search-input{width:100%;padding:14px 20px 14px 46px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:1rem;transition:border-color .2s,box-shadow .2s;box-shadow:var(--shadow-sm)}
-.search-input:focus{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)}
+.search-input{width:100%;padding:14px 22px 14px 48px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:1rem;transition:border-color .15s,box-shadow .15s}
+.search-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(6,26,93,.08)}
 .search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:1.1rem;pointer-events:none}
 .search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);max-height:340px;overflow-y:auto;display:none;z-index:50;box-shadow:var(--shadow-lg)}
 .search-results.open{display:block}
@@ -134,18 +149,18 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .chip-row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px}
 
 /* ── Section headers ───────────────────────────────────────────────────── */
-.section{padding:40px 0}
-.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px;flex-wrap:wrap}
-.section-title{font-size:1.35rem;font-weight:800;letter-spacing:-.015em;color:var(--text)}
-.section-link{color:var(--accent);font-size:.85rem;font-weight:600;transition:color .15s}
+.section{padding:36px 0}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px;flex-wrap:wrap}
+.section-title{font-size:1.3rem;font-weight:700;letter-spacing:-.01em;color:var(--text)}
+.section-link{color:var(--accent);font-size:.85rem;font-weight:500;transition:color .15s}
 .section-link:hover{color:var(--accent-hover)}
 
 /* ── Cards / Creator cards ─────────────────────────────────────────────── */
-.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
-.creator-card{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);padding:20px;transition:transform .2s cubic-bezier(.4,0,.2,1),box-shadow .2s cubic-bezier(.4,0,.2,1),border-color .2s;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-sm)}
-.creator-card:hover{border-color:var(--border);transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.creator-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;transition:transform .15s,box-shadow .15s,border-color .15s;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:12px}
+.creator-card:hover{border-color:var(--text-muted);transform:translateY(-2px);box-shadow:var(--shadow)}
 .cc-top{display:flex;align-items:center;gap:12px}
-.cc-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0}
+.cc-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0}
 .avatar-fallback{display:flex;align-items:center;justify-content:center;background:var(--navy);color:var(--yellow);font-weight:700;font-size:.75em;letter-spacing:.02em;border-radius:50%;flex-shrink:0}
 .cc-info{flex:1;min-width:0}
 .cc-name{font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
@@ -162,16 +177,16 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 /* Top creators tab toggle */
 .top-creators-tabs{display:flex;gap:4px;margin-bottom:16px}
-.top-creators-tab{padding:7px 18px;border-radius:var(--radius-pill);font-size:.78rem;font-weight:600;border:1px solid var(--border);background:var(--bg-card);color:var(--text-dim);cursor:pointer;transition:all .18s cubic-bezier(.4,0,.2,1)}
-.top-creators-tab:hover{border-color:var(--text-muted);color:var(--text);background:var(--bg-hover)}
-.top-creators-tab.active{background:var(--navy);color:var(--yellow);border-color:var(--navy);box-shadow:var(--shadow-sm)}
+.top-creators-tab{padding:7px 18px;border-radius:var(--radius-pill);font-size:.78rem;font-weight:600;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-dim);cursor:pointer;transition:all .15s}
+.top-creators-tab:hover{border-color:var(--text-muted);color:var(--text)}
+.top-creators-tab.active{background:var(--navy);color:var(--yellow);border-color:var(--navy)}
 
 /* ── Creator profile ───────────────────────────────────────────────────── */
-.profile-header{padding:48px 0 28px;border-bottom:1px solid var(--border-soft);background:linear-gradient(180deg,var(--bg-card) 0%,var(--bg) 100%)}
-.profile-top{display:flex;align-items:flex-start;gap:28px}
-.profile-avatar{width:104px;height:104px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0;box-shadow:var(--shadow-md);border:3px solid var(--bg-card)}
+.profile-header{padding:40px 0 24px;border-bottom:1px solid var(--border)}
+.profile-top{display:flex;align-items:flex-start;gap:24px}
+.profile-avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;background:var(--bg-hover);flex-shrink:0}
 .profile-info{flex:1}
-.profile-name{font-size:1.9rem;font-weight:800;display:flex;align-items:center;gap:10px;flex-wrap:wrap;letter-spacing:-.02em}
+.profile-name{font-size:1.8rem;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.01em}
 .profile-team{color:var(--text-dim);font-size:.95rem;margin-top:2px}
 .profile-desc{color:var(--text-dim);font-size:.9rem;margin-top:8px;max-width:600px}
 .profile-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
@@ -222,8 +237,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 /* ── Live now strip ────────────────────────────────────────────────────── */
 .live-strip{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.live-card{flex-shrink:0;width:200px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);padding:14px;text-align:center;transition:all .2s cubic-bezier(.4,0,.2,1);cursor:pointer;box-shadow:var(--shadow-sm)}
-.live-card:hover{border-color:var(--border);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.live-card{flex-shrink:0;width:200px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center;transition:all .15s;cursor:pointer}
+.live-card:hover{border-color:var(--text-muted);transform:translateY(-2px);box-shadow:var(--shadow)}
 .live-card img{width:52px;height:52px;border-radius:50%;margin:0 auto 8px;object-fit:cover;background:var(--bg-hover)}
 .live-card .lc-name{font-weight:600;font-size:.85rem;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .live-card .lc-team{color:var(--text-dim);font-size:.72rem}
@@ -231,17 +246,17 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* ── Club grid ─────────────────────────────────────────────────────────── */
 .club-filter-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .club-filter{font-size:.78rem;padding:6px 14px}
-.club-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:14px}
-.club-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 8px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);cursor:pointer;transition:all .2s cubic-bezier(.4,0,.2,1);text-align:center;box-shadow:var(--shadow-sm)}
-.club-tile:hover{border-color:var(--border);transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.club-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px}
+.club-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;text-align:center}
+.club-tile:hover{border-color:var(--text-muted);transform:translateY(-2px);box-shadow:var(--shadow)}
 .club-tile .club-name{font-size:.82rem;font-weight:700;color:var(--text)}
 .club-tile .club-meta{display:flex;align-items:center;gap:4px;font-size:.7rem;color:var(--text-muted)}
 .club-league-badge{width:14px;height:14px;object-fit:contain;display:inline-block}
 
 /* ── Editorial cards ───────────────────────────────────────────────────── */
-.editorial-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
-.editorial-card{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);overflow:hidden;transition:all .2s cubic-bezier(.4,0,.2,1);cursor:pointer;box-shadow:var(--shadow-sm)}
-.editorial-card:hover{border-color:var(--border);transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.editorial-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.editorial-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .15s;cursor:pointer}
+.editorial-card:hover{border-color:var(--text-muted);transform:translateY(-2px);box-shadow:var(--shadow)}
 .ec-img{width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--bg-hover)}
 .ec-body{padding:16px}
 .ec-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:6px}
@@ -319,10 +334,24 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .discover-top-bar .bar-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);flex-shrink:0}
 .discover-result-count{font-size:.85rem;color:var(--text-dim);margin-bottom:16px}
 
-/* ── FRFC Banner ──────────────────────────────────────────────────────── */
-.frfc-banner{background:linear-gradient(135deg,#061A5D,#0a2478);border-radius:var(--radius-lg);padding:24px 28px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;color:#E8ECF4}
-.frfc-banner-logo{width:80px;height:80px;object-fit:contain;flex-shrink:0;border-radius:var(--radius)}
-@media(max-width:600px){.frfc-banner-logo{width:56px;height:56px}}
+/* ── FRFC Banner ────────────────────────────────────────────────────────
+   Upgraded per design spec: gradient + subtle pitch-line texture, logo
+   in yellow-bordered frame, eyebrow with trailing line, stats row.
+*/
+.frfc-banner{position:relative;background:linear-gradient(135deg,#061A5D 0%,#0A2478 100%);border-radius:var(--radius-lg);padding:28px 32px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;color:#E8ECF4;overflow:hidden;box-shadow:0 2px 20px rgba(6,26,93,.15)}
+.frfc-banner::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 85% 50%,rgba(246,190,6,.12) 0%,transparent 45%),repeating-linear-gradient(90deg,transparent 0 60px,rgba(255,255,255,.02) 60px 61px);pointer-events:none}
+.frfc-banner > *{position:relative;z-index:1}
+.frfc-banner-logo-wrap{width:92px;height:92px;background:rgba(255,255,255,.06);border:1px solid rgba(246,190,6,.3);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.frfc-banner-logo{width:76px;height:76px;object-fit:contain}
+.frfc-banner-eyebrow{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--yellow);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.frfc-banner-eyebrow::after{content:'';display:inline-block;width:24px;height:1px;background:rgba(246,190,6,.4)}
+.frfc-banner-title{font-size:1.45rem;font-weight:800;margin-bottom:6px;color:#fff;letter-spacing:-.01em}
+.frfc-banner-desc{color:#b0b8d0;font-size:.88rem;line-height:1.5;max-width:500px}
+@media(max-width:600px){
+  .frfc-banner{padding:20px;gap:16px}
+  .frfc-banner-logo-wrap{width:72px;height:72px}
+  .frfc-banner-logo{width:56px;height:56px}
+}
 
 /* ── League logos ─────────────────────────────────────────────────────── */
 .league-logo{width:22px;height:22px;object-fit:contain;display:inline-block;vertical-align:middle}
@@ -356,6 +385,15 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .cc-crest{width:18px;height:18px;object-fit:contain;margin-right:2px;vertical-align:middle}
 .trending-crest{width:24px;height:24px;object-fit:contain;flex-shrink:0}
 
+/* ── Header live-count chip ───────────────────────────────────────────── */
+.nav-live-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--radius-pill);background:rgba(230,57,70,.1);color:var(--red);font-size:.72rem;font-weight:700;border:1px solid rgba(230,57,70,.25);white-space:nowrap}
+.nav-live-chip:empty{display:none}
+.nav-live-chip .nav-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse-live 1.8s infinite}
+
+/* ── Avatar country flag bubble ───────────────────────────────────────── */
+.av-wrap{position:relative;flex-shrink:0;display:inline-block}
+.av-flag{position:absolute;bottom:-2px;right:-4px;width:20px;height:20px;border-radius:50%;border:2px solid var(--bg-card);background-size:cover;background-position:center;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+
 /* ── Live indicators ──────────────────────────────────────────────────── */
 .live-dot-sm{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:6px;animation:pulse-live 1.8s infinite;vertical-align:middle}
 /* Inline live dot used next to creator names site-wide. Slightly smaller
@@ -375,8 +413,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 /* ── Profile: latest video card ───────────────────────────────────────── */
 .latest-video-section{margin-bottom:28px}
-.latest-video-card{display:flex;align-items:center;gap:16px;padding:14px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);transition:all .2s cubic-bezier(.4,0,.2,1);text-decoration:none;color:var(--text);box-shadow:var(--shadow-sm)}
-.latest-video-card:hover{border-color:var(--border);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.latest-video-card{display:flex;align-items:center;gap:16px;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);transition:all .15s;text-decoration:none;color:var(--text)}
+.latest-video-card:hover{border-color:var(--text-muted);transform:translateY(-1px);box-shadow:var(--shadow)}
 .lv-thumb{width:200px;height:112px;object-fit:cover;border-radius:var(--radius-sm);flex-shrink:0;background:var(--bg-hover)}
 .lv-info{flex:1;min-width:0}
 .lv-title{font-size:.92rem;font-weight:600;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

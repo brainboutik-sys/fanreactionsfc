@@ -251,6 +251,16 @@ function updateNavActive(path) {
   });
 }
 
+// Populate the header "N live now" chip whenever creator data is (re)loaded.
+function updateLiveCountChip() {
+  const chip = document.getElementById('navLiveChip');
+  if (!chip) return;
+  const count = creators.filter(c => c.isLive).length;
+  if (!count) { chip.style.display = 'none'; return; }
+  chip.innerHTML = `<span class="nav-live-dot"></span>${count} live now`;
+  chip.style.display = 'inline-flex';
+}
+
 function handleRoute() {
   const path = location.pathname;
   const app = document.getElementById('app');
@@ -431,6 +441,7 @@ async function loadCreators() {
       }
     });
   }
+  updateLiveCountChip();
 }
 
 async function loadFavorites() {
@@ -465,6 +476,13 @@ function safeUrl(s) { try { const u = new URL(s); return ['http:', 'https:'].inc
 // Subtle, pulsing red dot used next to a creator's name site-wide when
 // they're currently livestreaming on YouTube.
 function liveDot(isLive) { return isLive ? '<span class="live-dot" title="Live now" aria-label="Live now"></span>' : ''; }
+// Small country-flag bubble overlayed on the bottom-right of a creator
+// avatar. Returns empty if no country is set.
+function avFlag(countryCode) {
+  if (!countryCode || countryCode.length !== 2) return '';
+  const cc = countryCode.toLowerCase();
+  return `<span class="av-flag" title="${escHtml(countryCode.toUpperCase())}" style="background-image:url('https://flagcdn.com/w80/${cc}.png')"></span>`;
+}
 function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
 function avatarUrl(c) { return c.avatar || ''; }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
@@ -682,13 +700,15 @@ function renderHome() {
     <section class="section" style="padding-top:0">
       <div class="container">
         <div class="frfc-banner">
-          <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.style.display='none'">
-          <div style="flex:1;min-width:240px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#F6BE06;margin-bottom:4px">Curated by</div>
-            <div style="font-size:1.15rem;font-weight:700;margin-bottom:4px;color:#fff">@fanreactionsfc</div>
-            <div style="color:#b0b8d0;font-size:.85rem;line-height:1.5">Post-match fan reactions, compilation videos, and rankings every matchday. The editorial voice behind this platform.</div>
+          <div class="frfc-banner-logo-wrap">
+            <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
           </div>
-          <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn" style="background:#F6BE06;color:#061A5D;font-weight:700">Subscribe on YouTube</a>
+          <div style="flex:1;min-width:240px">
+            <div class="frfc-banner-eyebrow">Curated by</div>
+            <div class="frfc-banner-title">@fanreactionsfc</div>
+            <div class="frfc-banner-desc">Post-match fan reactions, compilation videos, and rankings every matchday. The editorial voice behind this platform.</div>
+          </div>
+          <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn btn-yellow">Subscribe on YouTube</a>
         </div>
       </div>
     </section>
@@ -837,7 +857,7 @@ function creatorCard(c) {
     <a href="${creatorLink(c)}" class="creator-card${c.isLive ? ' is-live' : ''}">
       ${c.isLive ? '<span class="cc-live badge badge-live">LIVE</span>' : ''}
       <div class="cc-top">
-        ${avatarImg(c, 'cc-avatar')}
+        <span class="av-wrap">${avatarImg(c, 'cc-avatar')}${avFlag(c.channelCountry)}</span>
         <div class="cc-info">
           <div class="cc-name">${liveDot(c.isLive)}${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
           <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}</div>

@@ -12,6 +12,7 @@ let creators = [];
 let reviews = [];
 let favorites = new Set();
 let currentUser = null;
+let currentProfile = null;  // frfc_user_profiles row for the signed-in user
 let currentRoute = { page: 'home' };
 
 // ── Content types ─────────────────────────────────────────────────────────
@@ -331,8 +332,10 @@ async function refreshAuth() {
     const { data: { user } } = await sb.auth.getUser();
     currentUser = user;
     if (currentUser) {
+      currentProfile = await loadUserProfile(currentUser.id);
       await loadFavorites();
     } else {
+      currentProfile = null;
       favorites = new Set();
     }
   } catch (e) { /* auth refresh failed silently — user will see sign-in */ }
@@ -343,9 +346,14 @@ function updateAuthUI() {
   const btn = document.getElementById('authBtn');
   if (!btn) return;
   if (currentUser) {
-    const initial = (currentUser.email || '?')[0].toUpperCase();
-    btn.innerHTML = `<span class="review-avatar">${initial}</span>`;
+    btn.className = 'auth-btn';
     btn.onclick = () => showUserMenu();
+    if (currentProfile && currentProfile.avatar_url) {
+      btn.innerHTML = `<img class="auth-avatar" src="${escHtml(currentProfile.avatar_url)}" alt="">`;
+    } else {
+      const source = (currentProfile && currentProfile.display_name) || currentUser.email || '?';
+      btn.innerHTML = `<span class="auth-avatar auth-avatar--initials">${escHtml(avatarInitials(source))}</span>`;
+    }
   } else {
     btn.innerHTML = 'Sign In';
     btn.className = 'btn btn-primary btn-sm';
@@ -359,8 +367,12 @@ function showUserMenu() {
   const menu = document.createElement('div');
   menu.className = 'user-menu';
   menu.style.cssText = 'position:fixed;top:52px;right:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 0;z-index:150;min-width:180px;box-shadow:var(--shadow)';
+  const displayName = (currentProfile && currentProfile.display_name) || '';
   menu.innerHTML = `
-    <div style="padding:8px 16px;font-size:.82rem;color:var(--text-dim);border-bottom:1px solid var(--border)">${escHtml(currentUser.email)}</div>
+    <div style="padding:8px 16px;border-bottom:1px solid var(--border)">
+      ${displayName ? `<div style="font-size:.88rem;font-weight:600;color:var(--text)">${escHtml(displayName)}</div>` : ''}
+      <div style="font-size:.78rem;color:var(--text-dim)">${escHtml(currentUser.email)}</div>
+    </div>
     <a href="/account" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Account settings</a>
     <a href="/tools/generator" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Description Generator</a>
     <a href="/admin" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Admin Panel</a>
@@ -1823,6 +1835,10 @@ async function handleAvatarUpload(e) {
     if (preview) preview.innerHTML = `<img src="${publicUrl}" alt="">`;
     // Persist to profile row via upsert
     await upsertProfile({ avatar_url: publicUrl });
+    // Update cached profile + header button so the top-right refreshes instantly.
+    if (!currentProfile) currentProfile = {};
+    currentProfile.avatar_url = publicUrl;
+    updateAuthUI();
     msg.style.color = 'var(--green)';
     msg.textContent = 'Uploaded — don\'t forget to save other changes.';
   } catch (e) {
@@ -1837,6 +1853,8 @@ async function removeAvatar() {
   await upsertProfile({ avatar_url: null });
   const preview = document.getElementById('acctAvatarPreview');
   if (preview) preview.innerHTML = `<div class="avatar-fallback">${escHtml(avatarInitials(currentUser.email))}</div>`;
+  if (currentProfile) currentProfile.avatar_url = null;
+  updateAuthUI();
   msg.style.color = 'var(--green)';
   msg.textContent = 'Removed.';
 }
@@ -1875,6 +1893,8 @@ async function saveAccount() {
   };
   const res = await upsertProfile(patch);
   if (res.ok) {
+    currentProfile = Object.assign({}, currentProfile || {}, patch);
+    updateAuthUI();
     msg.style.color = 'var(--green)';
     msg.textContent = 'Saved.';
   } else {

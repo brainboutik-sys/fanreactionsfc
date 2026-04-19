@@ -451,6 +451,12 @@ img.review-avatar{background:var(--bg-hover)}
 .suggest-cta:hover{border-color:var(--accent);border-style:solid;color:var(--accent);background:var(--accent-soft)}
 .suggest-cta .suggest-icon{font-size:1.1rem}
 
+/* ── Header user button / avatar ──────────────────────────────────────── */
+.auth-btn{background:none;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.auth-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;background:var(--bg-hover);display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);transition:border-color .15s}
+.auth-btn:hover .auth-avatar{border-color:var(--text-muted)}
+.auth-avatar--initials{background:var(--navy);color:var(--yellow);font-weight:700;font-size:.78rem;letter-spacing:.02em}
+
 /* ── Account settings ─────────────────────────────────────────────────── */
 .acct-avatar-row{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
 .acct-avatar{width:84px;height:84px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover);border:3px solid var(--bg-card);box-shadow:0 0 0 1px var(--border)}

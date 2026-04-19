@@ -422,6 +422,8 @@ async function loadCreators() {
     upcomingVideoTitle: r.upcoming_video_title || '',
     upcomingVideoThumbnail: r.upcoming_video_thumbnail || '',
     upcomingVideoScheduledAt: r.upcoming_video_scheduled_at || null,
+    subscriberCountPrev: r.subscriber_count_prev || 0,
+    avgRatingPrev: r.avg_rating_prev != null ? Number(r.avg_rating_prev) : 0,
     avgRating: 0,
     ratingCount: 0
   }));
@@ -481,7 +483,22 @@ function liveDot(isLive) { return isLive ? '<span class="live-dot" title="Live n
 function avFlag(countryCode) {
   if (!countryCode || countryCode.length !== 2) return '';
   const cc = countryCode.toLowerCase();
-  return `<span class="av-flag" title="${escHtml(countryCode.toUpperCase())}" style="background-image:url('https://flagcdn.com/w80/${cc}.png')"></span>`;
+  return `<span class="av-flag" title="${escHtml(countryName(countryCode) || countryCode.toUpperCase())}" style="background-image:url('https://flagcdn.com/w80/${cc}.png')"></span>`;
+}
+
+// Readable country names for the ISO-2 codes we see most. Falls back to
+// the raw code if we don't have a mapping yet.
+const COUNTRY_NAMES = {
+  GB: 'England', US: 'USA', ES: 'Spain', FR: 'France', DE: 'Germany',
+  IT: 'Italy', IE: 'Ireland', PT: 'Portugal', NL: 'Netherlands', BE: 'Belgium',
+  IN: 'India', AU: 'Australia', CA: 'Canada', BR: 'Brazil', AR: 'Argentina',
+  MX: 'Mexico', NG: 'Nigeria', ZA: 'South Africa', KR: 'South Korea',
+  JP: 'Japan', SE: 'Sweden', NO: 'Norway', DK: 'Denmark', CH: 'Switzerland',
+  AT: 'Austria', TR: 'Turkey', GR: 'Greece', PL: 'Poland', RU: 'Russia',
+};
+function countryName(code) {
+  if (!code || code.length !== 2) return '';
+  return COUNTRY_NAMES[code.toUpperCase()] || '';
 }
 function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
 function avatarUrl(c) { return c.avatar || ''; }
@@ -582,33 +599,75 @@ function subscriberSparkline(series, width = 220, height = 48) {
 
 // ── Search ────────────────────────────────────────────────────────────────
 let _searchTimer = null;
+
+function renderSearchResults(q, input) {
+  const wrap = input.closest('.search-wrap');
+  const box = wrap.querySelector('.search-results');
+  const clearBtn = wrap.querySelector('.search-clear');
+  if (clearBtn) clearBtn.style.display = input.value.length ? 'flex' : 'none';
+  if (q.length < 2) { box.classList.remove('open'); return; }
+
+  // Match creators — name, team, or content type
+  const creatorMatches = creators.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    c.team.toLowerCase().includes(q) ||
+    c.contentTypes.some(t => t.toLowerCase().includes(q))
+  ).slice(0, 6);
+
+  // Match clubs — dedupe by team name, count creators per team
+  const clubCountMap = {};
+  creators.forEach(c => {
+    if (c.team && c.team !== 'Multi-Club / Other') {
+      clubCountMap[c.team] = (clubCountMap[c.team] || 0) + 1;
+    }
+  });
+  const clubMatches = Object.entries(clubCountMap)
+    .filter(([team]) => team.toLowerCase().includes(q))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+
+  if (!creatorMatches.length && !clubMatches.length) {
+    box.innerHTML = '<div class="search-empty">No results found</div>';
+    box.classList.add('open');
+    return;
+  }
+
+  let html = '';
+  if (creatorMatches.length) {
+    html += '<div class="search-group-head">Creators</div>';
+    html += creatorMatches.map(c => `
+      <a href="${creatorLink(c)}" class="search-result">
+        ${avatarImg(c, 'cc-avatar')}
+        <div class="sr-info">
+          <div class="sr-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
+          <div class="sr-team">${escHtml(c.team)}</div>
+        </div>
+        ${c.avgRating > 0 ? `<span class="sr-meta">&#9733; ${c.avgRating}</span>` : ''}
+      </a>`).join('');
+  }
+  if (clubMatches.length) {
+    html += '<div class="search-group-head">Clubs</div>';
+    html += clubMatches.map(([team, count]) => `
+      <a href="/clubs/${encodeURIComponent(team)}" class="search-result">
+        <span class="cc-avatar search-crest-wrap">${crestImg(team, 'search-crest')}</span>
+        <div class="sr-info">
+          <div class="sr-name">${escHtml(team)}</div>
+          <div class="sr-team">${escHtml(getLeague(team))}</div>
+        </div>
+        <span class="sr-meta">${count} creator${count !== 1 ? 's' : ''}</span>
+      </a>`).join('');
+  }
+  box.innerHTML = html;
+  box.classList.add('open');
+}
+
 function initSearch() {
   document.addEventListener('input', e => {
     if (!e.target.classList.contains('search-input')) return;
     clearTimeout(_searchTimer);
     const input = e.target;
     _searchTimer = setTimeout(() => {
-      const q = input.value.trim().toLowerCase();
-      const box = input.closest('.search-wrap').querySelector('.search-results');
-      if (q.length < 2) { box.classList.remove('open'); return; }
-      const matches = creators.filter(c =>
-        c.name.toLowerCase().includes(q) || c.team.toLowerCase().includes(q) ||
-        c.contentTypes.some(t => t.toLowerCase().includes(q))
-      ).slice(0, 8);
-      if (!matches.length) {
-        box.innerHTML = '<div class="search-empty">No results found</div>';
-        box.classList.add('open');
-        return;
-      }
-      box.innerHTML = matches.map(c => `
-        <a href="${creatorLink(c)}" class="search-result">
-          ${avatarImg(c, 'cc-avatar')}
-          <div>
-            <div class="sr-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
-            <div class="sr-team">${escHtml(c.team)}</div>
-          </div>
-        </a>`).join('');
-      box.classList.add('open');
+      renderSearchResults(input.value.trim().toLowerCase(), input);
     }, 250);
   });
   document.addEventListener('keydown', e => {
@@ -624,6 +683,18 @@ function initSearch() {
         if (box) box.classList.remove('open');
       }, 200);
     }
+  });
+  // Click handler for the clear (×) button inside search-wrap.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.search-clear');
+    if (!btn) return;
+    const wrap = btn.closest('.search-wrap');
+    const input = wrap?.querySelector('.search-input');
+    if (!input) return;
+    input.value = '';
+    btn.style.display = 'none';
+    wrap.querySelector('.search-results')?.classList.remove('open');
+    input.focus();
   });
 }
 
@@ -664,6 +735,7 @@ function renderHome() {
         <div class="search-wrap">
           <span class="search-icon">&#128269;</span>
           <input class="search-input" type="text" placeholder="Search a creator, club, or content style...">
+          <button type="button" class="search-clear" aria-label="Clear search" style="display:none">&times;</button>
           <div class="search-results"></div>
         </div>
         <div class="chip-row">
@@ -703,12 +775,20 @@ function renderHome() {
           <div class="frfc-banner-logo-wrap">
             <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
           </div>
-          <div style="flex:1;min-width:240px">
+          <div class="frfc-banner-main">
             <div class="frfc-banner-eyebrow">Curated by</div>
             <div class="frfc-banner-title">@fanreactionsfc</div>
             <div class="frfc-banner-desc">Post-match fan reactions, compilation videos, and rankings every matchday. The editorial voice behind this platform.</div>
+            <div class="frfc-banner-stats">
+              <div class="frfc-stat"><b>${creators.length}</b>creators tracked</div>
+              <div class="frfc-stat"><b>${getLeagues().length}</b>leagues covered</div>
+              <div class="frfc-stat"><b>Every 5 min</b>live status</div>
+            </div>
           </div>
-          <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn btn-yellow">Subscribe on YouTube</a>
+          <div class="frfc-banner-cta">
+            <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn btn-yellow">&#9654; Subscribe on YouTube</a>
+            <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener" class="btn-banner-secondary">Follow on X</a>
+          </div>
         </div>
       </div>
     </section>
@@ -860,7 +940,7 @@ function creatorCard(c) {
         <span class="av-wrap">${avatarImg(c, 'cc-avatar')}${avFlag(c.channelCountry)}</span>
         <div class="cc-info">
           <div class="cc-name">${liveDot(c.isLive)}${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
-          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}</div>
+          <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}${countryName(c.channelCountry) ? ` <span class="cc-loc">&middot; ${escHtml(countryName(c.channelCountry))}</span>` : ''}</div>
         </div>
       </div>
       <div class="cc-meta">
@@ -1323,6 +1403,15 @@ function renderRankings() {
     ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
   }
 
+  // Compute previous ranks from the same filtered set, sorted by the
+  // snapshot column, so we can show week-over-week movement.
+  const prevRanks = {};
+  const prevField = mode === 'rating' ? 'avgRatingPrev' : 'subscriberCountPrev';
+  [...ranked]
+    .filter(c => c[prevField] > 0)
+    .sort((a, b) => b[prevField] - a[prevField])
+    .forEach((c, i) => { prevRanks[c.id] = i + 1; });
+
   const modeParam = mode === 'rating' ? '&mode=rating' : '';
 
   document.getElementById('app').innerHTML = `
@@ -1349,10 +1438,20 @@ function renderRankings() {
         const freq = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
         const videos = c.videoCount ? formatNum(c.videoCount) + ' videos' : '';
         const metaParts = [freq, videos].filter(Boolean);
+        const currentRank = i + 1;
+        const prev = prevRanks[c.id];
+        let move = '';
+        if (prev == null) {
+          if (c[prevField] <= 0) move = '<span class="rk-move rk-move--new">NEW</span>';
+        } else if (prev > currentRank) {
+          move = `<span class="rk-move rk-move--up">&uarr;${prev - currentRank}</span>`;
+        } else if (prev < currentRank) {
+          move = `<span class="rk-move rk-move--down">&darr;${currentRank - prev}</span>`;
+        }
         return `
-        <a href="${creatorLink(c)}" class="rk-row${rankClass}">
-          <div class="rk-rank">${i + 1}</div>
-          ${avatarImg(c, 'rk-avatar')}
+        <a href="${creatorLink(c)}" class="rk-row${rankClass}${c.isLive ? ' rk-row--live' : ''}">
+          <div class="rk-rank">${currentRank}${move}</div>
+          <span class="av-wrap">${avatarImg(c, 'rk-avatar')}</span>
           <div class="rk-info">
             <div class="rk-name">${liveDot(c.isLive)}${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}</div>
             <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>

@@ -242,6 +242,25 @@ function navigate(path, push = true) {
   handleRoute();
 }
 
+// Renders a "Sign in required" panel into #app so the route still visually
+// reflects the URL when the user isn't authenticated. Also opens the modal
+// so they can sign in immediately.
+function renderAuthRequired(what) {
+  const label = what || 'view this page';
+  document.getElementById('app').innerHTML = `
+    <div class="container" style="padding:60px 20px;text-align:center">
+      <div class="empty-state">
+        <div class="es-icon">&#128274;</div>
+        <div class="es-title">Sign in required</div>
+        <p style="color:var(--text-dim);margin-bottom:16px">Please sign in to ${escHtml(label)}.</p>
+        <button class="btn btn-primary" onclick="openModal('signin')">Sign In</button>
+        <a href="/" class="btn btn-ghost" style="margin-left:8px">Back to Home</a>
+      </div>
+    </div>
+    ${renderFooter()}`;
+  openModal('signin');
+}
+
 function updateNavActive(path) {
   const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings' };
   Object.entries(links).forEach(([id, prefix]) => {
@@ -272,46 +291,70 @@ function handleRoute() {
   // Update nav active state
   updateNavActive(path);
 
-  if (path === '/' || path === '/index.html') {
-    currentRoute = { page: 'home' };
-    renderHome();
-  } else if (path === '/discover' || path.startsWith('/discover')) {
-    currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
-    renderDiscover();
-  } else if (path.startsWith('/creators/')) {
-    const slug = path.split('/creators/')[1].replace(/\/$/, '');
-    currentRoute = { page: 'profile', slug };
-    renderProfile(slug);
-  } else if (path.startsWith('/clubs/')) {
-    const tail = path.split('/clubs/')[1].replace(/\/$/, '');
-    // /clubs/:team/videos -> team videos page; otherwise the club page
-    if (tail.endsWith('/videos')) {
-      const club = decodeURIComponent(tail.slice(0, -'/videos'.length));
-      currentRoute = { page: 'clubVideos', club };
-      renderClubVideos(club);
+  try {
+    if (path === '/' || path === '/index.html') {
+      currentRoute = { page: 'home' };
+      renderHome();
+    } else if (path === '/discover' || path.startsWith('/discover')) {
+      currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
+      renderDiscover();
+    } else if (path.startsWith('/creators/')) {
+      const slug = path.split('/creators/')[1].replace(/\/$/, '');
+      currentRoute = { page: 'profile', slug };
+      renderProfile(slug);
+    } else if (path.startsWith('/clubs/')) {
+      const tail = path.split('/clubs/')[1].replace(/\/$/, '');
+      // /clubs/:team/videos -> team videos page; otherwise the club page
+      if (tail.endsWith('/videos')) {
+        const club = decodeURIComponent(tail.slice(0, -'/videos'.length));
+        currentRoute = { page: 'clubVideos', club };
+        renderClubVideos(club);
+      } else {
+        const club = decodeURIComponent(tail);
+        currentRoute = { page: 'club', club };
+        renderClubPage(club);
+      }
+    } else if (path === '/rankings') {
+      currentRoute = { page: 'rankings' };
+      renderRankings();
+    } else if (path === '/tools/generator') {
+      currentRoute = { page: 'generator' };
+      renderGenerator();
+    } else if (path === '/submit') {
+      currentRoute = { page: 'submit' };
+      renderSubmit();
+    } else if (path === '/account') {
+      currentRoute = { page: 'account' };
+      renderAccount();
+    } else if (path.startsWith('/admin')) {
+      currentRoute = { page: 'admin' };
+      renderAdmin();
     } else {
-      const club = decodeURIComponent(tail);
-      currentRoute = { page: 'club', club };
-      renderClubPage(club);
+      // Unknown route — show a 404 rather than falling back to Home
+      // silently, which used to make broken links feel invisible.
+      currentRoute = { page: 'notfound' };
+      app.innerHTML = `
+        <div class="container" style="padding:60px 20px;text-align:center">
+          <div class="empty-state">
+            <div class="es-icon">&#128269;</div>
+            <div class="es-title">Page not found</div>
+            <p style="color:var(--text-dim);margin-bottom:16px">No page at <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px">${escHtml(path)}</code>.</p>
+            <a href="/" class="btn btn-primary">Back to Home</a>
+          </div>
+        </div>
+        ${renderFooter()}`;
     }
-  } else if (path === '/rankings') {
-    currentRoute = { page: 'rankings' };
-    renderRankings();
-  } else if (path === '/tools/generator') {
-    currentRoute = { page: 'generator' };
-    renderGenerator();
-  } else if (path === '/submit') {
-    currentRoute = { page: 'submit' };
-    renderSubmit();
-  } else if (path === '/account') {
-    currentRoute = { page: 'account' };
-    renderAccount();
-  } else if (path.startsWith('/admin')) {
-    currentRoute = { page: 'admin' };
-    renderAdmin();
-  } else {
-    currentRoute = { page: 'home' };
-    renderHome();
+  } catch (e) {
+    app.innerHTML = `
+      <div class="container" style="padding:60px 20px;text-align:center">
+        <div class="empty-state">
+          <div class="es-icon">&#9888;</div>
+          <div class="es-title">Something went wrong rendering this page.</div>
+          <p style="color:var(--text-dim);margin-bottom:8px">${escHtml(e && e.message || String(e))}</p>
+          <a href="/" class="btn btn-primary" style="margin-top:8px">Back to Home</a>
+        </div>
+      </div>
+      ${renderFooter()}`;
   }
 }
 
@@ -1514,6 +1557,10 @@ function renderRankings() {
 
 // ── Render: Generator ────────────────────────────────────────────────────
 async function renderGenerator() {
+  if (typeof Gen === 'undefined') {
+    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Generator module not loaded.</p></div>' + renderFooter();
+    return;
+  }
   if (!creators.length) await loadCreators();
   document.getElementById('app').innerHTML = Gen.renderHTML() + renderFooter();
   Gen.init();
@@ -1670,7 +1717,7 @@ async function loadUserProfile(userId) {
 }
 
 async function renderAccount() {
-  if (!currentUser) { openModal('signin'); return; }
+  if (!currentUser) return renderAuthRequired('access your account settings');
   const app = document.getElementById('app');
   app.innerHTML = `<div class="container" style="max-width:720px;padding-top:48px;padding-bottom:60px">
     <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:6px">Account settings</h1>
@@ -1906,7 +1953,7 @@ async function saveAccount() {
 
 // ── Render: Admin ────────────────────────────────────────────────────────
 async function renderAdmin() {
-  if (!currentUser) { openModal('signin'); return; }
+  if (!currentUser) return renderAuthRequired('open the admin panel');
   if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module not loaded.</p></div>'; return; }
   const isAdmin = await Admin.checkAdmin();
   if (!isAdmin) {

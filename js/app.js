@@ -813,14 +813,23 @@ function renderHome() {
     <section class="section" style="padding-top:0;padding-bottom:0">
       <div class="container">
         <div class="section-head">
-          <h2 class="section-title"><span class="live-dot-sm"></span> Live Now</h2>
+          <h2 class="section-title"><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></h2>
+          ${liveNow.length > 4 ? '<a href="/discover?live=1" class="section-link">View all &rarr;</a>' : ''}
         </div>
         <div class="live-strip">
           ${liveNow.map(c => `
-            <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card">
-              ${avatarImg(c, 'cc-avatar')}
-              <div class="lc-name">${escHtml(c.name)}</div>
-              <div class="lc-team">${escHtml(c.team)}</div>
+            <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card" title="${escHtml(c.name)} — Live on YouTube">
+              <div class="live-thumb-wrap">
+                <img class="live-thumb" src="https://i.ytimg.com/vi/${safeId(c.liveVideoId)}/mqdefault.jpg" alt="" loading="lazy" onerror="this.style.display='none'">
+                <span class="live-badge"><span class="live-badge-dot"></span>LIVE</span>
+              </div>
+              <div class="live-body">
+                <span class="av-wrap live-av">${avatarImg(c, 'lc-avatar')}${avFlag(c.channelCountry)}</span>
+                <div class="live-info">
+                  <div class="lc-name">${escHtml(c.name)}</div>
+                  <div class="lc-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+                </div>
+              </div>
             </a>
           `).join('')}
         </div>

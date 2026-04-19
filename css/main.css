@@ -238,12 +238,27 @@ img.review-avatar{background:var(--bg-hover)}
 .review-action:hover{color:var(--text)}
 
 /* ── Live now strip ────────────────────────────────────────────────────── */
-.live-strip{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.live-card{flex-shrink:0;width:200px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center;transition:all .15s;cursor:pointer}
-.live-card:hover{border-color:var(--text-muted);transform:translateY(-2px);box-shadow:var(--shadow)}
-.live-card img{width:52px;height:52px;border-radius:50%;margin:0 auto 8px;object-fit:cover;background:var(--bg-hover)}
-.live-card .lc-name{font-weight:600;font-size:.85rem;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.live-card .lc-team{color:var(--text-dim);font-size:.72rem}
+/* ── Live Now strip ───────────────────────────────────────────────────────
+   Horizontal scrolling row of stream cards. Each card: YouTube thumbnail
+   on top with a pulsing red LIVE badge, creator avatar + name + team
+   below. Red accent ring on hover to reinforce the "live" signal.
+*/
+.live-strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(240px,1fr);gap:14px;overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x mandatory;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+@media(min-width:900px){.live-strip{grid-auto-columns:minmax(0,1fr);grid-template-columns:repeat(auto-fit,minmax(240px,1fr));grid-auto-flow:row}}
+.live-card{display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;text-decoration:none;color:var(--text);transition:all .15s;scroll-snap-align:start}
+.live-card:hover{border-color:var(--red);transform:translateY(-2px);box-shadow:0 0 0 1px rgba(230,57,70,.18),var(--shadow)}
+.live-thumb-wrap{position:relative;aspect-ratio:16/9;background:var(--bg-hover);overflow:hidden}
+.live-thumb{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+.live-card:hover .live-thumb{transform:scale(1.03)}
+.live-badge{position:absolute;top:8px;left:8px;display:inline-flex;align-items:center;gap:5px;background:var(--red);color:#fff;font-size:.65rem;font-weight:800;padding:4px 9px;border-radius:var(--radius-sm);letter-spacing:.06em;animation:pulse-live 1.8s infinite;box-shadow:0 1px 4px rgba(230,57,70,.35)}
+.live-badge-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#fff}
+.live-body{display:flex;align-items:center;gap:10px;padding:10px 12px 12px}
+.live-av{flex-shrink:0}
+.lc-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;background:var(--bg-hover);display:block}
+.live-info{min-width:0;flex:1}
+.lc-name{font-weight:700;font-size:.85rem;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.lc-team{color:var(--text-dim);font-size:.72rem;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:var(--radius-pill);background:var(--red);color:#fff;font-size:.68rem;font-weight:800;margin-left:6px;vertical-align:middle}
 
 /* ── Club grid ─────────────────────────────────────────────────────────── */
 .club-filter-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}

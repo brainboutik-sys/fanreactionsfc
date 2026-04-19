@@ -227,7 +227,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .review{border-bottom:1px solid var(--border);padding:16px 0}
 .review:last-child{border-bottom:none}
 .review-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.review-avatar{width:28px;height:28px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff}
+.review-avatar{width:28px;height:28px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;object-fit:cover;flex-shrink:0}
+img.review-avatar{background:var(--bg-hover)}
 .review-user{font-weight:600;font-size:.85rem}
 .review-date{color:var(--text-muted);font-size:.75rem}
 .review-stars{margin-left:auto;color:var(--star);font-size:.8rem}
@@ -449,6 +450,14 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .suggest-cta{display:flex;align-items:center;justify-content:center;gap:8px;padding:24px;margin-top:24px;background:var(--bg-card);border:1.5px dashed var(--border);border-radius:var(--radius);color:var(--text-dim);font-size:.9rem;font-weight:500;transition:all .18s cubic-bezier(.4,0,.2,1);cursor:pointer;text-decoration:none}
 .suggest-cta:hover{border-color:var(--accent);border-style:solid;color:var(--accent);background:var(--accent-soft)}
 .suggest-cta .suggest-icon{font-size:1.1rem}
+
+/* ── Account settings ─────────────────────────────────────────────────── */
+.acct-avatar-row{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.acct-avatar{width:84px;height:84px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-hover);border:3px solid var(--bg-card);box-shadow:0 0 0 1px var(--border)}
+.acct-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.acct-avatar .avatar-fallback{width:100%;height:100%;font-size:1.5rem}
+.acct-check{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(--text);padding:6px 0;cursor:pointer}
+.acct-check input[type="checkbox"]{accent-color:var(--navy);width:16px;height:16px;cursor:pointer}
 
 /* ── Search empty state ───────────────────────────────────────────────── */
 .search-empty{padding:12px 16px;color:var(--text-dim);font-size:.85rem;text-align:center}

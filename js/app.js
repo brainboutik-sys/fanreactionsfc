@@ -302,6 +302,9 @@ function handleRoute() {
   } else if (path === '/submit') {
     currentRoute = { page: 'submit' };
     renderSubmit();
+  } else if (path === '/account') {
+    currentRoute = { page: 'account' };
+    renderAccount();
   } else if (path.startsWith('/admin')) {
     currentRoute = { page: 'admin' };
     renderAdmin();
@@ -357,7 +360,8 @@ function showUserMenu() {
   menu.className = 'user-menu';
   menu.style.cssText = 'position:fixed;top:52px;right:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 0;z-index:150;min-width:180px;box-shadow:var(--shadow)';
   menu.innerHTML = `
-    <div style="padding:8px 16px;font-size:.82rem;color:var(--text-dim);border-bottom:1px solid var(--border)">${currentUser.email}</div>
+    <div style="padding:8px 16px;font-size:.82rem;color:var(--text-dim);border-bottom:1px solid var(--border)">${escHtml(currentUser.email)}</div>
+    <a href="/account" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Account settings</a>
     <a href="/tools/generator" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Description Generator</a>
     <a href="/admin" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Admin Panel</a>
     <button onclick="signOut()" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:.85rem;color:var(--accent);background:none;border:none;border-top:1px solid var(--border)">Sign Out</button>`;
@@ -1109,6 +1113,25 @@ async function renderProfile(slug) {
   const { data: revData } = await sb.from('frfc_reviews').select('*').eq('creator_id', c.id).order('created_at', { ascending: false });
   reviews = revData || [];
 
+  // Enrich reviews with reviewer profiles (display_name + avatar_url).
+  // Uses a single batched fetch with a user_id IN(...) filter.
+  const reviewerIds = [...new Set(reviews.map(r => r.user_id).filter(Boolean))];
+  const profiles = {};
+  if (reviewerIds.length) {
+    try {
+      const ids = reviewerIds.map(encodeURIComponent).join(',');
+      const pRes = await fetch(`${SUPABASE_URL}/rest/v1/frfc_user_profiles?select=user_id,display_name,avatar_url,reviews_public&user_id=in.(${ids})`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      });
+      if (pRes.ok) (await pRes.json()).forEach(p => { profiles[p.user_id] = p; });
+    } catch {}
+  }
+  // Hide reviews whose author has opted out of public display.
+  reviews = reviews.filter(r => {
+    const p = profiles[r.user_id];
+    return !p || p.reviews_public !== false;
+  });
+
   const isFav = favorites.has(c.id);
   const similar = creators.filter(s => s.team === c.team && s.id !== c.id).slice(0, 4);
 
@@ -1210,17 +1233,23 @@ async function renderProfile(slug) {
       <!-- Reviews list -->
       <div style="margin-bottom:32px">
         <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Reviews (${reviews.length})</h3>
-        ${reviews.length ? reviews.map(r => `
+        ${reviews.length ? reviews.map(r => {
+          const p = profiles[r.user_id];
+          const name = (p && p.display_name) || 'Fan';
+          const avatar = p && p.avatar_url
+            ? `<img class="review-avatar" src="${escHtml(p.avatar_url)}" alt="">`
+            : `<div class="review-avatar">${escHtml(avatarInitials(name))}</div>`;
+          return `
           <div class="review">
             <div class="review-head">
-              <div class="review-avatar">${(r.user_id || '?').charAt(0).toUpperCase()}</div>
-              <span class="review-user">Fan</span>
+              ${avatar}
+              <span class="review-user">${escHtml(name)}</span>
               <span class="review-date">${new Date(r.created_at).toLocaleDateString()}</span>
               <span class="review-stars">${stars(r.rating)}</span>
             </div>
             ${r.review_text ? `<div class="review-text">${escHtml(r.review_text)}</div>` : ''}
-          </div>
-        `).join('') : '<div style="color:var(--text-dim);font-size:.88rem">No reviews yet. Be the first to rate this creator!</div>'}
+          </div>`;
+        }).join('') : '<div style="color:var(--text-dim);font-size:.88rem">No reviews yet. Be the first to rate this creator!</div>'}
       </div>
 
       ${!c.claimed ? `
@@ -1608,6 +1637,251 @@ async function submitCreator() {
   }).catch(function() { /* non-critical */ });
 
   document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
+}
+
+// ── Render: Account settings ──────────────────────────────────────────────
+
+// Fetches the user's profile row (or returns an empty template so the form
+// can still render on first visit).
+async function loadUserProfile(userId) {
+  const emptyProfile = {
+    user_id: userId, display_name: '', avatar_url: '', favourite_team: '',
+    country: '', bio: '', notify_live: false, notify_weekly: true, reviews_public: true,
+  };
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/frfc_user_profiles?select=*&user_id=eq.${userId}&limit=1`;
+    const res = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+    if (!res.ok) return emptyProfile;
+    const rows = await res.json();
+    return rows[0] || emptyProfile;
+  } catch { return emptyProfile; }
+}
+
+async function renderAccount() {
+  if (!currentUser) { openModal('signin'); return; }
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="container" style="max-width:720px;padding-top:48px;padding-bottom:60px">
+    <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:6px">Account settings</h1>
+    <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:28px">Update how you appear on FanReactionsFC.</p>
+    <div id="accountBody"><div class="empty-state" style="padding:40px 0"><div style="color:var(--text-dim)">Loading…</div></div></div>
+  </div>${renderFooter()}`;
+
+  const profile = await loadUserProfile(currentUser.id);
+  const memberSince = currentUser.created_at ? new Date(currentUser.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : '';
+
+  // Reviews + favorites count
+  let reviewsCount = 0, favCount = 0;
+  try {
+    const [rRes, fRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/frfc_reviews?select=id&user_id=eq.${currentUser.id}`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'count=exact' } }),
+      fetch(`${SUPABASE_URL}/rest/v1/frfc_streamer_favorites?select=streamer_id&user_id=eq.${currentUser.id}`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'count=exact' } }),
+    ]);
+    reviewsCount = (await rRes.json()).length;
+    favCount = (await fRes.json()).length;
+  } catch {}
+
+  // Team options grouped by league (same logic as submit form)
+  let teamOpts = '<option value="">No favourite</option>';
+  const leagueOrder = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1'];
+  const teamsByLeague = {};
+  Object.entries(TEAM_TO_LEAGUE).forEach(([t, l]) => { (teamsByLeague[l] = teamsByLeague[l] || []).push(t); });
+  leagueOrder.forEach(l => {
+    const teams = (teamsByLeague[l] || []).sort();
+    teamOpts += `<optgroup label="${escHtml(l)}">${teams.map(t => `<option value="${escHtml(t)}" ${profile.favourite_team === t ? 'selected' : ''}>${escHtml(t)}</option>`).join('')}</optgroup>`;
+  });
+
+  const countryOpts = '<option value="">—</option>' + Object.entries(COUNTRY_NAMES).sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) =>
+    `<option value="${code}" ${profile.country === code ? 'selected' : ''}>${escHtml(name)}</option>`
+  ).join('');
+
+  const avatarPreview = profile.avatar_url || '';
+  const initials = avatarInitials(profile.display_name || currentUser.email);
+
+  document.getElementById('accountBody').innerHTML = `
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="acct-avatar-row">
+        <div id="acctAvatarPreview" class="acct-avatar">${avatarPreview ? `<img src="${escHtml(avatarPreview)}" alt="">` : `<div class="avatar-fallback">${escHtml(initials)}</div>`}</div>
+        <div>
+          <label class="field-label">Profile picture</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label for="acctAvatarFile" class="btn btn-secondary btn-sm" style="cursor:pointer">Upload new photo</label>
+            <input type="file" id="acctAvatarFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+            ${avatarPreview ? '<button class="btn btn-ghost btn-sm" onclick="removeAvatar()" type="button">Remove</button>' : ''}
+            <span id="acctAvatarMsg" style="font-size:.78rem;color:var(--text-muted)"></span>
+          </div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:6px">JPG, PNG, WebP or GIF — up to 2MB.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Identity</div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Display name</label>
+        <input id="acctName" class="admin-form-input" placeholder="How you'll appear on reviews" value="${escHtml(profile.display_name || '')}">
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Bio</label>
+        <textarea id="acctBio" class="admin-form-input" style="min-height:72px;resize:vertical" placeholder="One line about you — optional">${escHtml(profile.bio || '')}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <label class="field-label">Favourite club</label>
+          <select id="acctTeam" class="admin-form-select">${teamOpts}</select>
+        </div>
+        <div>
+          <label class="field-label">Country</label>
+          <select id="acctCountry" class="admin-form-select">${countryOpts}</select>
+        </div>
+      </div>
+    </div>
+
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Account</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div>
+          <label class="field-label">Email</label>
+          <input class="admin-form-input" value="${escHtml(currentUser.email || '')}" disabled>
+        </div>
+        <div>
+          <label class="field-label">Member since</label>
+          <input class="admin-form-input" value="${escHtml(memberSince)}" disabled>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change email</button>
+        <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change password</button>
+      </div>
+    </div>
+
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Notifications</div>
+      <label class="acct-check"><input type="checkbox" id="acctNotifyLive" ${profile.notify_live ? 'checked' : ''}> Email me when a favourite creator goes live</label>
+      <label class="acct-check"><input type="checkbox" id="acctNotifyWeekly" ${profile.notify_weekly ? 'checked' : ''}> Send me the weekly digest</label>
+    </div>
+
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Privacy</div>
+      <label class="acct-check"><input type="checkbox" id="acctReviewsPublic" ${profile.reviews_public ? 'checked' : ''}> Show my reviews publicly</label>
+    </div>
+
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Activity</div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap">
+        <div><div style="font-size:1.4rem;font-weight:800">${reviewsCount}</div><div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Reviews written</div></div>
+        <div><div style="font-size:1.4rem;font-weight:800">${favCount}</div><div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Creators favourited</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveAccount()">Save changes</button>
+      <button class="btn btn-ghost" onclick="signOut()">Sign out</button>
+      <span id="acctSaveMsg" style="font-size:.85rem"></span>
+    </div>
+  `;
+
+  // Wire up file input
+  const fileInput = document.getElementById('acctAvatarFile');
+  if (fileInput) fileInput.addEventListener('change', handleAvatarUpload);
+}
+
+async function handleAvatarUpload(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const msg = document.getElementById('acctAvatarMsg');
+  msg.textContent = 'Uploading…';
+  msg.style.color = 'var(--text-dim)';
+  if (file.size > 2 * 1024 * 1024) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Too large — max 2MB.';
+    return;
+  }
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${currentUser.id}/avatar.${ext}`;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { msg.textContent = 'Please sign in again.'; msg.style.color = 'var(--red)'; return; }
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/avatars/${path}`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': file.type || 'application/octet-stream',
+        'x-upsert': 'true',
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      msg.style.color = 'var(--red)';
+      msg.textContent = 'Upload failed: ' + (body.slice(0, 120) || res.status);
+      return;
+    }
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
+    // Update preview
+    const preview = document.getElementById('acctAvatarPreview');
+    if (preview) preview.innerHTML = `<img src="${publicUrl}" alt="">`;
+    // Persist to profile row via upsert
+    await upsertProfile({ avatar_url: publicUrl });
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Uploaded — don\'t forget to save other changes.';
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Upload error: ' + (e.message || 'unknown');
+  }
+}
+
+async function removeAvatar() {
+  const msg = document.getElementById('acctAvatarMsg');
+  msg.textContent = 'Removing…';
+  await upsertProfile({ avatar_url: null });
+  const preview = document.getElementById('acctAvatarPreview');
+  if (preview) preview.innerHTML = `<div class="avatar-fallback">${escHtml(avatarInitials(currentUser.email))}</div>`;
+  msg.style.color = 'var(--green)';
+  msg.textContent = 'Removed.';
+}
+
+// Upsert into frfc_user_profiles via direct REST. Merges the passed fields
+// into the user's row (creating it if it doesn't exist yet).
+async function upsertProfile(patch) {
+  const body = { user_id: currentUser.id, updated_at: new Date().toISOString(), ...patch };
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token || SUPABASE_KEY;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/frfc_user_profiles?on_conflict=user_id`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(body),
+  });
+  return res;
+}
+
+async function saveAccount() {
+  const msg = document.getElementById('acctSaveMsg');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Saving…';
+  const patch = {
+    display_name: document.getElementById('acctName').value.trim() || null,
+    bio: document.getElementById('acctBio').value.trim() || null,
+    favourite_team: document.getElementById('acctTeam').value || null,
+    country: document.getElementById('acctCountry').value || null,
+    notify_live: document.getElementById('acctNotifyLive').checked,
+    notify_weekly: document.getElementById('acctNotifyWeekly').checked,
+    reviews_public: document.getElementById('acctReviewsPublic').checked,
+  };
+  const res = await upsertProfile(patch);
+  if (res.ok) {
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Saved.';
+  } else {
+    const body = await res.text().catch(() => '');
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Save failed: ' + (body.slice(0, 160) || res.status);
+  }
 }
 
 // ── Render: Admin ────────────────────────────────────────────────────────

@@ -82,7 +82,7 @@ const TEAM_CRESTS = {
   'AC Milan': 'https://crests.football-data.org/98.svg',
   'Inter Milan': 'https://crests.football-data.org/108.svg',
   'Napoli': 'https://crests.football-data.org/113.png',
-  'Roma': 'https://crests.football-data.org/100.svg',
+  'Roma': 'https://a.espncdn.com/i/teamlogos/soccer/500/104.png',
   'Lazio': 'https://crests.football-data.org/110.svg',
   'Atalanta': 'https://crests.football-data.org/102.svg',
   'Fiorentina': 'https://crests.football-data.org/99.svg',
@@ -90,10 +90,10 @@ const TEAM_CRESTS = {
   'Torino': 'https://crests.football-data.org/586.svg',
   'Udinese': 'https://crests.football-data.org/115.svg',
   'Monza': 'https://crests.football-data.org/5890.svg',
-  'Empoli': 'https://crests.football-data.org/445.svg',
+  'Empoli': 'https://a.espncdn.com/i/teamlogos/soccer/500/102.png',
   'Genoa': 'https://crests.football-data.org/107.svg',
   'Cagliari': 'https://crests.football-data.org/104.svg',
-  'Lecce': 'https://crests.football-data.org/5911.svg',
+  'Lecce': 'https://a.espncdn.com/i/teamlogos/soccer/500/113.png',
   'Hellas Verona': 'https://crests.football-data.org/450.svg',
   'Parma': 'https://crests.football-data.org/112.svg',
   'Venezia': 'https://crests.football-data.org/454.svg',
@@ -121,9 +121,9 @@ const TEAM_CRESTS = {
   'PSG': 'https://crests.football-data.org/524.svg',
   'Marseille': 'https://crests.football-data.org/516.svg',
   'Lyon': 'https://crests.football-data.org/523.svg',
-  'Monaco': 'https://crests.football-data.org/548.svg',
+  'Monaco': 'https://a.espncdn.com/i/teamlogos/soccer/500/174.png',
   'Lille': 'https://crests.football-data.org/521.svg',
-  'Nice': 'https://crests.football-data.org/522.svg',
+  'Nice': 'https://a.espncdn.com/i/teamlogos/soccer/500/2502.png',
   'Rennes': 'https://crests.football-data.org/529.svg',
   'Lens': 'https://crests.football-data.org/546.svg',
   'Strasbourg': 'https://crests.football-data.org/576.svg',
@@ -135,7 +135,7 @@ const TEAM_CRESTS = {
   'Le Havre': 'https://crests.football-data.org/545.svg',
   'Auxerre': 'https://crests.football-data.org/519.svg',
   'Angers': 'https://crests.football-data.org/532.svg',
-  'Saint-Etienne': 'https://crests.football-data.org/527.svg'
+  'Saint-Etienne': 'https://a.espncdn.com/i/teamlogos/soccer/500/178.png'
 };
 
 // ── Team → League mapping ─────────────────────────────────────────────────

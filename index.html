@@ -4,14 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FanReactionsFC — Discover the Best Football YouTubers</title>
-  <meta name="description" content="The definitive database of football YouTubers across Europe's top 5 leagues. Rated by fans. Ranked weekly. Premier League, La Liga, Serie A, Bundesliga, Ligue 1.">
+  <meta name="description" content="The definitive database of football YouTubers. Rated by fans. Ranked weekly. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.">
   <meta property="og:title" content="FanReactionsFC — Discover the Best Football YouTubers">
-  <meta property="og:description" content="Community-rated directory of football creators on YouTube. Browse by league, club, content type, or search by name. Premier League, La Liga, Serie A, Bundesliga, Ligue 1.">
+  <meta property="og:description" content="Community-rated directory of football creators on YouTube. Browse by league, club, content type, or search by name. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://fanreactionsfc.com">
   <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:image" content="https://fanreactionsfc.com/img/logo.png">
+  <link rel="icon" type="image/png" href="/img/logo-round.png">
+  <link rel="apple-touch-icon" href="/img/logo-round.png">
+  <link rel="preconnect" href="https://dsxijgrpxsfywxuffbmt.supabase.co" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="image" href="/img/hero-bg.jpg">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/generator.css">
@@ -21,15 +26,18 @@
   <!-- Header -->
   <header class="site-header">
     <div class="container nav-inner">
-      <a href="/" class="nav-brand"><img src="/img/logo.png" alt="" class="brand-logo"><span class="brand-text"><span class="brand-fan">Fan</span><span class="brand-reactions">Reactions</span><span class="brand-fc">FC</span></span></a>
+      <a href="/" class="nav-brand"><img src="/img/logo-round.png" alt="FanReactionsFC" class="brand-logo-round"></a>
       <button class="nav-toggle" id="navToggle" onclick="document.getElementById('navLinks').classList.toggle('open')">&#9776;</button>
       <nav class="nav-links" id="navLinks">
         <a href="/" class="nav-link active" id="navHome">Home</a>
         <a href="/discover" class="nav-link" id="navDiscover">Discover</a>
         <a href="/rankings" class="nav-link" id="navRankings">Rankings</a>
-        <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener" class="nav-link">YouTube &#8599;</a>
+        <a href="/become-a-creator" class="nav-link" id="navBecome">Become a Creator</a>
       </nav>
       <div class="nav-actions">
+        <a href="/discover?live=1" id="navLiveChip" class="nav-live-chip" style="display:none"></a>
+        <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener" class="nav-social-icon"><img src="/img/icon-youtube.png" alt="YouTube"></a>
+        <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener" class="nav-social-icon"><img src="/img/icon-x.png" alt="X"></a>
         <span id="authBtn"></span>
       </div>
     </div>
@@ -50,8 +58,7 @@
     <div class="modal" id="authModal" style="position:relative"></div>
   </div>
 
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <!-- App -->
   <script src="/js/app.js" defer></script>
   <script src="/js/generator.js" defer></script>
   <script src="/js/admin.js" defer></script>

@@ -66,7 +66,7 @@ exports.handler = async () => {
         avatar_url:
           (snippet.thumbnails && (snippet.thumbnails.high && snippet.thumbnails.high.url || snippet.thumbnails.medium && snippet.thumbnails.medium.url)) ||
           c.avatar_url,
-        channel_country: snippet.country || c.channel_country || null,
+        channel_country: snippet.country || null,
         last_youtube_sync: new Date().toISOString(),
       };
 

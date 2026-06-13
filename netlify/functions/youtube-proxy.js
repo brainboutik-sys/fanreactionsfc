@@ -1,14 +1,9 @@
 // Netlify serverless function — proxies YouTube Data API requests
 // so the API key stays server-side (set YOUTUBE_API_KEY in Netlify env vars).
 
-const ALLOWED_ORIGINS = ['https://fanreactionsfc.com', 'http://localhost:8888', 'http://localhost:3000'];
-
 exports.handler = async (event) => {
-  const origin = event.headers.origin || event.headers.Origin || '';
-  const corsOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-
   const headers = {
-    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
   };
@@ -35,18 +30,8 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid endpoint' }) };
   }
 
-  // Only allow expected query parameters to prevent quota abuse
-  const ALLOWED_PARAMS = new Set([
-    'forHandle', 'part', 'id', 'playlistId', 'maxResults',
-    'channelId', 'order', 'type'
-  ]);
-  const safeParams = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (ALLOWED_PARAMS.has(k)) safeParams[k] = v;
-  }
-
-  safeParams.key = apiKey;
-  const qs = new URLSearchParams(safeParams).toString();
+  params.key = apiKey;
+  const qs = new URLSearchParams(params).toString();
   const url = `https://www.googleapis.com/youtube/v3/${endpoint}?${qs}`;
 
   try {

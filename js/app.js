@@ -5,108 +5,12 @@
 // ── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_iq6Dv3b9IYfNktis7WeZ-g_y7_DV0gm';
-
-// ── Raw REST helpers (bypass supabase-js client which hangs with publishable key) ──
-// Session stored in localStorage — mirrors supabase-js v2 storage format.
-const _SB_SESSION_KEY = 'sb-dsxijgrpxsfywxuffbmt-auth-token';
-
-function _getSession() {
-  try {
-    const raw = localStorage.getItem(_SB_SESSION_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
-  return null;
-}
-
-function _saveSession(session) {
-  try { localStorage.setItem(_SB_SESSION_KEY, JSON.stringify(session)); } catch (_) {}
-}
-
-function _clearSession() {
-  try { localStorage.removeItem(_SB_SESSION_KEY); } catch (_) {}
-}
-
-function _getAccessToken() {
-  const s = _getSession();
-  return (s && s.access_token) || SUPABASE_KEY;
-}
-
-// When a user is signed in, use their JWT so RLS policies work for writes.
-function _sbAuthHeaders() {
-  return { apikey: SUPABASE_KEY, Authorization: `Bearer ${_getAccessToken()}`, 'Content-Type': 'application/json' };
-}
-
-// ── Raw Auth helpers (bypass supabase-js auth which also hangs) ──
-async function _authPost(endpoint, body) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/${endpoint}`, {
-    method: 'POST',
-    headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { data: null, error: { message: data.error_description || data.msg || data.error || res.statusText } };
-  return { data, error: null };
-}
-
-async function _authGet(endpoint, token) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/${endpoint}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { data: null, error: { message: data.error_description || data.msg || data.error || res.statusText } };
-  return { data, error: null };
-}
-
-/** GET from Supabase REST – returns { data, error } */
-async function sbGet(path) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: _sbAuthHeaders() });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { data: null, error: { message: body.message || body.error || res.statusText, status: res.status } };
-    }
-    return { data: await res.json(), error: null };
-  } catch (e) { return { data: null, error: e }; }
-}
-
-/** POST to Supabase REST (insert or RPC) – returns { data, error } */
-async function sbPost(path, body, opts = {}) {
-  try {
-    const h = _sbAuthHeaders();
-    if (opts.prefer) h['Prefer'] = opts.prefer;
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { method: 'POST', headers: h, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const rb = await res.json().catch(() => ({}));
-      return { data: null, error: { message: rb.message || rb.error || res.statusText, status: res.status } };
-    }
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('json') ? await res.json() : null;
-    return { data, error: null };
-  } catch (e) { return { data: null, error: e }; }
-}
-
-/** DELETE from Supabase REST – returns { error } */
-async function sbDelete(path) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { method: 'DELETE', headers: _sbAuthHeaders() });
-    if (!res.ok) {
-      const rb = await res.json().catch(() => ({}));
-      return { error: { message: rb.message || rb.error || res.statusText, status: res.status } };
-    }
-    return { error: null };
-  } catch (e) { return { error: e }; }
-}
-
-/** Call Supabase RPC – returns { data, error } */
-async function sbRpc(fn, params = {}) {
-  return sbPost(`rpc/${fn}`, params);
-}
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── State ─────────────────────────────────────────────────────────────────
 let creators = [];
-// reviews removed
+let reviews = [];
 let favorites = new Set();
-let favouriteCounts = new Map();
 let currentUser = null;
 let currentProfile = null;  // frfc_user_profiles row for the signed-in user
 let currentRoute = { page: 'home' };
@@ -119,12 +23,12 @@ const CONTENT_TYPES = [
 
 // ── Leagues ───────────────────────────────────────────────────────────────
 const LEAGUES = [
-  { name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'PL',  logo: '/img/leagues/premier-league.png' },
-  { name: 'La Liga',         flag: '🇪🇸', code: 'LL',  logo: '/img/leagues/la-liga.png' },
-  { name: 'Serie A',         flag: '🇮🇹', code: 'SA',  logo: '/img/leagues/serie-a.png' },
-  { name: 'Bundesliga',      flag: '🇩🇪', code: 'BL',  logo: '/img/leagues/bundesliga.png' },
-  { name: 'Ligue 1',         flag: '🇫🇷', code: 'L1',  logo: '/img/leagues/ligue-1.png' },
-  { name: 'Championship',   flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'ELC', logo: '/img/leagues/championship.png' }
+  { name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'PL',  logo: 'https://crests.football-data.org/PL.png' },
+  { name: 'Championship',   flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', code: 'ELC', logo: 'https://crests.football-data.org/ELC.png' },
+  { name: 'La Liga',         flag: '🇪🇸', code: 'LL',  logo: 'https://crests.football-data.org/PD.png' },
+  { name: 'Serie A',         flag: '🇮🇹', code: 'SA',  logo: 'https://crests.football-data.org/SA.png' },
+  { name: 'Bundesliga',      flag: '🇩🇪', code: 'BL',  logo: 'https://crests.football-data.org/BL1.png' },
+  { name: 'Ligue 1',         flag: '🇫🇷', code: 'L1',  logo: 'https://crests.football-data.org/FL1.png' }
 ];
 
 // ── Club crests (football-data.org SVGs) ──────────────────────────────────
@@ -276,32 +180,6 @@ const TEAM_TO_LEAGUE = {};
   }
 })();
 
-// ── Team brand colours (primary, secondary) ─────────────────────────────
-const TEAM_COLORS = {
-  'Arsenal':['#EF0107','#FFFFFF'],'Aston Villa':['#670E36','#95BFE5'],'Bournemouth':['#DA291C','#000000'],'Brentford':['#E30613','#FBB800'],
-  'Brighton':['#0057B8','#FFFFFF'],'Burnley':['#6C1D45','#99D6EA'],'Chelsea':['#034694','#FFFFFF'],'Crystal Palace':['#1B458F','#C4122E'],
-  'Everton':['#003399','#FFFFFF'],'Fulham':['#000000','#FFFFFF'],'Leeds United':['#1D428A','#FFCD00'],'Liverpool':['#C8102E','#FFFFFF'],
-  'Man City':['#6CABDD','#1C2C5B'],'Man United':['#DA291C','#FBE122'],'Newcastle':['#241F20','#FFFFFF'],'Nottm Forest':['#DD0000','#FFFFFF'],
-  'Sunderland':['#EB172B','#FFFFFF'],'Tottenham':['#132257','#FFFFFF'],'West Ham':['#7A263A','#1BB1E7'],'Wolves':['#FDB913','#231F20'],
-  'Barcelona':['#A50044','#004D98'],'Real Madrid':['#FEBE10','#00529F'],'Atletico Madrid':['#CB3524','#FFFFFF'],
-  'Sevilla':['#D6001C','#FFFFFF'],'Real Betis':['#00954C','#FFFFFF'],'Villarreal':['#FFCD00','#005187'],
-  'Juventus':['#000000','#FFFFFF'],'AC Milan':['#FB090B','#000000'],'Inter Milan':['#010E80','#FCBB09'],
-  'Napoli':['#12A0D7','#FFFFFF'],'Roma':['#8E1F2F','#F0BC42'],'Lazio':['#87D8F7','#FFFFFF'],
-  'Bayern Munich':['#DC052D','#FFFFFF'],'Borussia Dortmund':['#FDE100','#000000'],'RB Leipzig':['#DD0741','#FFFFFF'],
-  'Bayer Leverkusen':['#E32221','#000000'],'Eintracht Frankfurt':['#E1000F','#000000'],
-  'PSG':['#004170','#DA291C'],'Marseille':['#2FAEE0','#FFFFFF'],'Lyon':['#1A3C8F','#ED1C24'],
-  'Monaco':['#E7001E','#FFFFFF'],'Lille':['#D20026','#FFFFFF'],
-  'Leicester':['#003090','#FDBE11'],'Southampton':['#D71920','#FFFFFF'],'Sheffield Utd':['#EE2737','#FFFFFF'],
-  'Ipswich':['#0044AA','#FFFFFF'],'Norwich':['#00A650','#FFF200'],'Watford':['#FBEE23','#ED2127'],
-  'Birmingham':['#0000FF','#FFFFFF'],'Derby':['#000000','#FFFFFF'],'Stoke':['#E03A3E','#1B449C'],
-  'QPR':['#1D5BA4','#FFFFFF'],'Swansea':['#000000','#FFFFFF'],'West Brom':['#122F67','#FFFFFF'],
-  'Multi-Club / Other':['#F6BE06','#061A5D']
-};
-
-function getTeamColor(team) {
-  return TEAM_COLORS[team] || ['#F6BE06','#061A5D'];
-}
-
 function getLeague(team) {
   return TEAM_TO_LEAGUE[team] || 'Other';
 }
@@ -354,26 +232,14 @@ function getTeamsByLeague() {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    initTheme();
-    showLoading();
-    await loadCreators();
-    loadFavouriteCounts(); // fire-and-forget; non-critical
-    // Show sign-in button immediately (before auth resolves)
-    updateAuthUI();
-    // Auth: don't let it block page render — 5s timeout
-    try {
-      const authTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('auth timeout')), 5000));
-      await Promise.race([refreshAuth(), authTimeout]);
-    } catch (_) { updateAuthUI(); /* auth timed out — ensure button shows */ }
-    // Session changes are handled by our raw auth helpers — no onAuthStateChange needed
-    handleRoute();
-    window.addEventListener('popstate', handleRoute);
-    initSearch();
-  } catch (e) {
-    console.error('Init failed:', e);
-    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><h2>Something went wrong</h2><p style="color:var(--text-dim)">' + escHtml(e.message || '') + '</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>';
-  }
+  initTheme();
+  showLoading();
+  await loadCreators();
+  await refreshAuth();
+  sb.auth.onAuthStateChange(() => refreshAuth());
+  handleRoute();
+  window.addEventListener('popstate', handleRoute);
+  initSearch();
 });
 
 function showLoading() {
@@ -423,19 +289,13 @@ function renderAuthRequired(what) {
 }
 
 function updateNavActive(path) {
-  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navBecome: '/become-a-creator', navCommunity: '/community' };
+  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navCommunity: '/community' };
   Object.entries(links).forEach(([id, prefix]) => {
     const el = document.getElementById(id);
     if (!el) return;
     const isActive = prefix === '/' ? (path === '/' || path === '/index.html') : path.startsWith(prefix);
     el.classList.toggle('active', isActive);
   });
-}
-
-function updatePageMeta(title, description) {
-  document.title = title;
-  let meta = document.querySelector('meta[name="description"]');
-  if (meta) meta.setAttribute('content', description);
 }
 
 // Populate the header "N live now" chip whenever creator data is (re)loaded.
@@ -490,14 +350,6 @@ function handleRoute() {
     } else if (path === '/submit') {
       currentRoute = { page: 'submit' };
       renderSubmit();
-    } else if (path === '/streamwall') {
-      currentRoute = { page: 'streamwall' };
-      updatePageMeta('Streamwall — Watch Live Football Creators | FanReactionsFC', 'Watch multiple football creators streaming live on YouTube, all at once. Live watchalongs, reactions, and match day content.');
-      renderStreamwall();
-    } else if (path === '/become-a-creator') {
-      currentRoute = { page: 'becomeCreator' };
-      updatePageMeta('How to Start a Football Live Streaming Channel on YouTube | FanReactionsFC', 'Free step-by-step guide to setting up a professional football watchalong channel on YouTube using Prism Live Studio, Uno Overlays, and Canva. Start streaming for free.');
-      renderBecomeCreator();
     } else if (path === '/community/features' || path === '/community/features/') {
       currentRoute = { page: 'features' };
       updatePageMeta('Community Feature Requests | FanReactionsFC', 'Suggest and vote on new features for FanReactionsFC. Help shape the future of the platform.');
@@ -555,31 +407,8 @@ document.addEventListener('click', e => {
 // ── Auth ──────────────────────────────────────────────────────────────────
 async function refreshAuth() {
   try {
-    const session = _getSession();
-    if (session && session.access_token) {
-      const { data: user, error } = await _authGet('user', session.access_token);
-      if (error || !user || !user.id) {
-        // Token expired or invalid — try refresh
-        if (session.refresh_token) {
-          const { data: refreshed, error: rErr } = await _authPost('token?grant_type=refresh_token', { refresh_token: session.refresh_token });
-          if (!rErr && refreshed && refreshed.access_token) {
-            _saveSession(refreshed);
-            const { data: u2 } = await _authGet('user', refreshed.access_token);
-            currentUser = (u2 && u2.id) ? u2 : null;
-          } else {
-            _clearSession();
-            currentUser = null;
-          }
-        } else {
-          _clearSession();
-          currentUser = null;
-        }
-      } else {
-        currentUser = user;
-      }
-    } else {
-      currentUser = null;
-    }
+    const { data: { user } } = await sb.auth.getUser();
+    currentUser = user;
     if (currentUser) {
       currentProfile = await loadUserProfile(currentUser.id);
       await loadFavorites();
@@ -631,48 +460,32 @@ function showUserMenu() {
 }
 
 async function signIn(email, password) {
-  const { data, error } = await _authPost('token?grant_type=password', { email, password });
+  const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) return error.message;
-  if (data && data.access_token) {
-    _saveSession(data);
-    await refreshAuth();
-    closeModal();
-  }
+  await refreshAuth();
+  closeModal();
   return null;
 }
 
 async function signUp(email, password) {
-  const { data, error } = await _authPost('signup', { email, password });
+  const { error } = await sb.auth.signUp({ email, password });
   if (error) return error.message;
-  // If auto-confirm is off, user gets a confirmation email
-  if (data && data.access_token) _saveSession(data);
   return null;
 }
 
 async function signOut() {
-  try {
-    const token = _getAccessToken();
-    if (token !== SUPABASE_KEY) {
-      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-        method: 'POST',
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
-      }).catch(() => {});
-    }
-  } catch (_) {}
-  _clearSession();
+  await sb.auth.signOut();
   currentUser = null;
-  currentProfile = null;
   favorites = new Set();
   updateAuthUI();
   handleRoute();
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────
-const CREATOR_CACHE_KEY = 'frfc_creators_cache';
-const CREATOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function mapCreatorRow(r) {
-  return {
+async function loadCreators() {
+  const { data, error } = await sb.from('frfc_streamers').select('*').order('team').order('name');
+  if (error) { creators = []; return; }
+  creators = data.map(r => ({
     id: r.id,
     name: r.name,
     team: r.team,
@@ -683,6 +496,7 @@ function mapCreatorRow(r) {
     league: r.league || getLeague(r.team),
     description: r.description || '',
     verified: r.verified || false,
+    claimed: !!r.claimed_by,
     contentTypes: r.content_types || [],
     subscriberCount: r.subscriber_count || 0,
     featured: r.featured || false,
@@ -702,82 +516,48 @@ function mapCreatorRow(r) {
     upcomingVideoTitle: r.upcoming_video_title || '',
     upcomingVideoThumbnail: r.upcoming_video_thumbnail || '',
     upcomingVideoScheduledAt: r.upcoming_video_scheduled_at || null,
-    subscriberCountPrev: r.subscriber_count_prev || 0
-  };
-}
-
-async function loadCreators() {
-  // 1. Try localStorage cache first for instant render
-  try {
-    const cached = localStorage.getItem(CREATOR_CACHE_KEY);
-    if (cached) {
-      const { ts, rows } = JSON.parse(cached);
-      if (Date.now() - ts < CREATOR_CACHE_TTL && rows && rows.length) {
-        creators = rows.map(mapCreatorRow);
-        updateLiveCountChip();
-        // Revalidate in background (stale-while-revalidate pattern)
-        _revalidateCreators();
-        return;
+    subscriberCountPrev: r.subscriber_count_prev || 0,
+    avgRatingPrev: r.avg_rating_prev != null ? Number(r.avg_rating_prev) : 0,
+    avgRating: 0,
+    ratingCount: 0
+  }));
+  // Load ratings
+  const { data: revs } = await sb.from('frfc_reviews').select('creator_id, rating');
+  if (revs && revs.length) {
+    const map = {};
+    revs.forEach(r => {
+      if (!map[r.creator_id]) map[r.creator_id] = [];
+      map[r.creator_id].push(r.rating);
+    });
+    creators.forEach(c => {
+      const ratings = map[c.id];
+      if (ratings) {
+        c.avgRating = +(ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
+        c.ratingCount = ratings.length;
       }
-    }
-  } catch (_) {}
-
-  // 2. No valid cache — fetch and wait
-  await _fetchCreators();
-}
-
-async function _fetchCreators() {
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 15000));
-  let data, error;
-  try {
-    const result = await Promise.race([sbGet('frfc_streamers?select=*&order=team,name'), timeout]);
-    data = result.data;
-    error = result.error;
-  } catch (e) {
-    console.error('loadCreators failed:', e);
-    if (!creators.length) creators = [];
-    return;
+    });
   }
-  if (error) { console.error('loadCreators error:', error); if (!creators.length) creators = []; return; }
-  creators = data.map(mapCreatorRow);
   updateLiveCountChip();
-  // Cache raw rows for next visit
-  try { localStorage.setItem(CREATOR_CACHE_KEY, JSON.stringify({ ts: Date.now(), rows: data })); } catch (_) {}
-}
-
-function _revalidateCreators() {
-  _fetchCreators().then(() => {
-    // If route is already rendered, live status may have changed — update chip
-    updateLiveCountChip();
-  }).catch(() => {});
 }
 
 async function loadFavorites() {
   if (!currentUser) return;
   try {
-    const { data, error } = await sbGet(`frfc_streamer_favorites?select=streamer_id&user_id=eq.${currentUser.id}`);
+    const { data, error } = await sb.from('frfc_streamer_favorites').select('streamer_id').eq('user_id', currentUser.id);
     if (error) return;
     favorites = new Set((data || []).map(r => r.streamer_id));
   } catch (e) { /* favorites load failed — non-critical */ }
-}
-
-async function loadFavouriteCounts() {
-  try {
-    const { data, error } = await sbRpc('get_favourite_counts');
-    if (error || !data) return;
-    favouriteCounts = new Map(data.map(r => [r.streamer_id, Number(r.fav_count)]));
-  } catch (e) { /* non-critical */ }
 }
 
 async function toggleFavorite(id) {
   if (!currentUser) { openModal('signin'); return; }
   try {
     if (favorites.has(id)) {
-      const { error } = await sbDelete(`frfc_streamer_favorites?user_id=eq.${currentUser.id}&streamer_id=eq.${id}`);
+      const { error } = await sb.from('frfc_streamer_favorites').delete().eq('user_id', currentUser.id).eq('streamer_id', id);
       if (error) throw error;
       favorites.delete(id);
     } else {
-      const { error } = await sbPost('frfc_streamer_favorites', { user_id: currentUser.id, streamer_id: id }, { prefer: 'return=minimal' });
+      const { error } = await sb.from('frfc_streamer_favorites').insert({ user_id: currentUser.id, streamer_id: id });
       if (error) throw error;
       favorites.add(id);
     }
@@ -814,6 +594,7 @@ function countryName(code) {
   if (!code || code.length !== 2) return '';
   return COUNTRY_NAMES[code.toUpperCase()] || '';
 }
+function stars(n, max = 5) { return Array.from({ length: max }, (_, i) => `<span class="star ${i < Math.round(n) ? 'filled' : ''}">★</span>`).join(''); }
 function avatarUrl(c) { return c.avatar || ''; }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
 function avatarOnerror(img, name) { img.onerror=null; img.style.display='none'; const el=document.createElement('div'); el.className=img.className+' avatar-fallback'; el.textContent=avatarInitials(name); img.parentNode.insertBefore(el,img); }
@@ -955,6 +736,7 @@ function renderSearchResults(q, input) {
           <div class="sr-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
           <div class="sr-team">${escHtml(c.team)}</div>
         </div>
+        ${c.avgRating > 0 ? `<span class="sr-meta">&#9733; ${c.avgRating}</span>` : ''}
       </a>`).join('');
   }
   if (clubMatches.length) {
@@ -1013,6 +795,8 @@ function initSearch() {
 // ── Render: Home ──────────────────────────────────────────────────────────
 function renderHome() {
   const activeLeagues = getLeagues();
+  const topRated = [...creators].filter(c => c.ratingCount > 0).sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 10);
+  const topByRating = [...creators].sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 8);
   const topBySubs = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
   const liveNow = creators.filter(c => c.isLive);
 
@@ -1036,15 +820,12 @@ function renderHome() {
     .sort((a, b) => b[1] - a[1])
     .map(([team, count]) => ({ team, count, league: getLeague(team) }));
 
-  const totalLive = liveNow.length;
-  const totalClubs = Object.keys(clubCounts).length;
-
   document.getElementById('app').innerHTML = `
     <!-- Hero -->
     <section class="hero">
       <div class="container">
         <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
-        <p class="subtitle">The definitive database of football YouTubers. Ranked weekly.</p>
+        <p class="subtitle">Rated by fans. Ranked weekly. The definitive database of football YouTubers.</p>
         <div class="search-wrap">
           <span class="search-icon">&#128269;</span>
           <input class="search-input" type="text" placeholder="Search a creator, club, or content style...">
@@ -1055,224 +836,162 @@ function renderHome() {
           ${LEAGUES.map(l =>
             `<span class="chip" onclick="navigate('/discover?league=${encodeURIComponent(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${l.name}</span>`
           ).join('')}
+          ${['Watchalongs', 'Reactions', 'Tactical'].map(t =>
+            `<span class="chip" onclick="navigate('/discover?q=${encodeURIComponent(t)}')">${t}</span>`
+          ).join('')}
         </div>
       </div>
     </section>
 
-    <!-- Platform stats bar -->
-    <div class="platform-stat-bar">
-      <div class="container">
-        <div class="platform-stats">
-          <div class="platform-stat">
-            <div class="platform-stat-icon">🎬</div>
-            <div class="platform-stat-num">${creators.length}</div>
-            <div class="platform-stat-label">Creators indexed</div>
-          </div>
-          <div class="platform-stat">
-            <div class="platform-stat-icon">⚽</div>
-            <div class="platform-stat-num">${totalClubs}</div>
-            <div class="platform-stat-label">Clubs covered</div>
-          </div>
-          <div class="platform-stat">
-            <div class="platform-stat-icon">🏆</div>
-            <div class="platform-stat-num">${LEAGUES.length}</div>
-            <div class="platform-stat-label">Leagues</div>
-          </div>
-          <div class="platform-stat">
-            <div class="platform-stat-icon">${totalLive ? '📡' : '🔄'}</div>
-            <div class="platform-stat-num ${totalLive ? 'platform-stat-num--live' : ''}">${totalLive || 'Weekly'}</div>
-            <div class="platform-stat-label" style="${totalLive ? 'color:var(--red)' : ''}">${totalLive ? '● Live now' : 'Rankings updated'}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Live Now -->
     ${liveNow.length ? `
-    <div class="container" style="padding-top:28px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title"><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></div>
-          ${liveNow.length > 4 ? '<a href="/discover?live=1" class="sc-head-link">View all &rarr;</a>' : ''}
+    <section class="section" style="padding-top:0;padding-bottom:0">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title"><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></h2>
+          ${liveNow.length > 4 ? '<a href="/discover?live=1" class="section-link">View all &rarr;</a>' : ''}
         </div>
-        <div class="sc-body">
-          <div class="live-strip">
-            ${liveNow.slice(0, 4).map(c => `
-              <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card" title="${escHtml(c.name)} — Live on YouTube">
-                <div class="live-thumb-wrap">
-                  <img class="live-thumb" src="https://i.ytimg.com/vi/${safeId(c.liveVideoId)}/mqdefault.jpg" alt="" loading="lazy" onerror="this.style.display='none'">
-                  <span class="live-badge"><span class="live-badge-dot"></span>LIVE</span>
+        <div class="live-strip">
+          ${liveNow.map(c => `
+            <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card" title="${escHtml(c.name)} — Live on YouTube">
+              <div class="live-thumb-wrap">
+                <img class="live-thumb" src="https://i.ytimg.com/vi/${safeId(c.liveVideoId)}/mqdefault.jpg" alt="" loading="lazy" onerror="this.style.display='none'">
+                <span class="live-badge"><span class="live-badge-dot"></span>LIVE</span>
+              </div>
+              <div class="live-body">
+                <span class="av-wrap live-av">${avatarImg(c, 'lc-avatar')}${avFlag(c.channelCountry)}</span>
+                <div class="live-info">
+                  <div class="lc-name">${escHtml(c.name)}</div>
+                  <div class="lc-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
                 </div>
-                <div class="live-body">
-                  <span class="av-wrap live-av">${avatarImg(c, 'lc-avatar')}${avFlag(c.channelCountry)}</span>
-                  <div class="live-info">
-                    <div class="lc-name">${escHtml(c.name)}</div>
-                    <div class="lc-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
-                  </div>
-                </div>
-              </a>
-            `).join('')}
+              </div>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+    </section>` : ''}
+
+    <!-- FRFC Channel banner -->
+    <section class="section" style="padding-top:0">
+      <div class="container">
+        <div class="frfc-banner">
+          <div class="frfc-banner-logo-wrap">
+            <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
+          </div>
+          <div class="frfc-banner-main">
+            <div class="frfc-banner-eyebrow">Curated by</div>
+            <div class="frfc-banner-title">@fanreactionsfc</div>
+            <div class="frfc-banner-desc">Post-match fan reactions, compilation videos, and rankings every matchday. The editorial voice behind this platform.</div>
+            <div class="frfc-banner-stats">
+              <div class="frfc-stat"><b>${creators.length}</b>creators tracked</div>
+              <div class="frfc-stat"><b>${getLeagues().length}</b>leagues covered</div>
+              <div class="frfc-stat"><b>Every 5 min</b>live status</div>
+            </div>
+          </div>
+          <div class="frfc-banner-cta">
+            <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn btn-yellow">&#9654; Subscribe on YouTube</a>
+            <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener" class="btn-banner-secondary">Follow on X</a>
           </div>
         </div>
       </div>
-    </div>` : ''}
+    </section>
 
     <!-- Upcoming streams -->
     ${upcoming.length ? `
-    <div class="container" style="padding-top:24px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title">&#128197; Upcoming Streams</div>
+    <section class="section" style="padding-top:0">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">&#128197; Upcoming streams</h2>
         </div>
-        <div class="sc-body">
-          <div class="upcoming-grid">
-            ${upcoming.map(({ c }) => `
-              <a href="https://youtube.com/watch?v=${safeId(c.upcomingVideoId)}" target="_blank" rel="noopener" class="upcoming-card">
-                <div class="up-thumb-wrap">
-                  <img class="up-thumb" src="${c.upcomingVideoThumbnail || ''}" alt="" loading="lazy">
-                  <span class="up-when-badge">${escHtml(whenUpcoming(c.upcomingVideoScheduledAt))}</span>
-                </div>
-                <div class="up-body">
-                  <div class="up-title">${escHtml(c.upcomingVideoTitle || 'Upcoming stream')}</div>
-                  <div class="up-creator">
-                    ${avatarImg(c, 'up-avatar')}
-                    <div class="up-creator-info">
-                      <div class="up-creator-name">${escHtml(c.name)}</div>
-                      <div class="up-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
-                    </div>
+        <div class="upcoming-grid">
+          ${upcoming.map(({ c }) => `
+            <a href="https://youtube.com/watch?v=${safeId(c.upcomingVideoId)}" target="_blank" rel="noopener" class="upcoming-card">
+              <div class="up-thumb-wrap">
+                <img class="up-thumb" src="${c.upcomingVideoThumbnail || ''}" alt="" loading="lazy">
+                <span class="up-when-badge">${escHtml(whenUpcoming(c.upcomingVideoScheduledAt))}</span>
+              </div>
+              <div class="up-body">
+                <div class="up-title">${escHtml(c.upcomingVideoTitle || 'Upcoming stream')}</div>
+                <div class="up-creator">
+                  ${avatarImg(c, 'up-avatar')}
+                  <div class="up-creator-info">
+                    <div class="up-creator-name">${escHtml(c.name)}</div>
+                    <div class="up-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
                   </div>
                 </div>
-              </a>
-            `).join('')}
-          </div>
+              </div>
+            </a>
+          `).join('')}
         </div>
       </div>
-    </div>` : ''}
+    </section>` : ''}
 
-    <!-- 1. Top Clubs -->
-    <div class="container" style="padding-top:${liveNow.length || upcoming.length ? '24' : '28'}px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title">&#127942; Top Clubs</div>
-          <div class="sc-head-right">
-            <div class="club-filter-row" style="margin:0;gap:6px">
-              <span class="chip club-filter active" style="font-size:.72rem;padding:4px 12px" onclick="filterClubs(this,'')">All</span>
-              ${LEAGUES.map(l => `<span class="chip club-filter" style="font-size:.72rem;padding:4px 10px" onclick="filterClubs(this,'${escHtml(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
-            </div>
-            <a href="/discover" class="sc-head-link">View all &rarr;</a>
-          </div>
-        </div>
-        <div class="sc-body">
-          <div class="club-grid" id="topClubsGrid">
-            ${allClubs.map(({ team, count, league }) => {
-              return `<a href="/clubs/${encodeURIComponent(team)}" class="club-tile" data-league="${escHtml(league || '')}">
-                ${crestImg(team)}
-                <div class="club-name">${escHtml(team)}</div>
-                <div class="club-meta"><strong>${count} creator${count !== 1 ? 's' : ''}</strong></div>
-              </a>`;
-            }).join('')}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. Curated By / FRFC Channel banner -->
-    <div class="container" style="padding-top:24px">
-      <div class="frfc-banner">
-        <div class="frfc-banner-logo-wrap">
-          <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
-        </div>
-        <div class="frfc-banner-main">
-          <div class="frfc-banner-eyebrow">Curated by</div>
-          <div class="frfc-banner-title">@fanreactionsfc</div>
-          <div class="frfc-banner-desc">Post-match fan reactions, compilation videos, and rankings every matchday. The editorial voice behind this platform.</div>
-        </div>
-        <div id="frfc-videos" class="frfc-banner-videos">
-          <div class="frfc-video-placeholder">Loading latest videos…</div>
-        </div>
-        <div class="frfc-banner-cta">
-          <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn btn-yellow">&#9654; Subscribe on YouTube</a>
-          <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener" class="btn-banner-secondary">Follow on X</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. Creator Battle -->
-    <div class="container battle-section">
-      <div class="battle-wrap">
-        <div class="battle-top">
-          <div class="battle-title">&#9876;&#65039; Creator Battle</div>
-          <div class="battle-filters">
-            <span class="battle-social-item" id="battleTotalVotes"></span>
-            <select class="battle-select" id="battleLeague" onchange="battleLeagueChange()">
-              <option value="">All Leagues</option>
-              ${LEAGUES.map(l => `<option value="${escHtml(l.name)}"${l.name === 'Premier League' ? ' selected' : ''}>${escHtml(l.name)}</option>`).join('')}
-            </select>
-            <select class="battle-select" id="battleClub" onchange="battleClubChange()">
-              <option value="">All Clubs</option>
-            </select>
-          </div>
-        </div>
-        <div class="battle-arena" id="battleArena">
-          <div class="battle-loading">Loading matchup...</div>
-        </div>
-        <div class="battle-hot" id="battleHot" style="display:none">
-          <div class="battle-hot-title">&#128293; Hot Creators</div>
-          <div class="battle-hot-strip" id="battleHotStrip"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 4. Become a Creator -->
-    <div class="container" style="padding-top:24px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title">&#127916; Become a Creator</div>
-        </div>
-        <div class="sc-body">
-          <div class="become-section">
-            <div class="become-video">
-              <iframe src="https://www.youtube.com/embed/RA7-Wtsk8Pg" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-            </div>
-            <div class="become-text">
-              <h3>Start Your Watchalong Journey</h3>
-              <p>Learn how to set up a professional streaming environment for football watchalongs — completely free. Prism Live Studio, Uno Overlays, live scoreboards, and more.</p>
-              <a href="/become-a-creator" class="btn-yellow" onclick="event.preventDefault();navigate('/become-a-creator')">Read the Full Guide &rarr;</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Suggest CTA band -->
-    <div class="cta-band">
+    <!-- Top Rated -->
+    ${topRated.length ? `
+    <section class="section">
       <div class="container">
-        <div class="cta-band-inner">
-          <div>
-            <div class="cta-band-title">Know a great football creator?</div>
-            <p class="cta-band-sub">Help us grow the database — submissions are reviewed and published within 24 hours.</p>
-          </div>
-          <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
+        <div class="section-head">
+          <h2 class="section-title">Top Rated Creators</h2>
+          <a href="/rankings" class="section-link">View all rankings &rarr;</a>
+        </div>
+        <div class="trending-list">
+          ${topRated.map((c, i) => `
+            <a href="${creatorLink(c)}" class="trending-row">
+              <span class="trending-rank">${i + 1}</span>
+              ${avatarImg(c, 'trending-avatar')}
+              <div class="trending-info">
+                <div class="trending-name">${liveDot(c.isLive)}${escHtml(c.name)} ${c.verified ? '<span style="color:var(--blue);font-size:.8rem">&#10003;</span>' : ''}</div>
+                <div class="trending-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+              </div>
+              <div class="trending-score">${stars(c.avgRating)} <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">(${c.ratingCount})</span></div>
+            </a>
+          `).join('')}
         </div>
       </div>
-    </div>
+    </section>` : ''}
 
-    <!-- 5. Top Creators -->
-    <div class="container" style="padding-top:24px;padding-bottom:60px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title">&#11088; Top Creators</div>
-          <div class="sc-head-right">
-            <a href="/discover" class="sc-head-link">Browse all &rarr;</a>
-          </div>
+    <!-- Top Clubs -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">Top Clubs</h2>
+          <a href="/discover" class="section-link">View all &rarr;</a>
         </div>
-        <div class="sc-body">
-          <div class="card-grid" id="topCreatorsGrid">
-            ${topBySubs.map(c => creatorCard(c)).join('')}
-          </div>
+        <div class="club-filter-row">
+          <span class="chip club-filter active" onclick="filterClubs(this,'')">All leagues</span>
+          ${LEAGUES.map(l => `<span class="chip club-filter" onclick="filterClubs(this,'${escHtml(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
+        </div>
+        <div class="club-grid" id="topClubsGrid">
+          ${allClubs.map(({ team, count, league }) => {
+            return `<a href="/clubs/${encodeURIComponent(team)}" class="club-tile" data-league="${escHtml(league || '')}">
+              ${crestImg(team)}
+              <div class="club-name">${escHtml(team)}</div>
+              <div class="club-meta"><strong>${count} creator${count !== 1 ? 's' : ''}</strong></div>
+            </a>`;
+          }).join('')}
         </div>
       </div>
-    </div>
+    </section>
+
+    <!-- Top Creators -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">Top Creators</h2>
+          <div style="display:flex;align-items:center;gap:12px">
+            <a href="/submit" class="btn btn-secondary btn-sm" style="font-size:.72rem">+ Suggest</a>
+            <a href="/discover?sort=rating" class="section-link">Browse all &rarr;</a>
+          </div>
+        </div>
+        <div class="top-creators-tabs">
+          <button class="top-creators-tab active" onclick="switchTopCreators('subs',this)">By Subscribers</button>
+          <button class="top-creators-tab" onclick="switchTopCreators('rating',this)">By Rating</button>
+        </div>
+        <div class="card-grid" id="topCreatorsGrid">
+          ${topBySubs.map(c => creatorCard(c)).join('')}
+        </div>
+      </div>
+    </section>
 
     ${renderFooter()}
   `;
@@ -1280,319 +999,19 @@ function renderHome() {
   // Cap Top Clubs to ~2 rows on initial render (matches filterClubs MAX_VISIBLE).
   const defaultClubFilter = document.querySelector('.club-filter.active');
   if (defaultClubFilter) filterClubs(defaultClubFilter, '');
-
-  // Async: populate the FRFC channel video cards after paint.
-  loadFRFCVideos();
-
-  // Init Creator Battle
-  battleInit();
-}
-
-// ── Creator Battle ──────────────────────────────────────────────────────────
-const battleSeen = new Set();
-let battlePair = [null, null];
-let battleVoteCount = 0;
-let battleLeaderboard = [];
-let battleSessionVotes = 0;
-let battleSignupDismissed = false;
-
-const BATTLE_TAGS = [
-  'Passionate','Tactical','Funny','Matchday Vibes','Entertaining',
-  'Knowledgeable','High Energy','Underrated','Fan Favourite','Rising Star'
-];
-
-function battleFingerprint() {
-  let fp = localStorage.getItem('frfc_fp');
-  if (!fp) { fp = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('frfc_fp', fp); }
-  return fp;
-}
-
-function battleGetTags(c) {
-  // Deterministic pseudo-random tags from creator id
-  const hash = c.id.split('').reduce((h, ch) => ((h << 5) - h + ch.charCodeAt(0)) | 0, 0);
-  const idx1 = Math.abs(hash) % BATTLE_TAGS.length;
-  const idx2 = Math.abs(hash * 7 + 3) % BATTLE_TAGS.length;
-  const tags = [BATTLE_TAGS[idx1]];
-  if (idx2 !== idx1) tags.push(BATTLE_TAGS[idx2]);
-  return tags;
-}
-
-function battleInit() {
-  battlePopulateClubs();
-  battleNextMatchup();
-  battleLoadMeta();
-}
-
-async function battleLoadMeta() {
-  try {
-    const [totalRes, lbRes] = await Promise.all([
-      sbRpc('get_battle_total'),
-      sbRpc('get_battle_leaderboard', { lim: 8 })
-    ]);
-    battleVoteCount = Number(totalRes.data) || 0;
-    const el = document.getElementById('battleTotalVotes');
-    if (el && battleVoteCount > 0) el.textContent = '🗳 ' + formatNum(battleVoteCount) + ' votes cast';
-    battleLeaderboard = (lbRes.data || []);
-    battleRenderHot();
-  } catch (e) { /* non-critical */ }
-}
-
-function battleRenderHot() {
-  const container = document.getElementById('battleHot');
-  const strip = document.getElementById('battleHotStrip');
-  if (!container || !strip || !battleLeaderboard.length) return;
-  const items = battleLeaderboard.map(r => {
-    const c = creators.find(x => x.id === r.creator_id);
-    if (!c) return '';
-    const winRate = r.total_battles > 0 ? Math.round(r.total_wins / r.total_battles * 100) : 0;
-    return `<a class="battle-hot-item" href="${creatorLink(c)}" onclick="event.preventDefault();navigate('${creatorLink(c)}')">
-      ${c.avatar ? `<img class="battle-hot-av" src="${c.avatar}" alt="">` : ''}
-      <span class="battle-hot-name">${escHtml(c.name)}</span>
-      <span class="battle-hot-wins">${winRate}% W</span>
-    </a>`;
-  }).filter(Boolean);
-  if (items.length) { strip.innerHTML = items.join(''); container.style.display = ''; }
-}
-
-function battlePopulateClubs() {
-  const leagueSel = document.getElementById('battleLeague');
-  const clubSel = document.getElementById('battleClub');
-  if (!leagueSel || !clubSel) return;
-  const league = leagueSel.value;
-  let html = '<option value="">All Clubs</option>';
-  if (league) {
-    const clubs = Object.entries(TEAM_TO_LEAGUE).filter(([t, l]) => l === league).map(([t]) => t).sort();
-    clubs.forEach(t => { html += `<option value="${escHtml(t)}">${escHtml(t)}</option>`; });
-  }
-  clubSel.innerHTML = html;
-}
-
-function battleLeagueChange() {
-  battlePopulateClubs();
-  battleSeen.clear();
-  battleNextMatchup();
-}
-
-function battleClubChange() {
-  battleSeen.clear();
-  battleNextMatchup();
-}
-
-function battleGetPool() {
-  const league = document.getElementById('battleLeague')?.value || '';
-  const club = document.getElementById('battleClub')?.value || '';
-  let pool = creators.filter(c => c.subscriberCount > 0 && c.avatar);
-  if (club) pool = pool.filter(c => c.team === club);
-  else if (league) pool = pool.filter(c => (c.league || getLeague(c.team)) === league);
-  pool.sort((a, b) => b.subscriberCount - a.subscriberCount);
-  const cutoff = Math.max(10, Math.ceil(pool.length * 0.6));
-  return pool.slice(0, cutoff);
-}
-
-function battlePairKey(a, b) { return [a.id, b.id].sort().join(':'); }
-
-function battleNextMatchup() {
-  const arena = document.getElementById('battleArena');
-  if (!arena) return;
-  const pool = battleGetPool();
-  if (pool.length < 2) {
-    arena.innerHTML = '<div class="battle-loading">Not enough creators for this filter — try a broader selection.</div>';
-    return;
-  }
-  let attempts = 0, a, b;
-  do {
-    a = pool[Math.floor(Math.random() * pool.length)];
-    b = pool[Math.floor(Math.random() * pool.length)];
-    attempts++;
-  } while ((a.id === b.id || battleSeen.has(battlePairKey(a, b))) && attempts < 50);
-  if (a.id === b.id) { a = pool[0]; b = pool[1]; }
-  battlePair = [a, b];
-  battleSeen.add(battlePairKey(a, b));
-  battleRender(a, b);
-}
-
-function battleRender(a, b) {
-  const arena = document.getElementById('battleArena');
-  if (!arena) return;
-  // Fade-in effect
-  arena.style.opacity = '0';
-  arena.innerHTML = `
-    ${battleCardHTML(a, 0)}
-    <div class="battle-vs"><div class="battle-vs-text">VS</div></div>
-    ${battleCardHTML(b, 1)}
-  `;
-  requestAnimationFrame(() => { arena.style.transition = 'opacity .3s'; arena.style.opacity = '1'; });
-}
-
-function battleCardHTML(c, idx) {
-  const lb = battleLeaderboard.find(r => r.creator_id === c.id);
-  const wins = lb ? Number(lb.total_wins) : 0;
-  const streak = wins >= 5 ? `<span class="battle-streak">&#128293; ${wins}W</span>` : '';
-  const [tc1, tc2] = getTeamColor(c.team);
-  const crestUrl = TEAM_CRESTS[c.team] || '';
-  return `<div class="battle-card" id="bcard${idx}" style="--tc:${tc1};--tc2:${tc2};--tcr:${hexToRgb(tc1)}">
-    ${crestUrl ? `<img class="battle-crest-bg" src="${crestUrl}" alt="" onerror="this.style.display='none'">` : ''}
-    <div class="battle-team-row">
-      ${crestUrl ? `<img class="battle-crest" src="${crestUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <span class="battle-team-name">${escHtml(c.team)}</span>
-    </div>
-    <div class="battle-avatar-wrap">
-      ${c.avatar ? `<img class="battle-avatar" src="${c.avatar}" alt="" onerror="this.style.display='none'">` : '<div class="battle-avatar"></div>'}
-      ${streak}
-    </div>
-    <div class="battle-name">${escHtml(c.name)}</div>
-    <div class="battle-subs">${formatNum(c.subscriberCount)} subs</div>
-    <button class="battle-vote-btn" onclick="battleVote(${idx})">Vote</button>
-    <div class="battle-result">
-      <div class="battle-pct" id="bpct${idx}"></div>
-      <div class="battle-toast" id="btoast${idx}"></div>
-    </div>
-    <div class="battle-pct-bar"><div class="battle-pct-fill" id="bfill${idx}"></div></div>
-  </div>`;
-}
-
-async function battleVote(winIdx) {
-  const winner = battlePair[winIdx];
-  const loser = battlePair[1 - winIdx];
-  if (!winner || !loser) return;
-
-  // Visual feedback
-  document.querySelectorAll('.battle-card').forEach(el => el.classList.add('battle-card--voted'));
-  document.getElementById('bcard' + winIdx).classList.add('battle-card--winner');
-  document.getElementById('bcard' + (1 - winIdx)).classList.add('battle-card--loser');
-
-  // Toast
-  const toast = document.getElementById('btoast' + winIdx);
-  if (toast) toast.textContent = '✓ Vote counted';
-
-  // Record vote via RPC (SECURITY DEFINER bypasses publishable-key restrictions)
-  const { error: voteErr } = await sbRpc('record_battle_vote', {
-    w_id: winner.id, l_id: loser.id, fp: battleFingerprint(),
-    v_id: currentUser ? currentUser.id : null
-  });
-  if (voteErr) console.error('Battle vote insert failed:', voteErr);
-  battleVoteCount++;
-
-  // Signup prompt for anonymous users after 3 votes
-  if (!currentUser) {
-    battleSessionVotes++;
-    if (battleSessionVotes >= 3 && !battleSignupDismissed) showBattleSignupPrompt();
-  }
-  const totalEl = document.getElementById('battleTotalVotes');
-  if (totalEl) totalEl.textContent = '🗳 ' + formatNum(battleVoteCount) + ' votes cast';
-
-  // Get total battle wins for each creator
-  try {
-    const [winnerStats, loserStats] = await Promise.all([
-      sbRpc('get_creator_battle_stats', { cid: winner.id }),
-      sbRpc('get_creator_battle_stats', { cid: loser.id })
-    ]);
-    const winnerWins = (winnerStats.data && winnerStats.data.length ? Number(winnerStats.data[0].wins) : 0) + 1;
-    const loserWins = loserStats.data && loserStats.data.length ? Number(loserStats.data[0].wins) : 0;
-    const total = winnerWins + loserWins;
-    const winnerPct = total ? Math.round(winnerWins / total * 100) : 100;
-
-    document.getElementById('bpct' + winIdx).textContent = winnerWins + ' wins';
-    document.getElementById('bpct' + (1 - winIdx)).textContent = loserWins + ' wins';
-    document.getElementById('bfill' + winIdx).style.width = winnerPct + '%';
-    document.getElementById('bfill' + (1 - winIdx)).style.width = (100 - winnerPct) + '%';
-  } catch (e) {
-    document.getElementById('bpct' + winIdx).textContent = '✓';
-  }
-
-  setTimeout(() => battleNextMatchup(), 1800);
-}
-
-function showBattleSignupPrompt() {
-  if (document.getElementById('battleSignupPrompt')) return;
-  const arena = document.getElementById('battleArena');
-  if (!arena) return;
-  const p = document.createElement('div');
-  p.id = 'battleSignupPrompt';
-  p.className = 'battle-signup-prompt';
-  p.innerHTML = `<div class="bsp-inner">
-    <div class="bsp-text"><strong>Track your votes!</strong> Create a free account to keep your voting stats and join the voters leaderboard.</div>
-    <div class="bsp-actions">
-      <button class="btn btn-primary btn-sm" onclick="openModal('signup')">Sign Up Free</button>
-      <button class="btn btn-ghost btn-sm" onclick="dismissBattleSignup()">Not now</button>
-    </div>
-  </div>`;
-  arena.parentNode.insertBefore(p, arena);
-}
-function dismissBattleSignup() {
-  battleSignupDismissed = true;
-  const el = document.getElementById('battleSignupPrompt');
-  if (el) el.remove();
-}
-
-function hexToRgb(hex) {
-  const h = hex.replace('#', '');
-  return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)].join(',');
-}
-
-function countryFlag(code) {
-  if (!code || code.length !== 2) return '';
-  const c = code.toUpperCase();
-  return String.fromCodePoint(...[...c].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
 }
 
 function switchTopCreators(mode, btn) {
   document.querySelectorAll('.top-creators-tab').forEach(t => t.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  btn.classList.add('active');
   const grid = document.getElementById('topCreatorsGrid');
-  const list = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
-  grid.innerHTML = list.map(c => creatorCard(c)).join('');
-}
-
-// ── FRFC YouTube channel videos ──────────────────────────────────────────────
-const FRFC_CACHE_KEY = 'frfc_channel_videos';
-const FRFC_CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
-async function loadFRFCVideos() {
-  const el = document.getElementById('frfc-videos');
-  if (!el) return;
-  try {
-    const cached = sessionStorage.getItem(FRFC_CACHE_KEY);
-    let videos;
-    if (cached) {
-      const p = JSON.parse(cached);
-      if (Date.now() - p.ts < FRFC_CACHE_TTL) videos = p.videos;
-    }
-    if (!videos) {
-      // 1. Resolve channel ID from handle
-      const chRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=channels&part=snippet&forHandle=fanreactionsfc`);
-      if (!chRes.ok) throw new Error('channel lookup failed');
-      const chData = await chRes.json();
-      const channelId = chData.items?.[0]?.id;
-      if (!channelId) throw new Error('no channel id');
-      // 2. Get uploads playlist ID
-      const detRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=channels&part=contentDetails&id=${channelId}`);
-      const detData = await detRes.json();
-      const uploadsId = detData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-      if (!uploadsId) throw new Error('no uploads playlist');
-      // 3. Fetch last 2 videos
-      const plRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=playlistItems&part=snippet&playlistId=${uploadsId}&maxResults=2`);
-      const plData = await plRes.json();
-      videos = (plData.items || []).map(item => ({
-        id: item.snippet.resourceId.videoId,
-        title: item.snippet.title,
-        thumb: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
-        published: item.snippet.publishedAt,
-      }));
-      sessionStorage.setItem(FRFC_CACHE_KEY, JSON.stringify({ ts: Date.now(), videos }));
-    }
-    if (!videos.length) { el.style.display = 'none'; return; }
-    el.innerHTML = videos.map(v => `
-      <a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener" class="frfc-video-card">
-        <div class="frfc-video-thumb-wrap">
-          <img class="frfc-video-thumb" src="${escHtml(v.thumb)}" alt="" loading="lazy">
-          <span class="frfc-video-play">&#9654;</span>
-        </div>
-        <div class="frfc-video-title">${escHtml(v.title)}</div>
-      </a>`).join('');
-  } catch (e) {
-    el.style.display = 'none';
+  let list;
+  if (mode === 'subs') {
+    list = [...creators].filter(c => c.subscriberCount > 0).sort((a, b) => b.subscriberCount - a.subscriberCount).slice(0, 8);
+  } else {
+    list = [...creators].sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount).slice(0, 8);
   }
+  grid.innerHTML = list.map(c => creatorCard(c)).join('');
 }
 
 // Filter Top Clubs tiles by league, capping visible tiles to ~2 rows.
@@ -1600,7 +1019,7 @@ function filterClubs(el, league) {
   document.querySelectorAll('.club-filter').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   const tiles = document.querySelectorAll('#topClubsGrid .club-tile');
-  const MAX_VISIBLE = 20;
+  const MAX_VISIBLE = 18;
   let shown = 0;
   tiles.forEach(t => {
     const matches = !league || t.dataset.league === league;
@@ -1628,8 +1047,8 @@ function creatorCard(c) {
         </div>
       </div>
       <div class="cc-meta">
+        ${c.ratingCount > 0 ? `<span class="cc-rating">★ ${c.avgRating} <span class="cc-rating-count">(${c.ratingCount})</span></span>` : ''}
         ${subsStr ? `<span class="cc-subs">${subsStr}</span>` : ''}
-        ${(favouriteCounts.get(c.id) || 0) > 0 ? `<span class="cc-fav-count">&#9733; ${favouriteCounts.get(c.id)}</span>` : ''}
         ${freqStr ? `<span class="cc-freq">${freqStr}</span>` : ''}
       </div>
       ${c.latestVideoThumbnail ? `<div class="cc-video"><img src="${c.latestVideoThumbnail}" alt="" loading="lazy"><span class="cc-video-title">${escHtml((c.latestVideoTitle || '').substring(0, 50))}${(c.latestVideoTitle || '').length > 50 ? '...' : ''}</span></div>` : ''}
@@ -1644,7 +1063,7 @@ function renderDiscover() {
   const leagueFilter = params.get('league') || '';
   const teamFilter = params.get('team') || '';
   const typeFilter = params.get('type') || '';
-  const sort = params.get('sort') || 'subs';
+  const sort = params.get('sort') || 'name';
   const favOnly = params.get('favs') === '1';
   const activeOnly = params.get('active') === '1';
   const liveOnly = params.get('live') === '1';
@@ -1665,27 +1084,24 @@ function renderDiscover() {
   if (activeOnly) filtered = filtered.filter(c => c.latestVideoDate && (Date.now() - new Date(c.latestVideoDate).getTime()) < 30 * 24 * 60 * 60 * 1000);
   if (liveOnly) filtered = filtered.filter(c => c.isLive);
 
-  if (sort === 'subs') filtered.sort((a, b) => b.subscriberCount - a.subscriberCount);
+  if (sort === 'rating') filtered.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
+  else if (sort === 'reviews') filtered.sort((a, b) => b.ratingCount - a.ratingCount);
+  else if (sort === 'subs') filtered.sort((a, b) => b.subscriberCount - a.subscriberCount);
   else filtered.sort((a, b) => a.name.localeCompare(b.name));
 
   // Build accordion: which league should be open?
   const openLeague = leagueFilter || (teamFilter ? getLeague(teamFilter) : '');
 
   document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">Database</div>
-            <h1 class="page-hero-title">Discover Creators</h1>
-            <p class="page-hero-subtitle">${creators.length} creators across ${activeLeagues.length} leagues and ${teams.length} clubs</p>
-          </div>
-          <a href="/submit" class="btn-cta-band btn-cta-band--yellow" style="flex-shrink:0">+ Suggest a Creator</a>
+    <div class="container" style="padding-top:32px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap">
+        <div>
+          <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:4px">Discover Creators</h1>
+          <p style="color:var(--text-dim);font-size:.9rem">${creators.length} creators across ${activeLeagues.length} leagues and ${teams.length} clubs</p>
         </div>
+        <a href="/submit" class="btn btn-secondary btn-sm">+ Suggest a Creator</a>
       </div>
-    </div>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
       <div class="discover-layout">
         <!-- Left sidebar: League/Club accordion -->
         <aside class="filter-sidebar" id="filterSidebar">
@@ -1724,11 +1140,16 @@ function renderDiscover() {
           <!-- Top filter bar -->
           <div class="discover-top-bar">
             <span class="bar-label">Quick</span>
-            <span class="filter-chip ${sort === 'subs' ? 'active' : ''}" onclick="applyFilter('sort','subs')">&#128200; Most Subs</span>
-            <span class="filter-chip ${sort === 'name' ? 'active' : ''}" onclick="applyFilter('sort','name')">&#9398; A–Z</span>
             <span class="filter-chip ${favOnly ? 'active' : ''}" onclick="applyFilter('favs','${favOnly ? '' : '1'}')">&#9733; Favorites${favOnly ? ' <span class=chip-x>&times;</span>' : ''}</span>
+            <span class="filter-chip ${sort === 'rating' ? 'active' : ''}" onclick="applyFilter('sort','${sort === 'rating' ? 'name' : 'rating'}')">&#127942; Top Rated</span>
+            <span class="filter-chip ${sort === 'subs' ? 'active' : ''}" onclick="applyFilter('sort','${sort === 'subs' ? 'name' : 'subs'}')">&#128200; Most Subs</span>
             <span class="filter-chip ${activeOnly ? 'active' : ''}" onclick="applyFilter('active','${activeOnly ? '' : '1'}')">&#9889; Active (30d)${activeOnly ? ' <span class=chip-x>&times;</span>' : ''}</span>
             ${creators.some(c => c.isLive) ? `<span class="filter-chip ${liveOnly ? 'active' : ''}" onclick="applyFilter('live','${liveOnly ? '' : '1'}')"><span class="live-dot-sm"></span> Live Now${liveOnly ? ' <span class=chip-x>&times;</span>' : ''}</span>` : ''}
+            <span class="bar-sep"></span>
+            <span class="bar-label">Type</span>
+            ${CONTENT_TYPES.slice(0, 6).map(t =>
+              `<span class="filter-chip ${typeFilter === t ? 'active' : ''}" onclick="applyFilter('type','${typeFilter === t ? '' : t}')">${t}${typeFilter === t ? ' <span class=chip-x>&times;</span>' : ''}</span>`
+            ).join('')}
           </div>
 
           <!-- Active filters + result count -->
@@ -1736,6 +1157,7 @@ function renderDiscover() {
             <span class="discover-result-count">${filtered.length} creator${filtered.length !== 1 ? 's' : ''}</span>
             ${leagueFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('league','')">${leagueChipImg(leagueFilter)} ${escHtml(leagueFilter)} &times;</span>` : ''}
             ${teamFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('team','')">${escHtml(teamFilter)} &times;</span>` : ''}
+            ${typeFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('type','')">${escHtml(typeFilter)} &times;</span>` : ''}
             ${favOnly ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('favs','')">Favorites &times;</span>` : ''}
           </div>
 
@@ -1786,158 +1208,168 @@ async function renderProfile(slug) {
     return;
   }
 
+  // Load reviews for this creator
+  const { data: revData } = await sb.from('frfc_reviews').select('*').eq('creator_id', c.id).order('created_at', { ascending: false });
+  reviews = revData || [];
+
+  // Enrich reviews with reviewer profiles (display_name + avatar_url).
+  // Uses a single batched fetch with a user_id IN(...) filter.
+  const reviewerIds = [...new Set(reviews.map(r => r.user_id).filter(Boolean))];
+  const profiles = {};
+  if (reviewerIds.length) {
+    try {
+      const ids = reviewerIds.map(encodeURIComponent).join(',');
+      const pRes = await fetch(`${SUPABASE_URL}/rest/v1/frfc_user_profiles?select=user_id,display_name,avatar_url,reviews_public&user_id=in.(${ids})`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      });
+      if (pRes.ok) (await pRes.json()).forEach(p => { profiles[p.user_id] = p; });
+    } catch {}
+  }
+  // Hide reviews whose author has opted out of public display.
+  reviews = reviews.filter(r => {
+    const p = profiles[r.user_id];
+    return !p || p.reviews_public !== false;
+  });
+
   const isFav = favorites.has(c.id);
   const similar = creators.filter(s => s.team === c.team && s.id !== c.id).slice(0, 4);
 
+  // Rating distribution
+  const dist = [0, 0, 0, 0, 0];
+  reviews.forEach(r => dist[r.rating - 1]++);
+  const maxDist = Math.max(...dist, 1);
+
   document.getElementById('app').innerHTML = `
-    <!-- ── Hero Header ─────────────────────────────────────────────────────── -->
-    <div class="cp-hero">
+    <div class="profile-header">
       <div class="container">
-        <div class="cp-hero-inner">
-          <div class="cp-avatar-wrap">
-            ${avatarImg(c, 'cp-avatar')}
-            ${c.isLive ? '<span class="cp-live-ring"></span>' : ''}
-            ${c.channelCountry ? `<span class="cp-flag-badge">${countryFlag(c.channelCountry)}</span>` : ''}
-          </div>
-          <div class="cp-hero-info">
-            <div class="cp-hero-eyebrow">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.league ? '&middot; ' + escHtml(c.league) : ''}</div>
-            <h1 class="cp-hero-name">
-              ${escHtml(c.name)}
-              ${c.verified ? '<span class="badge badge-green" style="font-size:.7rem;vertical-align:middle">Verified</span>' : ''}
-              ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
+        <div class="profile-top">
+          ${avatarImg(c, 'profile-avatar')}
+          <div class="profile-info">
+            <h1 class="profile-name">
+              ${liveDot(c.isLive)}${escHtml(c.name)}
+              ${c.verified ? '<span class="badge badge-green">Verified</span>' : ''}
+              ${c.claimed ? '<span class="badge badge-dim">Claimed</span>' : ''}
             </h1>
-            ${c.description ? `<p class="cp-hero-desc">${escHtml(c.description)}</p>` : ''}
-            <div class="cp-hero-actions">
-              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-yellow cp-cta">▶ Watch on YouTube</a>` : ''}
-              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-ghost-white">📡 Live / Streams</a>` : ''}
-              <button class="btn btn-ghost-white${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
-              <button class="cp-report-link" onclick="openReportModal('${c.id}',${JSON.stringify(c.name)})">Report issue</button>
+            <div class="profile-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+            ${c.description ? `<div class="profile-desc">${escHtml(c.description)}</div>` : ''}
+            <div class="profile-actions">
+              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-primary">Watch on YouTube</a>` : ''}
+              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-secondary">Live / Streams</a>` : ''}
+              <button class="btn btn-secondary" onclick="handleFavorite('${c.id}')" id="favBtn">${isFav ? '&#9733; Favorited' : '&#9734; Favorite'}</button>
+              <button class="btn btn-ghost btn-sm report-link" onclick="openReportModal('${c.id}','${escHtml(c.name).replace(/'/g, "\\'")}')">Report issue</button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- ── Stat Cards ──────────────────────────────────────────────────────── -->
-    <div class="cp-stats-bar">
-      <div class="container">
-        <div class="cp-stat-cards">
-          ${c.subscriberCount ? `
-          <div class="cp-stat-card cp-stat-card--primary">
-            <div class="cp-stat-label">Subscribers</div>
-            <div class="cp-stat-num">${formatNum(c.subscriberCount)}<span id="subGrowth" class="cp-stat-growth"></span></div>
-          </div>` : ''}
-          ${c.totalViews ? `
-          <div class="cp-stat-card">
-            <div class="cp-stat-label">Total Views</div>
-            <div class="cp-stat-num">${formatNum(c.totalViews)}</div>
-          </div>` : ''}
-          ${c.videoCount ? `
-          <div class="cp-stat-card">
-            <div class="cp-stat-label">Videos</div>
-            <div class="cp-stat-num">${formatNum(c.videoCount)}</div>
-          </div>` : ''}
-          ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `
-          <div class="cp-stat-card">
-            <div class="cp-stat-label">Upload Freq.</div>
-            <div class="cp-stat-num cp-stat-num--sm">${escHtml(c.uploadFrequency)}</div>
-          </div>` : ''}
-          ${c.channelCreatedAt ? `
-          <div class="cp-stat-card">
-            <div class="cp-stat-label">Est.</div>
-            <div class="cp-stat-num cp-stat-num--sm">${channelYear(c.channelCreatedAt)}</div>
-          </div>` : ''}
-          <div class="cp-stat-card" id="battleWonStat" style="display:none">
-            <div class="cp-stat-label">Battles Won</div>
-            <div class="cp-stat-num" id="battleWonNum">—</div>
+        <div class="profile-stats">
+          <div class="ps-item">
+            <div class="ps-num" style="color:var(--star)">${c.avgRating > 0 ? c.avgRating : '—'}</div>
+            <div class="ps-label">Avg Rating</div>
           </div>
+          <div class="ps-item">
+            <div class="ps-num">${c.ratingCount}</div>
+            <div class="ps-label">Reviews</div>
+          </div>
+          ${c.subscriberCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.subscriberCount)} <span id="subGrowth" class="ps-growth"></span></div><div class="ps-label">Subscribers</div></div>` : ''}
+          ${c.totalViews ? `<div class="ps-item"><div class="ps-num">${formatNum(c.totalViews)}</div><div class="ps-label">Total Views</div></div>` : ''}
+          ${c.videoCount ? `<div class="ps-item"><div class="ps-num">${formatNum(c.videoCount)}</div><div class="ps-label">Videos</div></div>` : ''}
+          ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `<div class="ps-item"><div class="ps-num ps-num-sm">${c.uploadFrequency}</div><div class="ps-label">Uploads</div></div>` : ''}
+          ${c.channelCreatedAt ? `<div class="ps-item"><div class="ps-num ps-num-sm">${channelYear(c.channelCreatedAt)}</div><div class="ps-label">Channel</div></div>` : ''}
+          ${c.channelCountry ? `<div class="ps-item"><div class="ps-num ps-num-sm">${countryFlag(c.channelCountry)}</div><div class="ps-label">Based in</div></div>` : ''}
         </div>
+        ${c.subscriberCount ? '<div id="subSparkline" class="sub-sparkline-wrap"></div>' : ''}
       </div>
     </div>
 
-    <!-- ── Main Content ────────────────────────────────────────────────────── -->
-    <div class="container cp-body">
-      <div class="cp-main">
+    <div class="container" style="padding-top:24px">
+      ${c.isLive ? `
+      <div class="live-banner">
+        <span class="live-dot-sm"></span> <strong>${escHtml(c.name)} is live now</strong>
+        <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto">Watch Live</a>
+      </div>` : ''}
 
-        ${c.isLive ? `
-        <div class="cp-live-alert">
-          <span class="live-dot-sm"></span>
-          <strong>${escHtml(c.name)} is streaming live right now</strong>
-          <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto;flex-shrink:0">Watch Live &rarr;</a>
-        </div>` : ''}
-
-        ${c.latestVideoId ? `
-        <div class="cp-section-card">
-          <div class="cp-section-head">
-            <span class="cp-section-label">Latest Video</span>
-            <span class="cp-section-meta">${c.latestVideoDate ? timeAgo(c.latestVideoDate) : ''}</span>
+      ${c.latestVideoId ? `
+      <div class="latest-video-section">
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Latest Video</h3>
+        <a href="https://youtube.com/watch?v=${safeId(c.latestVideoId)}" target="_blank" rel="noopener" class="latest-video-card">
+          <img src="${c.latestVideoThumbnail || ''}" alt="" class="lv-thumb" loading="lazy">
+          <div class="lv-info">
+            <div class="lv-title">${escHtml(c.latestVideoTitle || '')}</div>
+            <div class="lv-meta">${c.latestVideoViews ? formatNum(c.latestVideoViews) + ' views' : ''} ${c.latestVideoDate ? '&middot; ' + timeAgo(c.latestVideoDate) : ''}</div>
           </div>
-          <a href="https://youtube.com/watch?v=${safeId(c.latestVideoId)}" target="_blank" rel="noopener" class="cp-video-card">
-            <div class="cp-video-thumb-wrap">
-              <img src="${c.latestVideoThumbnail || ''}" alt="" class="cp-video-thumb" loading="lazy">
-              <span class="cp-video-play">▶</span>
-            </div>
-            <div class="cp-video-info">
-              <div class="cp-video-title">${escHtml(c.latestVideoTitle || '')}</div>
-              <div class="cp-video-meta">
-                ${c.latestVideoViews ? `<span>${formatNum(c.latestVideoViews)} views</span>` : ''}
+        </a>
+      </div>` : ''}
+
+      <!-- Rating distribution + write review -->
+      <div class="profile-rating-grid">
+        <div>
+          <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Ratings</h3>
+          <div class="rating-dist">
+            ${[5,4,3,2,1].map(n => `
+              <div class="rd-row">
+                <span class="rd-label">${n}</span>
+                <div class="rd-bar"><div class="rd-fill" style="width:${(dist[n-1]/maxDist*100)}%"></div></div>
+                <span class="rd-count">${dist[n-1]}</span>
               </div>
-            </div>
-          </a>
-        </div>` : ''}
-
-        ${similar.length ? `
-        <div class="cp-section-card">
-          <div class="cp-section-head">
-            <span class="cp-section-label">${crestImg(c.team, 'crest-sm')} More ${escHtml(c.team)} Creators</span>
-            <a href="/clubs/${encodeURIComponent(c.team)}" class="cp-section-link">View all &rarr;</a>
+            `).join('')}
           </div>
-          <div class="card-grid">${similar.map(s => creatorCard(s)).join('')}</div>
-        </div>` : ''}
-
-        <div class="cta-band" style="border-radius:var(--radius);margin-top:4px;padding:24px 28px">
-          <div class="cta-band-inner" style="padding:0">
-            <div>
-              <div class="cta-band-title">Know a great ${escHtml(c.team)} creator?</div>
-              <p class="cta-band-sub">Help us grow the database — submissions reviewed within 24h.</p>
+        </div>
+        <div>
+          <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Rate this creator</h3>
+          ${currentUser ? `
+            <div class="star-row" id="rateStars" style="margin-bottom:12px">
+              ${[1,2,3,4,5].map(n => `<span class="star" data-val="${n}" onclick="setRating(${n})" onmouseenter="hoverRating(${n})" onmouseleave="resetRatingHover()">★</span>`).join('')}
             </div>
-            <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
-          </div>
+            <textarea id="reviewText" placeholder="Write your review (optional)..." style="width:100%;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:.88rem;resize:vertical;min-height:80px;margin-bottom:10px"></textarea>
+            <button class="btn btn-primary btn-sm" onclick="submitReview('${c.id}')">Submit Review</button>
+            <div id="reviewMsg" style="font-size:.8rem;color:var(--red);margin-top:6px"></div>
+          ` : `
+            <p style="color:var(--text-dim);font-size:.88rem;margin-bottom:12px">Sign in to rate and review this creator.</p>
+            <button class="btn btn-primary btn-sm" onclick="openModal('signin')">Sign In</button>
+          `}
         </div>
       </div>
 
-      <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-      <aside class="cp-sidebar">
-        ${c.subscriberCount ? `
-        <div class="cp-sidebar-card">
-          <div class="cp-sidebar-title">Subscriber Growth <span style="font-size:.68rem;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">— last 30 days</span></div>
-          <div id="subSparkline" style="padding:12px 0 4px;text-align:center;color:var(--text-muted);font-size:.82rem">Loading…</div>
-        </div>` : ''}
+      <!-- Reviews list -->
+      <div style="margin-bottom:32px">
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">Reviews (${reviews.length})</h3>
+        ${reviews.length ? reviews.map(r => {
+          const p = profiles[r.user_id];
+          const name = (p && p.display_name) || 'Fan';
+          const avatar = p && p.avatar_url
+            ? `<img class="review-avatar" src="${escHtml(p.avatar_url)}" alt="">`
+            : `<div class="review-avatar">${escHtml(avatarInitials(name))}</div>`;
+          return `
+          <div class="review">
+            <div class="review-head">
+              ${avatar}
+              <span class="review-user">${escHtml(name)}</span>
+              <span class="review-date">${new Date(r.created_at).toLocaleDateString()}</span>
+              <span class="review-stars">${stars(r.rating)}</span>
+            </div>
+            ${r.review_text ? `<div class="review-text">${escHtml(r.review_text)}</div>` : ''}
+          </div>`;
+        }).join('') : '<div style="color:var(--text-dim);font-size:.88rem">No reviews yet. Be the first to rate this creator!</div>'}
+      </div>
 
-        <div class="cp-sidebar-card">
-          <div class="cp-sidebar-title">Channel Info</div>
-          <div class="cp-info-list">
-            ${c.channelCountry ? `<div class="cp-info-row"><span class="cp-info-key">Based in</span><span class="cp-info-val">${countryFlag(c.channelCountry)} ${escHtml(countryName(c.channelCountry) || c.channelCountry)}</span></div>` : ''}
-            ${c.channelCreatedAt ? `<div class="cp-info-row"><span class="cp-info-key">Est.</span><span class="cp-info-val">${channelYear(c.channelCreatedAt)}</span></div>` : ''}
-            ${c.uploadFrequency && c.uploadFrequency !== 'Unknown' ? `<div class="cp-info-row"><span class="cp-info-key">Uploads</span><span class="cp-info-val">${escHtml(c.uploadFrequency)}</span></div>` : ''}
-            ${c.league ? `<div class="cp-info-row"><span class="cp-info-key">League</span><span class="cp-info-val">${escHtml(c.league)}</span></div>` : ''}
-            ${c.contentTypes && c.contentTypes.length ? `<div class="cp-info-row"><span class="cp-info-key">Content</span><span class="cp-info-val cp-tags">${c.contentTypes.slice(0,4).map(t => `<span class="cc-tag">${escHtml(t)}</span>`).join('')}</span></div>` : ''}
-          </div>
-        </div>
+      ${!c.claimed ? `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:32px;text-align:center">
+        <div style="font-size:.95rem;font-weight:700;margin-bottom:4px">Is this your channel?</div>
+        <div style="color:var(--text-dim);font-size:.82rem;margin-bottom:12px">Claim your profile to manage your bio, respond to reviews, and access analytics.</div>
+        <button class="btn btn-secondary btn-sm" onclick="alert('Creator claim flow coming soon. Contact @fanreactionsfc on YouTube.')">Claim this profile</button>
+      </div>` : ''}
 
-        ${c.channel || c.live ? `
-        <div class="cp-sidebar-card">
-          <div class="cp-sidebar-title">Links</div>
-          <div class="cp-links">
-            ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-yt">▶ YouTube Channel</a>` : ''}
-            ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-live">📡 Live / Streams</a>` : ''}
-          </div>
-        </div>` : ''}
-      </aside>
+      <!-- Similar creators -->
+      ${similar.length ? `
+      <div style="margin-bottom:32px">
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">More ${escHtml(c.team)} creators</h3>
+        <div class="card-grid">${similar.map(s => creatorCard(s)).join('')}</div>
+      </div>` : ''}
+      <a href="/submit" class="suggest-cta"><span class="suggest-icon">+</span> Know a great ${escHtml(c.team)} creator we should add? Suggest them here</a>
     </div>
     ${renderFooter()}
   `;
 
+  selectedRating = 0;
 
   // Async: load subscriber history for growth delta + sparkline
   if (c.subscriberCount) {
@@ -1948,42 +1380,42 @@ async function renderProfile(slug) {
         const el = document.getElementById('subGrowth');
         if (el) {
           const dir = growth >= 0 ? 'up' : 'down';
-          el.className = 'cp-stat-growth ' + dir;
+          el.className = 'ps-growth ' + dir;
           el.textContent = (growth >= 0 ? '+' : '') + formatNum(Math.abs(growth));
         }
       }
       const sparkEl = document.getElementById('subSparkline');
       if (sparkEl) {
-        if (series.length >= 2) {
-          const growth = series[series.length - 1].subscriber_count - series[0].subscriber_count;
-          const isUp = growth >= 0;
-          const color = isUp ? '#16a34a' : 'var(--red)';
-          const sign = isUp ? '+' : '−';
-          sparkEl.innerHTML = `
-            <div style="text-align:center;padding:10px 0 6px">
-              <div style="font-size:2.4rem;font-weight:800;color:${color};letter-spacing:-.03em;line-height:1">${sign}${formatNum(Math.abs(growth))}</div>
-              <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-top:6px">subscribers</div>
-            </div>`;
-        } else {
-          sparkEl.innerHTML = `<div style="padding:12px 0;text-align:center;color:var(--text-muted);font-size:.82rem">Not enough data yet</div>`;
-        }
+        const svg = subscriberSparkline(series);
+        if (svg) sparkEl.innerHTML = `<div class="sub-sparkline-label">Last 30 days</div>${svg}`;
       }
     });
   }
+}
 
-  // Async: load battle wins
-  sbRpc('get_creator_battle_stats', { cid: c.id }).then(({ data, error }) => {
-    if (error) { console.warn('battle stats error', error); return; }
-    const wins = data && data.length ? Number(data[0].wins) || 0 : 0;
-    const el = document.getElementById('battleWonStat');
-    const num = document.getElementById('battleWonNum');
-    if (el && num) {
-      num.textContent = formatNum(wins);
-      el.style.display = '';
-    }
+let selectedRating = 0;
+function setRating(n) { selectedRating = n; updateStars(n); }
+function hoverRating(n) { updateStars(n); }
+function resetRatingHover() { updateStars(selectedRating); }
+function updateStars(n) {
+  document.querySelectorAll('#rateStars .star').forEach(s => {
+    s.classList.toggle('filled', +s.dataset.val <= n);
   });
 }
 
+async function submitReview(creatorId) {
+  const msg = document.getElementById('reviewMsg');
+  if (!selectedRating) { msg.textContent = 'Please select a rating.'; return; }
+  const text = document.getElementById('reviewText')?.value.trim() || null;
+  const { error } = await sb.from('frfc_reviews').upsert({
+    creator_id: creatorId, user_id: currentUser.id, rating: selectedRating, review_text: text, updated_at: new Date().toISOString()
+  }, { onConflict: 'creator_id,user_id' });
+  if (error) { msg.textContent = error.message; return; }
+  msg.textContent = 'Review submitted! Thank you.';
+  msg.style.color = 'var(--green)';
+  await loadCreators();
+  setTimeout(() => renderProfile(currentRoute.slug), 800);
+}
 
 function formatNum(n) {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
@@ -1993,17 +1425,8 @@ function formatNum(n) {
 
 async function handleFavorite(id) {
   await toggleFavorite(id);
-  const fav = favorites.has(id);
-  // Update favourite count in the local map
-  const prev = favouriteCounts.get(id) || 0;
-  favouriteCounts.set(id, Math.max(0, prev + (fav ? 1 : -1)));
-  const count = favouriteCounts.get(id) || 0;
-  // Update button
   const btn = document.getElementById('favBtn');
-  if (btn) {
-    btn.innerHTML = (fav ? '&#9733; Favourited' : '&#9734; Favourite') + (count > 0 ? ' <span class="fav-count-badge" id="favCount">' + count + '</span>' : '');
-    btn.classList.toggle('btn-favourited', fav);
-  }
+  if (btn) btn.innerHTML = favorites.has(id) ? '&#9733; Favorited' : '&#9734; Favorite';
 }
 
 // ── Render: Club Page ─────────────────────────────────────────────────────
@@ -2013,6 +1436,7 @@ function renderClubPage(club) {
   let clubCreators = creators.filter(c => c.team === club);
 
   if (sort === 'name') clubCreators.sort((a, b) => a.name.localeCompare(b.name));
+  else if (sort === 'rating') clubCreators.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
   else if (sort === 'recent') clubCreators.sort((a, b) => new Date(b.latestVideoDate || 0) - new Date(a.latestVideoDate || 0));
   else clubCreators.sort((a, b) => b.subscriberCount - a.subscriberCount);
 
@@ -2021,53 +1445,27 @@ function renderClubPage(club) {
   const clubUrl = '/clubs/' + encodeURIComponent(club);
 
   document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <a href="/discover${clubLeague !== 'Other' ? '?league=' + encodeURIComponent(clubLeague) : ''}" class="page-hero-back">&larr; ${clubLeague !== 'Other' ? escHtml(clubLeague) : 'All clubs'}</a>
-        <div class="page-hero-inner">
-          ${crestImg(club, 'page-hero-crest')}
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">${leagueInfo ? escHtml(clubLeague) : 'Football Club'}</div>
-            <h1 class="page-hero-title">${escHtml(club)}</h1>
-            <div class="page-hero-meta">
-              <span class="page-hero-tag">${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</span>
-              ${clubCreators.filter(c => c.isLive).length ? `<span class="page-hero-tag" style="background:rgba(230,57,70,.2);border-color:rgba(230,57,70,.3);color:#ff8080">● ${clubCreators.filter(c => c.isLive).length} live</span>` : ''}
-            </div>
-          </div>
-          <div class="page-hero-actions">
-            <a href="/clubs/${encodeURIComponent(club)}/videos" class="btn btn-ghost-white btn-sm">📺 Videos</a>
-            <a href="/submit" class="btn-cta-band btn-cta-band--yellow" style="padding:8px 18px;font-size:.82rem">+ Suggest</a>
-          </div>
+    <div class="container" style="padding-top:40px">
+      <a href="/discover${clubLeague !== 'Other' ? '?league=' + encodeURIComponent(clubLeague) : ''}" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; ${clubLeague !== 'Other' ? escHtml(clubLeague) : 'All clubs'}</a>
+      <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:12px">${crestImg(club, 'crest-xl')} ${escHtml(club)}</h1>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:16px;display:flex;align-items:center;gap:6px">${leagueInfo ? leagueChipImg(clubLeague) : ''} ${escHtml(clubLeague)} &bull; ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <div class="top-creators-tabs">
+          <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subscribers</button>
+          <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
+          <button class="top-creators-tab ${sort === 'rating' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=rating')">By Rating</button>
+          <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Latest Upload</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a href="/clubs/${encodeURIComponent(club)}/videos" class="btn btn-secondary btn-sm">📺 Latest videos</a>
+          <a href="/submit" class="btn btn-secondary btn-sm">+ Suggest a Creator</a>
         </div>
       </div>
-    </div>
-
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title">${crestImg(club, 'crest-sm')} Creators</div>
-          <div class="top-creators-tabs" style="margin:0">
-            <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subs</button>
-            <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
-            <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Recent</button>
-          </div>
-        </div>
-        <div class="sc-body">
-          <div class="card-grid">
-            ${clubCreators.length ? clubCreators.map(c => creatorCard(c)).join('') :
-              `<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px">Suggest a Creator</a></div>`}
-          </div>
-        </div>
+      <div class="card-grid">
+        ${clubCreators.length ? clubCreators.map(c => creatorCard(c)).join('') :
+          '<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px">Suggest a Creator</a></div>'}
       </div>
-      <div class="cta-band" style="border-radius:var(--radius);margin-top:4px;padding:24px 28px">
-        <div class="cta-band-inner" style="padding:0">
-          <div>
-            <div class="cta-band-title">Know a ${escHtml(club)} YouTuber we're missing?</div>
-            <p class="cta-band-sub">Help us grow the database — submissions reviewed within 24h.</p>
-          </div>
-          <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
-        </div>
-      </div>
+      <a href="/submit" class="suggest-cta"><span class="suggest-icon">+</span> Know a ${escHtml(club)} YouTuber we're missing? Suggest them here</a>
     </div>
     ${renderFooter()}
   `;
@@ -2087,266 +1485,118 @@ function renderClubVideos(club) {
   const clubUrl = '/clubs/' + encodeURIComponent(club);
 
   document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <a href="${clubUrl}" class="page-hero-back">&larr; ${escHtml(club)}</a>
-        <div class="page-hero-inner">
-          ${crestImg(club, 'page-hero-crest')}
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">📺 Latest Videos</div>
-            <h1 class="page-hero-title">${escHtml(club)} Videos</h1>
-            <p class="page-hero-subtitle">${videos.length} recent upload${videos.length !== 1 ? 's' : ''} from ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}${clubLeague !== 'Other' ? ' in ' + escHtml(clubLeague) : ''}.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="container" style="padding-top:40px">
+      <a href="${clubUrl}" style="font-size:.82rem;color:var(--text-dim);display:inline-block;margin-bottom:12px">&larr; ${escHtml(club)}</a>
+      <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:12px">${crestImg(club, 'crest-xl')} Latest ${escHtml(club)} videos</h1>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:24px">${videos.length} recent upload${videos.length !== 1 ? 's' : ''} from ${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}${clubLeague !== 'Other' ? ' in ' + escHtml(clubLeague) : ''}.</p>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
-      <div class="sc-card">
-        <div class="sc-head">
-          <div class="sc-head-title">${crestImg(club, 'crest-sm')} Recent Uploads</div>
-          <span style="font-size:.82rem;color:var(--text-muted)">${videos.length} video${videos.length !== 1 ? 's' : ''}</span>
-        </div>
-        <div class="sc-body">
-          ${videos.length ? `<div class="team-video-grid">
-            ${videos.map(({ c }) => `
-              <a href="https://youtube.com/watch?v=${safeId(c.latestVideoId)}" target="_blank" rel="noopener" class="team-video-card">
-                <div class="tv-thumb-wrap">
-                  <img class="tv-thumb" src="${c.latestVideoThumbnail || ''}" alt="" loading="lazy">
-                  ${c.isLive ? '<span class="tv-live-badge badge badge-live">LIVE</span>' : ''}
+      ${videos.length ? `<div class="team-video-grid">
+        ${videos.map(({ c }) => `
+          <a href="https://youtube.com/watch?v=${safeId(c.latestVideoId)}" target="_blank" rel="noopener" class="team-video-card">
+            <div class="tv-thumb-wrap">
+              <img class="tv-thumb" src="${c.latestVideoThumbnail || ''}" alt="" loading="lazy">
+              ${c.isLive ? '<span class="tv-live-badge badge badge-live">LIVE</span>' : ''}
+            </div>
+            <div class="tv-body">
+              <div class="tv-title">${escHtml(c.latestVideoTitle || 'Untitled')}</div>
+              <div class="tv-creator">
+                ${avatarImg(c, 'tv-avatar')}
+                <div class="tv-creator-info">
+                  <div class="tv-creator-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
+                  <div class="tv-meta">${c.latestVideoViews ? formatNum(c.latestVideoViews) + ' views' : ''}${c.latestVideoViews && c.latestVideoDate ? ' · ' : ''}${c.latestVideoDate ? timeAgo(c.latestVideoDate) : ''}</div>
                 </div>
-                <div class="tv-body">
-                  <div class="tv-title">${escHtml(c.latestVideoTitle || 'Untitled')}</div>
-                  <div class="tv-creator">
-                    ${avatarImg(c, 'tv-avatar')}
-                    <div class="tv-creator-info">
-                      <div class="tv-creator-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
-                      <div class="tv-meta">${c.latestVideoViews ? formatNum(c.latestVideoViews) + ' views' : ''}${c.latestVideoViews && c.latestVideoDate ? ' · ' : ''}${c.latestVideoDate ? timeAgo(c.latestVideoDate) : ''}</div>
-                    </div>
-                  </div>
-                </div>
-              </a>`).join('')}
-          </div>` : `<div class="empty-state"><div class="es-icon">📺</div><div class="es-title">No recent videos yet</div><p style="color:var(--text-dim)">Creator video data will appear here after the next sync.</p></div>`}
-        </div>
-      </div>
+              </div>
+            </div>
+          </a>`).join('')}
+      </div>` : `<div class="empty-state"><div class="es-icon">📺</div><div class="es-title">No recent videos yet</div><p style="color:var(--text-dim)">Creator video data will appear here after the next sync.</p></div>`}
     </div>
     ${renderFooter()}
   `;
 }
 
 // ── Render: Rankings ──────────────────────────────────────────────────────
-async function renderRankings() {
+function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
-  const teamFilter = params.get('team') || '';
-  const mode = params.get('mode') || 'winpct';
-  if (mode === 'voters') return renderVoterLeaderboard();
+  const mode = params.get('mode') || 'subs';
 
-  // Fetch battle stats for all creators (5s timeout to avoid blocking render)
-  let battleMap = {};
-  try {
-    const bTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('battle stats timeout')), 5000));
-    const { data: bStats } = await Promise.race([sbRpc('get_all_battle_stats'), bTimeout]);
-    if (bStats) bStats.forEach(s => {
-      battleMap[s.creator_id] = { wins: Number(s.wins) || 0, losses: Number(s.losses) || 0, total: Number(s.total) || 0, winPct: Number(s.win_pct) || 0 };
-    });
-  } catch (_) {}
-
-  let ranked = [...creators].filter(c => c.subscriberCount > 0);
-  if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
-  if (teamFilter) ranked = ranked.filter(c => c.team === teamFilter);
-
-  // Attach battle stats to each creator for sorting
-  ranked.forEach(c => {
-    c._battle = battleMap[c.id] || { wins: 0, losses: 0, total: 0, winPct: 0 };
-  });
-
-  // Sort based on mode
-  if (mode === 'wins') {
-    ranked.sort((a, b) => b._battle.wins - a._battle.wins || b._battle.winPct - a._battle.winPct || b.subscriberCount - a.subscriberCount);
-  } else if (mode === 'winpct') {
-    // Win % sort: require at least 1 battle, then sort by % desc, wins desc as tiebreaker
-    ranked.sort((a, b) => {
-      const aHas = a._battle.total > 0 ? 1 : 0;
-      const bHas = b._battle.total > 0 ? 1 : 0;
-      if (bHas !== aHas) return bHas - aHas;
-      if (aHas && bHas) return b._battle.winPct - a._battle.winPct || b._battle.wins - a._battle.wins || b.subscriberCount - a.subscriberCount;
-      return b.subscriberCount - a.subscriberCount;
-    });
+  let ranked;
+  if (mode === 'rating') {
+    ranked = [...creators].filter(c => c.ratingCount > 0);
+    if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
+    ranked.sort((a, b) => b.avgRating - a.avgRating || b.ratingCount - a.ratingCount);
   } else {
+    ranked = [...creators].filter(c => c.subscriberCount > 0);
+    if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
     ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
   }
 
-  // Build team strip
-  const stripTeams = [];
-  if (leagueFilter) {
-    Object.entries(TEAM_TO_LEAGUE).filter(([t, lg]) => lg === leagueFilter).forEach(([t]) => stripTeams.push(t));
-  } else {
-    Object.keys(TEAM_TO_LEAGUE).forEach(t => stripTeams.push(t));
-  }
-  stripTeams.sort();
+  // Compute previous ranks from the same filtered set, sorted by the
+  // snapshot column, so we can show week-over-week movement.
+  const prevRanks = {};
+  const prevField = mode === 'rating' ? 'avgRatingPrev' : 'subscriberCountPrev';
+  [...ranked]
+    .filter(c => c[prevField] > 0)
+    .sort((a, b) => b[prevField] - a[prevField])
+    .forEach((c, i) => { prevRanks[c.id] = i + 1; });
 
-  // Build sort URL helper
-  function sortUrl(s) {
-    const p = new URLSearchParams();
-    if (leagueFilter) p.set('league', leagueFilter);
-    if (teamFilter) p.set('team', teamFilter);
-    if (s !== 'winpct') p.set('mode', s);
-    return '/rankings' + (p.toString() ? '?' + p.toString() : '');
-  }
-
-  // Subtitle based on mode
-  const subtitles = { subs: 'Ranked by YouTube subscriber count.', wins: 'Ranked by Creator Battle wins.', winpct: 'Ranked by Creator Battle win percentage.' };
-  const scoreLabels = { subs: 'subscribers', wins: 'wins', winpct: 'win %' };
+  const modeParam = mode === 'rating' ? '&mode=rating' : '';
 
   document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">&#127942; Weekly Rankings</div>
-            <h1 class="page-hero-title">Creator Rankings</h1>
-            <p class="page-hero-subtitle">${subtitles[mode] || subtitles.winpct}</p>
-            <div class="rk-tabs-row">
-              <div class="rk-tabs">
-                <button class="rk-tab rk-tab--active" onclick="navigate('/rankings')">Creators</button>
-                <button class="rk-tab" onclick="navigate('/rankings?mode=voters')">Top Voters</button>
-              </div>
-              <div class="page-hero-meta">
-                <span class="page-hero-tag ${!leagueFilter ? 'page-hero-tag--active' : ''}" onclick="navigate('/rankings')" style="cursor:pointer${!leagueFilter ? ';background:rgba(246,190,6,.25);border-color:rgba(246,190,6,.4);color:#fff' : ''}">All leagues</span>
-                ${LEAGUES.map(l =>
-                  `<span class="page-hero-tag" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}')" style="cursor:pointer${leagueFilter === l.name ? ';background:rgba(246,190,6,.25);border-color:rgba(246,190,6,.4);color:#fff' : ''}">${l.name}</span>`
-                ).join('')}
-              </div>
-            </div>
-          </div>
-        </div>
+    <div class="container" style="padding-top:40px">
+      <h1 style="font-size:1.8rem;font-weight:800;margin-bottom:4px">Creator Rankings</h1>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:12px">${mode === 'subs' ? 'Ranked by YouTube subscriber count.' : 'Ranked by community ratings. Rate your favorites to influence the leaderboard.'}</p>
+      <div class="top-creators-tabs" style="margin-bottom:16px">
+        <button class="top-creators-tab ${mode === 'subs' ? 'active' : ''}" onclick="navigate('/rankings${leagueFilter ? '?league=' + encodeURIComponent(leagueFilter) : ''}')">By Subscribers</button>
+        <button class="top-creators-tab ${mode === 'rating' ? 'active' : ''}" onclick="navigate('/rankings?mode=rating${leagueFilter ? '&league=' + encodeURIComponent(leagueFilter) : ''}')">By Rating</button>
       </div>
-    </div>
-
-    ${stripTeams.length ? `<div class="rk-team-strip">
-      <div class="container">
-        <div class="rk-team-strip-inner">
-          <button class="rk-team-btn rk-team-btn--all${!teamFilter ? ' rk-team-btn--active' : ''}" onclick="navigate('/rankings${leagueFilter ? '?league=' + encodeURIComponent(leagueFilter) : ''}')">All</button>
-          ${stripTeams.map(t => {
-            const url = TEAM_CRESTS[t];
-            const active = teamFilter === t ? ' rk-team-btn--active' : '';
-            const href = '/rankings?' + (leagueFilter ? 'league=' + encodeURIComponent(leagueFilter) + '&' : '') + 'team=' + encodeURIComponent(t);
-            return url ? `<button class="rk-team-btn${active}" title="${escHtml(t)}" onclick="navigate('${href}')"><img src="${url}" alt="${escHtml(t)}"></button>` : '';
-          }).join('')}
-        </div>
+      <div class="chip-row" style="justify-content:flex-start;margin-bottom:24px">
+        <span class="chip ${!leagueFilter ? 'active' : ''}" onclick="navigate('/rankings${mode === 'rating' ? '?mode=rating' : ''}')">All leagues</span>
+        ${LEAGUES.map(l =>
+          `<span class="chip ${leagueFilter === l.name ? 'active' : ''}" onclick="navigate('/rankings?league=${encodeURIComponent(l.name)}${modeParam}')">${leagueChipImg(l.name)} ${l.name}</span>`
+        ).join('')}
       </div>
-    </div>` : ''}
-
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
       ${ranked.length ? `
-      <div class="sc-card" style="margin-bottom:0">
-        <div class="sc-head" style="flex-wrap:wrap;gap:8px">
-          <div class="sc-head-title">&#127942; ${teamFilter ? escHtml(teamFilter) : (leagueFilter ? escHtml(leagueFilter) : 'All Leagues')}</div>
-          <div class="rk-sort-row">
-            <span class="rk-sort-label">Sort by</span>
-            <button class="rk-sort-btn${mode === 'winpct' ? ' rk-sort-btn--active' : ''}" onclick="navigate('${sortUrl('winpct')}')">Win %</button>
-            <button class="rk-sort-btn${mode === 'wins' ? ' rk-sort-btn--active' : ''}" onclick="navigate('${sortUrl('wins')}')">Battles Won</button>
-            <button class="rk-sort-btn${mode === 'subs' ? ' rk-sort-btn--active' : ''}" onclick="navigate('${sortUrl('subs')}')">Subscribers</button>
-          </div>
-        </div>
-        <div class="sc-body--tight">
-      <div class="rankings-card" style="border:none;border-radius:0;box-shadow:none">${ranked.map((c, i) => {
+      <div class="rankings-summary">
+        <span><strong>${ranked.length}</strong> creator${ranked.length !== 1 ? 's' : ''}${leagueFilter ? ` in ${escHtml(leagueFilter)}` : ''}</span>
+        ${mode === 'subs' ? `<span>Combined <strong>${formatNum(ranked.reduce((a, c) => a + (c.subscriberCount || 0), 0))}</strong> subscribers</span>` : `<span><strong>${ranked.reduce((a, c) => a + (c.ratingCount || 0), 0)}</strong> reviews total</span>`}
+      </div>
+      <div class="rankings-card">${ranked.map((c, i) => {
         const rankClass = i < 3 ? ' rk-row--top rk-row--top' + (i + 1) : '';
-        const b = c._battle;
+        const freq = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
+        const videos = c.videoCount ? formatNum(c.videoCount) + ' videos' : '';
+        const metaParts = [freq, videos].filter(Boolean);
         const currentRank = i + 1;
-        // Score display based on sort mode
-        let scoreHtml = '';
-        if (mode === 'winpct') {
-          scoreHtml = b.total > 0
-            ? `<div class="rk-score-num">${b.winPct}%</div><div class="rk-score-label">${b.wins}W–${b.losses}L</div>`
-            : `<div class="rk-score-num" style="color:var(--text-muted)">–</div><div class="rk-score-label">no battles</div>`;
-        } else if (mode === 'wins') {
-          scoreHtml = `<div class="rk-score-num">${b.wins}</div><div class="rk-score-label">${b.total > 0 ? b.winPct + '% win' : 'no battles'}</div>`;
-        } else {
-          scoreHtml = `<div class="rk-score-num">${formatNum(c.subscriberCount)}</div><div class="rk-score-label">subscribers</div>`;
+        const prev = prevRanks[c.id];
+        let move = '';
+        if (prev == null) {
+          if (c[prevField] <= 0) move = '<span class="rk-move rk-move--new">NEW</span>';
+        } else if (prev > currentRank) {
+          move = `<span class="rk-move rk-move--up">&uarr;${prev - currentRank}</span>`;
+        } else if (prev < currentRank) {
+          move = `<span class="rk-move rk-move--down">&darr;${currentRank - prev}</span>`;
         }
-        // Battle mini-stat for subs mode
-        const battleMini = mode === 'subs' && b.total > 0 ? `<span class="rk-battle-mini" title="${b.wins}W–${b.losses}L (${b.winPct}%)">⚔ ${b.wins}W ${b.winPct}%</span>` : '';
         return `
         <a href="${creatorLink(c)}" class="rk-row${rankClass}${c.isLive ? ' rk-row--live' : ''}">
-          <div class="rk-rank">${currentRank}</div>
+          <div class="rk-rank">${currentRank}${move}</div>
           <span class="av-wrap">${avatarImg(c, 'rk-avatar')}</span>
           <div class="rk-info">
             <div class="rk-name">${liveDot(c.isLive)}${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}</div>
             <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
           </div>
-          <div class="rk-meta">${battleMini || (b.total > 0 && mode !== 'subs' ? formatNum(c.subscriberCount) + ' subs' : '')}</div>
-          <div class="rk-score">${scoreHtml}</div>
+          <div class="rk-meta">${metaParts.join(' &middot; ')}</div>
+          <div class="rk-score">
+            ${mode === 'subs'
+              ? `<div class="rk-score-num">${formatNum(c.subscriberCount)}</div><div class="rk-score-label">subscribers</div>`
+              : `<div class="rk-score-num">${c.avgRating || '—'} <span class="rk-score-star">&#9733;</span></div><div class="rk-score-label">${c.ratingCount} review${c.ratingCount !== 1 ? 's' : ''}</div>`}
+          </div>
           <span class="rk-arrow">&rsaquo;</span>
         </a>
-      `;}).join('')}</div>
-        </div>
-      </div>` :
-        `<div class="empty-state"><div class="es-icon">&#127942;</div><div class="es-title">No rankings yet</div><p style="color:var(--text-dim)">No subscriber data available.</p></div>`}
+      `;}).join('')}</div>` :
+        `<div class="empty-state"><div class="es-icon">&#127942;</div><div class="es-title">No rankings yet</div><p style="color:var(--text-dim)">${mode === 'subs' ? 'No subscriber data available.' : 'Be the first to rate a creator and start the rankings!'}</p></div>`}
     </div>
     ${renderFooter()}
   `;
-}
-
-// ── Render: Voter Leaderboard ─────────────────────────────────────────────
-async function renderVoterLeaderboard() {
-  document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">&#127942; Weekly Rankings</div>
-            <h1 class="page-hero-title">Top Voters</h1>
-            <p class="page-hero-subtitle">The most active voters in Creator Battles.</p>
-            <div class="rk-tabs-row">
-              <div class="rk-tabs">
-                <button class="rk-tab" onclick="navigate('/rankings')">Creators</button>
-                <button class="rk-tab rk-tab--active" onclick="navigate('/rankings?mode=voters')">Top Voters</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
-      <div id="voterLbBody"><div class="empty-state" style="padding:40px 0"><div style="color:var(--text-dim)">Loading leaderboard…</div></div></div>
-    </div>${renderFooter()}`;
-
-  const { data: voters, error } = await sbRpc('get_top_voters', { lim: 50 });
-  const body = document.getElementById('voterLbBody');
-  if (!body) return;
-
-  if (error || !voters || !voters.length) {
-    body.innerHTML = '<div class="empty-state"><div class="es-icon">&#128499;</div><div class="es-title">No votes yet</div><p style="color:var(--text-dim)">Be the first to vote in a Creator Battle!</p></div>';
-    return;
-  }
-
-  body.innerHTML = `
-    <div class="sc-card" style="margin-bottom:0">
-      <div class="sc-head">
-        <div class="sc-head-title">&#128499; Top Voters</div>
-        <div style="font-size:.82rem;color:var(--text-dim)">${voters.length} voter${voters.length !== 1 ? 's' : ''}</div>
-      </div>
-      <div class="sc-body--tight">
-        <div class="rankings-card" style="border:none;border-radius:0;box-shadow:none">
-          ${voters.map((v, i) => {
-            const rankClass = i < 3 ? ' rk-row--top rk-row--top' + (i + 1) : '';
-            return `<div class="rk-row${rankClass}" style="cursor:default">
-              <div class="rk-rank">${i + 1}</div>
-              <span class="av-wrap"><div class="rk-avatar avatar-fallback" style="width:40px;height:40px;font-size:.8rem">${(v.display_name || '?')[0].toUpperCase()}</div></span>
-              <div class="rk-info">
-                <div class="rk-name">${escHtml(v.display_name)}</div>
-              </div>
-              <div class="rk-score">
-                <div class="rk-score-num">${formatNum(Number(v.vote_count))}</div>
-                <div class="rk-score-label">votes</div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
-    </div>`;
 }
 
 // ── Render: Generator ────────────────────────────────────────────────────
@@ -2380,27 +1630,16 @@ function renderSubmit() {
   }
 
   document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">Community</div>
-            <h1 class="page-hero-title">Submit a Creator</h1>
-            <p class="page-hero-subtitle">Know a great football YouTuber? Suggest them for the database. Submissions are reviewed before being published.</p>
-          </div>
-        </div>
+    <div class="container" style="max-width:560px;padding-top:48px;padding-bottom:60px">
+      <div style="text-align:center;margin-bottom:32px">
+        <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:6px">Submit a Creator</h1>
+        <p style="color:var(--text-dim);font-size:.9rem">Know a great football YouTuber? Suggest them for the database. Submissions are reviewed before being published.</p>
       </div>
-    </div>
-
-    <div class="container" style="max-width:560px;padding-top:28px;padding-bottom:60px">
       <div id="submitForm">
-        <div class="sc-card" style="margin-bottom:0">
-          <div class="sc-head"><div class="sc-head-title">Creator details</div></div>
-          <div class="sc-body">
+        <div class="gen-card" style="margin-bottom:0">
           <div style="margin-bottom:14px">
             <label class="field-label">YouTube Channel URL</label>
-            <input type="text" id="sub_channel" class="admin-form-input" placeholder="e.g. https://www.youtube.com/@AFTVmedia" oninput="checkDuplicateChannel(this.value)">
-            <div id="channelDupeWarn" class="dupe-warn"></div>
+            <input type="text" id="sub_channel" class="admin-form-input" placeholder="e.g. https://www.youtube.com/@AFTVmedia">
             <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">We'll fetch the channel name automatically.</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -2417,7 +1656,6 @@ function renderSubmit() {
           </div>
           <button class="btn-generate" onclick="submitCreator()" style="margin-top:8px">Submit for Review</button>
           <div id="submitMsg" style="text-align:center;margin-top:12px;font-size:.85rem"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -2429,25 +1667,6 @@ function renderSubmit() {
 function submitTeamOpts(league) {
   var teams = Object.entries(TEAM_TO_LEAGUE).filter(function(e) { return e[1] === league; }).map(function(e) { return e[0]; }).sort();
   return '<option value="">Select team...</option>' + teams.map(function(t) { return '<option value="' + escHtml(t) + '">' + escHtml(t) + '</option>'; }).join('') + '<option value="Multi-Club / Other">Multi-Club / Other</option>';
-}
-
-let _dupeTimer = null;
-function checkDuplicateChannel(val) {
-  clearTimeout(_dupeTimer);
-  const warn = document.getElementById('channelDupeWarn');
-  if (!warn) return;
-  _dupeTimer = setTimeout(() => {
-    const m = val.match(/@([A-Za-z0-9_.-]+)/);
-    if (!m) { warn.style.display = 'none'; return; }
-    const handle = m[1].toLowerCase();
-    const match = creators.find(c => (c.channel || '').toLowerCase().includes('@' + handle));
-    if (match) {
-      warn.innerHTML = '⚠ This channel may already be in our database: <a href="' + creatorLink(match) + '">' + escHtml(match.name) + '</a> (' + escHtml(match.team) + ')';
-      warn.style.display = 'block';
-    } else {
-      warn.style.display = 'none';
-    }
-  }, 300);
 }
 
 async function submitCreator() {
@@ -2530,7 +1749,7 @@ async function submitCreator() {
 async function loadUserProfile(userId) {
   const emptyProfile = {
     user_id: userId, display_name: '', avatar_url: '', favourite_team: '',
-    country: '', bio: '', notify_live: false, notify_weekly: true,
+    country: '', bio: '', notify_live: false, notify_weekly: true, reviews_public: true,
   };
   try {
     const url = `${SUPABASE_URL}/rest/v1/frfc_user_profiles?select=*&user_id=eq.${userId}&limit=1`;
@@ -2544,38 +1763,24 @@ async function loadUserProfile(userId) {
 async function renderAccount() {
   if (!currentUser) return renderAuthRequired('access your account settings');
   const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">My account</div>
-            <h1 class="page-hero-title">Account Settings</h1>
-            <p class="page-hero-subtitle">Update how you appear on FanReactionsFC.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="container" style="max-width:720px;padding-top:28px;padding-bottom:60px">
-      <div id="accountBody"><div class="empty-state" style="padding:40px 0"><div style="color:var(--text-dim)">Loading…</div></div></div>
-    </div>${renderFooter()}`;
+  app.innerHTML = `<div class="container" style="max-width:720px;padding-top:48px;padding-bottom:60px">
+    <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:6px">Account settings</h1>
+    <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:28px">Update how you appear on FanReactionsFC.</p>
+    <div id="accountBody"><div class="empty-state" style="padding:40px 0"><div style="color:var(--text-dim)">Loading…</div></div></div>
+  </div>${renderFooter()}`;
 
   const profile = await loadUserProfile(currentUser.id);
   const memberSince = currentUser.created_at ? new Date(currentUser.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : '';
 
-  // Favorites count + voter stats
-  let favCount = 0;
-  let voterTotalVotes = 0;
-  let voterPreferred = [];
+  // Reviews + favorites count
+  let reviewsCount = 0, favCount = 0;
   try {
-    const [fRes, vStatsRes, vPrefRes] = await Promise.all([
+    const [rRes, fRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/frfc_reviews?select=id&user_id=eq.${currentUser.id}`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'count=exact' } }),
       fetch(`${SUPABASE_URL}/rest/v1/frfc_streamer_favorites?select=streamer_id&user_id=eq.${currentUser.id}`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'count=exact' } }),
-      sbRpc('get_voter_stats', { uid: currentUser.id }),
-      sbRpc('get_voter_preferred_creators', { uid: currentUser.id, lim: 5 })
     ]);
+    reviewsCount = (await rRes.json()).length;
     favCount = (await fRes.json()).length;
-    voterTotalVotes = vStatsRes.data && vStatsRes.data.length ? Number(vStatsRes.data[0].total_votes) : 0;
-    voterPreferred = vPrefRes.data || [];
   } catch {}
 
   // Team options grouped by league (same logic as submit form)
@@ -2596,100 +1801,78 @@ async function renderAccount() {
   const initials = avatarInitials(profile.display_name || currentUser.email);
 
   document.getElementById('accountBody').innerHTML = `
-    <div class="sc-card" style="margin-bottom:16px">
-      <div class="sc-head"><div class="sc-head-title">Profile picture</div></div>
-      <div class="sc-body">
-        <div class="acct-avatar-row">
-          <div id="acctAvatarPreview" class="acct-avatar">${avatarPreview ? `<img src="${escHtml(avatarPreview)}" alt="">` : `<div class="avatar-fallback">${escHtml(initials)}</div>`}</div>
-          <div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-              <label for="acctAvatarFile" class="btn btn-secondary btn-sm" style="cursor:pointer">Upload new photo</label>
-              <input type="file" id="acctAvatarFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
-              ${avatarPreview ? '<button class="btn btn-ghost btn-sm" onclick="removeAvatar()" type="button">Remove</button>' : ''}
-              <span id="acctAvatarMsg" style="font-size:.78rem;color:var(--text-muted)"></span>
-            </div>
-            <div style="font-size:.72rem;color:var(--text-muted)">JPG, PNG, WebP or GIF — up to 2MB.</div>
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="acct-avatar-row">
+        <div id="acctAvatarPreview" class="acct-avatar">${avatarPreview ? `<img src="${escHtml(avatarPreview)}" alt="">` : `<div class="avatar-fallback">${escHtml(initials)}</div>`}</div>
+        <div>
+          <label class="field-label">Profile picture</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label for="acctAvatarFile" class="btn btn-secondary btn-sm" style="cursor:pointer">Upload new photo</label>
+            <input type="file" id="acctAvatarFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+            ${avatarPreview ? '<button class="btn btn-ghost btn-sm" onclick="removeAvatar()" type="button">Remove</button>' : ''}
+            <span id="acctAvatarMsg" style="font-size:.78rem;color:var(--text-muted)"></span>
           </div>
+          <div style="font-size:.72rem;color:var(--text-muted);margin-top:6px">JPG, PNG, WebP or GIF — up to 2MB.</div>
         </div>
       </div>
     </div>
 
-    <div class="sc-card" style="margin-bottom:16px">
-      <div class="sc-head"><div class="sc-head-title">Identity</div></div>
-      <div class="sc-body">
-        <div style="margin-bottom:14px">
-          <label class="field-label">Display name</label>
-          <input id="acctName" class="admin-form-input" placeholder="Your display name" value="${escHtml(profile.display_name || '')}">
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Identity</div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Display name</label>
+        <input id="acctName" class="admin-form-input" placeholder="How you'll appear on reviews" value="${escHtml(profile.display_name || '')}">
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Bio</label>
+        <textarea id="acctBio" class="admin-form-input" style="min-height:72px;resize:vertical" placeholder="One line about you — optional">${escHtml(profile.bio || '')}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <label class="field-label">Favourite club</label>
+          <select id="acctTeam" class="admin-form-select">${teamOpts}</select>
         </div>
-        <div style="margin-bottom:14px">
-          <label class="field-label">Bio</label>
-          <textarea id="acctBio" class="admin-form-input" style="min-height:72px;resize:vertical" placeholder="One line about you — optional">${escHtml(profile.bio || '')}</textarea>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-          <div>
-            <label class="field-label">Favourite club</label>
-            <select id="acctTeam" class="admin-form-select">${teamOpts}</select>
-          </div>
-          <div>
-            <label class="field-label">Country</label>
-            <select id="acctCountry" class="admin-form-select">${countryOpts}</select>
-          </div>
+        <div>
+          <label class="field-label">Country</label>
+          <select id="acctCountry" class="admin-form-select">${countryOpts}</select>
         </div>
       </div>
     </div>
 
-    <div class="sc-card" style="margin-bottom:16px">
-      <div class="sc-head"><div class="sc-head-title">Account</div></div>
-      <div class="sc-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-          <div>
-            <label class="field-label">Email</label>
-            <input class="admin-form-input" value="${escHtml(currentUser.email || '')}" disabled>
-          </div>
-          <div>
-            <label class="field-label">Member since</label>
-            <input class="admin-form-input" value="${escHtml(memberSince)}" disabled>
-          </div>
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Account</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div>
+          <label class="field-label">Email</label>
+          <input class="admin-form-input" value="${escHtml(currentUser.email || '')}" disabled>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change email</button>
-          <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change password</button>
+        <div>
+          <label class="field-label">Member since</label>
+          <input class="admin-form-input" value="${escHtml(memberSince)}" disabled>
         </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change email</button>
+        <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change password</button>
       </div>
     </div>
 
-    <div class="sc-card" style="margin-bottom:16px">
-      <div class="sc-head"><div class="sc-head-title">Notifications</div></div>
-      <div class="sc-body">
-        <label class="acct-check"><input type="checkbox" id="acctNotifyLive" ${profile.notify_live ? 'checked' : ''}> Email me when a favourite creator goes live</label>
-        <label class="acct-check"><input type="checkbox" id="acctNotifyWeekly" ${profile.notify_weekly ? 'checked' : ''}> Send me the weekly digest</label>
-      </div>
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Notifications</div>
+      <label class="acct-check"><input type="checkbox" id="acctNotifyLive" ${profile.notify_live ? 'checked' : ''}> Email me when a favourite creator goes live</label>
+      <label class="acct-check"><input type="checkbox" id="acctNotifyWeekly" ${profile.notify_weekly ? 'checked' : ''}> Send me the weekly digest</label>
     </div>
 
-    <div class="sc-card" style="margin-bottom:16px">
-      <div class="sc-head"><div class="sc-head-title">Activity</div></div>
-      <div class="sc-body">
-        <div class="cp-stat-cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:${voterPreferred.length ? '14px' : '0'}">
-          <div class="cp-stat-card cp-stat-card--primary">
-            <div class="cp-stat-label">Favourited</div>
-            <div class="cp-stat-num">${favCount}</div>
-          </div>
-          <div class="cp-stat-card">
-            <div class="cp-stat-label">Battle Votes</div>
-            <div class="cp-stat-num">${formatNum(voterTotalVotes)}</div>
-          </div>
-        </div>
-        ${voterPreferred.length ? `
-        <div class="field-label" style="margin-bottom:8px">Your Top Creators</div>
-        <div class="voter-top-creators">${voterPreferred.map(pc => {
-          const cr = creators.find(x => x.id === pc.creator_id);
-          if (!cr) return '';
-          return `<a href="${creatorLink(cr)}" class="voter-top-item">
-            <span class="av-wrap">${avatarImg(cr, 'voter-top-av')}</span>
-            <span class="voter-top-name">${escHtml(cr.name)}</span>
-            <span class="voter-top-count">${pc.vote_count} vote${pc.vote_count > 1 ? 's' : ''}</span>
-          </a>`;
-        }).join('')}</div>` : ''}
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Privacy</div>
+      <label class="acct-check"><input type="checkbox" id="acctReviewsPublic" ${profile.reviews_public ? 'checked' : ''}> Show my reviews publicly</label>
+    </div>
+
+    <div class="gen-card" style="margin-bottom:16px">
+      <div class="gen-card-title">Activity</div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap">
+        <div><div style="font-size:1.4rem;font-weight:800">${reviewsCount}</div><div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Reviews written</div></div>
+        <div><div style="font-size:1.4rem;font-weight:800">${favCount}</div><div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Creators favourited</div></div>
       </div>
     </div>
 
@@ -2719,13 +1902,13 @@ async function handleAvatarUpload(e) {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${currentUser.id}/avatar.${ext}`;
   try {
-    const _avToken = _getAccessToken();
-    if (_avToken === SUPABASE_KEY) { msg.textContent = 'Please sign in again.'; msg.style.color = 'var(--red)'; return; }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { msg.textContent = 'Please sign in again.'; msg.style.color = 'var(--red)'; return; }
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/avatars/${path}`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${_avToken}`,
+        Authorization: `Bearer ${session.access_token}`,
         'Content-Type': file.type || 'application/octet-stream',
         'x-upsert': 'true',
       },
@@ -2740,7 +1923,7 @@ async function handleAvatarUpload(e) {
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
     // Update preview
     const preview = document.getElementById('acctAvatarPreview');
-    if (preview) preview.innerHTML = `<img src="${escHtml(publicUrl)}" alt="">`;
+    if (preview) preview.innerHTML = `<img src="${publicUrl}" alt="">`;
     // Persist to profile row via upsert
     await upsertProfile({ avatar_url: publicUrl });
     // Update cached profile + header button so the top-right refreshes instantly.
@@ -2771,7 +1954,8 @@ async function removeAvatar() {
 // into the user's row (creating it if it doesn't exist yet).
 async function upsertProfile(patch) {
   const body = { user_id: currentUser.id, updated_at: new Date().toISOString(), ...patch };
-  const token = _getAccessToken();
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session?.access_token || SUPABASE_KEY;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/frfc_user_profiles?on_conflict=user_id`, {
     method: 'POST',
     headers: {
@@ -2796,6 +1980,7 @@ async function saveAccount() {
     country: document.getElementById('acctCountry').value || null,
     notify_live: document.getElementById('acctNotifyLive').checked,
     notify_weekly: document.getElementById('acctNotifyWeekly').checked,
+    reviews_public: document.getElementById('acctReviewsPublic').checked,
   };
   const res = await upsertProfile(patch);
   if (res.ok) {
@@ -2825,7 +2010,7 @@ async function renderAdmin() {
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${currentUser.id}`,
-      { headers: _sbAuthHeaders() }
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${(await sb.auth.getSession()).data.session?.access_token || SUPABASE_KEY}` } }
     );
     if (res.ok) {
       const rows = await res.json();
@@ -2850,31 +2035,15 @@ async function renderAdmin() {
 function openModal(type = 'signin') {
   const overlay = document.getElementById('authOverlay');
   const modal = document.getElementById('authModal');
-  if (type === 'reset') {
-    modal.innerHTML = `
-      <button class="modal-close" onclick="closeModal()">&times;</button>
-      <h2>Reset your password</h2>
-      <p class="modal-sub">Enter your email and we'll send you a link to reset your password.</p>
-      <label>Email</label>
-      <input type="email" id="authEmail" placeholder="you@example.com">
-      <button class="btn btn-primary" onclick="handleResetPassword()">Send Reset Link</button>
-      <div class="auth-msg" id="authMsg"></div>
-      <div class="switch-link">
-        <a href="#" onclick="event.preventDefault();openModal('signin')">Back to Sign In</a>
-      </div>`;
-    overlay.classList.add('open');
-    return;
-  }
   const isSignIn = type === 'signin';
   modal.innerHTML = `
     <button class="modal-close" onclick="closeModal()">&times;</button>
     <h2>${isSignIn ? 'Welcome back' : 'Create an account'}</h2>
-    <p class="modal-sub">${isSignIn ? 'Sign in to follow and favourite creators.' : 'Join the community of football YouTube fans.'}</p>
+    <p class="modal-sub">${isSignIn ? 'Sign in to rate, review, and follow creators.' : 'Join the community and start rating creators.'}</p>
     <label>Email</label>
     <input type="email" id="authEmail" placeholder="you@example.com">
     <label>Password</label>
     <input type="password" id="authPass" placeholder="${isSignIn ? 'Your password' : 'Choose a password'}">
-    ${isSignIn ? '<a href="#" class="forgot-link" onclick="event.preventDefault();openModal(\'reset\')">Forgot your password?</a>' : ''}
     <button class="btn btn-primary" onclick="handleAuth('${type}')">${isSignIn ? 'Sign In' : 'Create Account'}</button>
     <div class="auth-msg" id="authMsg"></div>
     <div class="switch-link">
@@ -2944,24 +2113,6 @@ async function submitReport(creatorId) {
   }
 }
 
-async function handleResetPassword() {
-  const email = document.getElementById('authEmail').value.trim();
-  const msg = document.getElementById('authMsg');
-  if (!email) { msg.textContent = 'Please enter your email address.'; return; }
-  try {
-    const { error } = await _authPost('recover', {
-      email,
-      gotrue_meta_security: { captcha_token: '' },
-    });
-    if (error) { msg.style.color = 'var(--red)'; msg.textContent = error.message; return; }
-    msg.style.color = 'var(--green)';
-    msg.textContent = 'Check your email for a password reset link.';
-  } catch (e) {
-    msg.style.color = 'var(--red)';
-    msg.textContent = 'Something went wrong. Please try again.';
-  }
-}
-
 async function handleAuth(type) {
   const email = document.getElementById('authEmail').value.trim();
   const pass = document.getElementById('authPass').value;
@@ -2976,324 +2127,6 @@ async function handleAuth(type) {
     msg.style.color = 'var(--green)';
     msg.textContent = 'Account created! Check your email to confirm, then sign in.';
   }
-}
-
-// ── Render: Streamwall ───────────────────────────────────────────────────
-let _swLeague = '';
-let _swMuted = false;
-
-function swFilterLeague(el, league) {
-  _swLeague = league;
-  el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  filterStreamwall();
-}
-
-function filterStreamwall() {
-  const q = (document.getElementById('swSearch') || {}).value || '';
-  const ql = q.toLowerCase();
-  const grid = document.getElementById('swCardGrid');
-  if (!grid) return;
-  let filtered = creators.slice();
-  if (_swLeague) filtered = filtered.filter(c => (c.league || getLeague(c.team)) === _swLeague);
-  if (ql) filtered = filtered.filter(c => c.name.toLowerCase().includes(ql) || c.team.toLowerCase().includes(ql) || (c.league || '').toLowerCase().includes(ql));
-  filtered.sort((a, b) => (b.isLive ? 1 : 0) - (a.isLive ? 1 : 0) || b.subscriberCount - a.subscriberCount);
-  grid.innerHTML = filtered.length
-    ? filtered.map(c => creatorCard(c)).join('')
-    : '<div class="sw-empty"><div class="sw-empty-icon">&#128269;</div><div class="sw-empty-title">No creators found</div><div class="sw-empty-desc">Try a different search or filter.</div></div>';
-}
-
-function swMuteAll() {
-  _swMuted = !_swMuted;
-  document.querySelectorAll('.sw-tile-video iframe').forEach(iframe => {
-    try { iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: _swMuted ? 'mute' : 'unMute', args: [] }), '*'); } catch (e) {}
-  });
-  const btn = document.getElementById('swMuteBtn');
-  if (btn) btn.innerHTML = _swMuted ? '&#128266; Unmute All' : '&#128263; Mute All';
-}
-
-function swSeekLive() {
-  document.querySelectorAll('.sw-tile-video iframe').forEach(iframe => {
-    try { iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [99999, true] }), '*'); } catch (e) {}
-  });
-}
-
-function renderStreamwall() {
-  const liveCreators = creators.filter(c => c.isLive && c.liveVideoId);
-  const sorted = [...creators].sort((a, b) => (b.isLive ? 1 : 0) - (a.isLive ? 1 : 0) || b.subscriberCount - a.subscriberCount);
-  _swLeague = '';
-  _swMuted = false;
-
-  document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">Live</div>
-            <h1 class="page-hero-title">Streamwall</h1>
-            <p class="page-hero-subtitle">Watch multiple football creators streaming live, all at once. Filter by league, search by name, or browse all ${creators.length} creators.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
-      <!-- Toolbar -->
-      <div class="sw-toolbar">
-        <div class="sw-search-wrap">
-          <span class="sw-search-icon">&#128269;</span>
-          <input class="sw-search-input" type="text" placeholder="Search creators by name or club..." id="swSearch" oninput="filterStreamwall()">
-        </div>
-        <div class="sw-filter-row">
-          <span class="chip active" onclick="swFilterLeague(this,'')">All</span>
-          ${LEAGUES.map(l => `<span class="chip" onclick="swFilterLeague(this,'${escHtml(l.name)}')">${leagueChipImg(l.name)} ${escHtml(l.name)}</span>`).join('')}
-        </div>
-        ${liveCreators.length ? `
-        <div class="sw-controls">
-          <button class="sw-ctrl-btn" onclick="swMuteAll()" id="swMuteBtn">&#128263; Mute All</button>
-          <button class="sw-ctrl-btn" onclick="swSeekLive()">&#128308; Go Live</button>
-        </div>` : ''}
-        <div class="sw-stats"><strong>${creators.length}</strong> creators${liveCreators.length ? ` &middot; <strong style="color:var(--red,#e53935)">${liveCreators.length}</strong> live now` : ''}</div>
-      </div>
-
-      ${liveCreators.length ? `
-      <!-- Live Section -->
-      <div class="sw-section">
-        <div class="sw-section-head">
-          <div class="sw-section-title"><span class="live-dot-sm"></span> Live Now <span class="sw-live-count">${liveCreators.length}</span></div>
-        </div>
-        <div class="sw-live-grid">
-          ${liveCreators.slice(0, 8).map(c => `
-            <div class="sw-tile">
-              <div class="sw-tile-video">
-                <iframe src="https://www.youtube.com/embed/${safeId(c.liveVideoId)}?autoplay=0&enablejsapi=1" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-              </div>
-              <div class="sw-tile-bar">
-                ${avatarImg(c, 'sw-tile-avatar')}
-                <div class="sw-tile-info">
-                  <div class="sw-tile-name"><a href="${creatorLink(c)}">${escHtml(c.name)}</a></div>
-                  <div class="sw-tile-meta">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.subscriberCount ? '&middot; ' + formatNum(c.subscriberCount) + ' subs' : ''}</div>
-                </div>
-                <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red,#e53935);color:#fff;flex-shrink:0;font-size:.72rem">Watch &rarr;</a>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>` : `
-      <div class="sc-card" style="margin-bottom:24px">
-        <div class="sc-body sw-empty">
-          <div class="sw-empty-icon">&#128225;</div>
-          <div class="sw-empty-title">No one is live right now</div>
-          <div class="sw-empty-desc">When football creators go live, their streams will appear here in a multi-view grid. Browse all creators below.</div>
-        </div>
-      </div>`}
-
-      <!-- Browse All Creators -->
-      <div class="sw-section">
-        <div class="sw-section-head">
-          <div class="sw-section-title">All Creators</div>
-        </div>
-        <div class="sw-card-grid" id="swCardGrid">
-          ${sorted.map(c => creatorCard(c)).join('')}
-        </div>
-      </div>
-    </div>
-    ${renderFooter()}
-  `;
-}
-
-// ── Render: Become a Creator ─────────────────────────────────────────────
-function renderBecomeCreator() {
-  document.getElementById('app').innerHTML = `
-    <div class="page-hero">
-      <div class="container">
-        <div class="page-hero-inner">
-          <div class="page-hero-text">
-            <div class="page-hero-eyebrow">Free Guide</div>
-            <h1 class="page-hero-title">How to Start a Football Live Streaming Channel on YouTube</h1>
-            <p class="page-hero-subtitle">A free, step-by-step guide to setting up a professional YouTube watchalong channel with live scoreboards, overlays, and chat — using free tools.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
-      <div class="sc-card" style="margin-bottom:24px">
-        <div class="sc-body" style="padding:0;overflow:hidden">
-          <div style="aspect-ratio:16/9;width:100%;background:#000">
-            <iframe src="https://www.youtube.com/embed/RA7-Wtsk8Pg" style="width:100%;height:100%;border:0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-          </div>
-        </div>
-      </div>
-
-      <div class="tutorial-body">
-        <div class="tutorial-toc">
-          <div class="tutorial-toc-title">In this guide</div>
-          <ol>
-            <li><a href="#tut-intro">Why start a football reaction channel?</a></li>
-            <li><a href="#tut-tools">The three free streaming tools you need</a></li>
-            <li><a href="#tut-prism">Setting up Prism Live Studio</a></li>
-            <li><a href="#tut-overlays">Creating overlays with Canva</a></li>
-            <li><a href="#tut-yuno">Scoreboard &amp; live chat overlay for YouTube</a></li>
-            <li><a href="#tut-golive">Going live on YouTube</a></li>
-            <li><a href="#tut-tips">Tips for growing your channel</a></li>
-            <li><a href="#tut-faq">FAQ</a></li>
-          </ol>
-        </div>
-
-        <h2 id="tut-intro">Why Start a Football Reaction Channel?</h2>
-        <p>Football live streaming and watchalongs have become one of the most popular formats on YouTube. Fan reaction channels have built massive communities around live match coverage. If you're passionate about football and want to start your own YouTube live streaming channel, the great news is you can do it today with zero budget.</p>
-        <p>All you need is a computer, a webcam (even your built-in one works), a microphone, and the three free tools outlined in this guide. Whether you support a Premier League, La Liga, Serie A, Bundesliga, or Ligue 1 club — there's an audience waiting for your football fan reactions and watchalong streams.</p>
-
-        <h2 id="tut-tools">The Three Free YouTube Live Stream Tools You Need</h2>
-
-        <div class="tutorial-tool">
-          <div class="tutorial-tool-logo">
-            <img src="https://guide.prismlive.com/~gitbook/image?url=https%3A%2F%2F3567613719-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Forganizations%252FbCO3shMLhrSk9ldAM0kr%252Fsites%252Fsite_BrYGm%252Flogo%252FXToC2ZUX76co4tmjmwx7%252FPRISM%2520Live%2520Studio_logo_512x512.png%3Falt%3Dmedia%26token%3D5e61b924-c3c3-4e53-b1b8-d6c93898fbf7&width=260&dpr=3&quality=100&sign=877301fa&sv=2" alt="Prism Live Studio" onerror="this.parentNode.innerHTML='&#127916;'">
-          </div>
-          <div>
-            <div class="tutorial-tool-name">Prism Live Studio</div>
-            <div class="tutorial-tool-desc">A free streaming app that sits between StreamYard's simplicity and OBS's power. Available for Mac and Windows. Comes with built-in widgets for live chat, viewer count, and GIF stickers — no plugins needed. Includes <strong>Prism Lens</strong> for webcam management, virtual green screens, and background effects.</div>
-            <a href="https://prismlive.com/en_us/" target="_blank" rel="noopener" class="tutorial-tool-link">Visit Website &rarr;</a>
-          </div>
-        </div>
-
-        <div class="tutorial-tool">
-          <div class="tutorial-tool-logo">
-            <img src="https://yt3.googleusercontent.com/LFbmgXAoEB5oxQMNUm4kqWpallwbZVMXfFnCsH2NvB3sbOsK7EcQZblMjJR64CT-qE-O8qAokA=s900-c-k-c0x00ffffff-no-rj" alt="Uno Overlays" onerror="this.parentNode.innerHTML='&#9917;'">
-          </div>
-          <div>
-            <div class="tutorial-tool-name">Uno Overlays</div>
-            <div class="tutorial-tool-desc">Free real-time overlays purpose-built for sports streaming. Provides live scoreboards, game clocks, lineup displays, and more. The football overlays include match timers calibrated for 45-minute halves, stoppage time, extra time, and red card tracking — all controllable from your phone.</div>
-            <a href="https://overlays.uno/home" target="_blank" rel="noopener" class="tutorial-tool-link">Visit Website &rarr;</a>
-          </div>
-        </div>
-
-        <div class="tutorial-tool">
-          <div class="tutorial-tool-logo">
-            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGpJ8UFG03-e_wuIAfqnNlnVzUDZ-4Uxxwiw&s" alt="Canva" onerror="this.parentNode.innerHTML='&#127912;'">
-          </div>
-          <div>
-            <div class="tutorial-tool-name">Canva</div>
-            <div class="tutorial-tool-desc">The go-to tool for creating stream overlays, thumbnails, and any visual asset you need. Create transparent PNG overlays with placeholders for your webcam, chat, scoreboard, and social handles. Free tier is more than enough to get started.</div>
-            <a href="https://www.canva.com/" target="_blank" rel="noopener" class="tutorial-tool-link">Visit Website &rarr;</a>
-          </div>
-        </div>
-
-        <h2 id="tut-prism">Setting Up Prism Live Studio for Football Streaming</h2>
-        <p>Download Prism Live Studio from their website — it's available for both Mac and Windows. Once installed, here's how to build your football watchalong streaming environment:</p>
-
-        <h3>1. Add your camera source</h3>
-        <p>Click the <strong>+</strong> button to add sources. Select your webcam, or use <strong>Prism Lens</strong> (a companion app) for virtual green screen and background effects like an animated stadium. This will be the base layer of your stream.</p>
-
-        <h3>2. Add your overlay</h3>
-        <p>Create a transparent PNG overlay in Canva with placeholders for the chat, scoreboard, lineups, and your social handles. In Prism, add it as an <strong>Image</strong> source and press <strong>Ctrl+F</strong> to snap it to full screen.</p>
-
-        <h3>3. Add built-in widgets</h3>
-        <p>Prism comes with several useful widgets out of the box — no plugins required:</p>
-        <ul>
-          <li><strong>Live Chat</strong> — pulls directly from your YouTube live chat with multiple layout options</li>
-          <li><strong>Viewer Count</strong> — shows how many people are watching in real time</li>
-          <li><strong>GIF Stickers (Giphy)</strong> — add an animated subscribe button or your club's crest as a rotating GIF</li>
-        </ul>
-        <p>Arrange each widget into the placeholder areas on your overlay. Lock the overlay and camera layers so they don't accidentally move.</p>
-
-        <h2 id="tut-overlays">Creating Stream Overlays with Canva</h2>
-        <p>Open Canva and create a 1920&times;1080 design (standard HD). Design your overlay with transparent areas where your webcam, chat, and scoreboard will appear. Key tips:</p>
-        <ul>
-          <li>Use your club's colours for branding consistency</li>
-          <li>Include your X/Twitter handle, Instagram, or other social links</li>
-          <li>Export as <strong>PNG with transparency</strong> (not JPG)</li>
-          <li>Keep a clean layout — don't overcrowd the screen</li>
-        </ul>
-
-        <h2 id="tut-yuno">Scoreboard &amp; Live Chat Overlay for YouTube Streams</h2>
-        <p>Uno Overlays provides the two most critical elements for any football watchalong: the <strong>live scoreboard</strong> and the <strong>game clock</strong>.</p>
-
-        <h3>Finding football overlays</h3>
-        <p>Uno is a US-based platform, so search for <strong>"soccer"</strong> (not "football") to find the right overlays. The soccer-specific ones include game clocks calibrated for 45-minute halves.</p>
-
-        <h3>Customising the scoreboard</h3>
-        <ul>
-          <li><strong>Colours</strong> — match it to your club's kit colours</li>
-          <li><strong>Team logos</strong> — upload crests in a square format so they don't get cropped</li>
-          <li><strong>In-game events</strong> — add goals, substitutions, yellow cards, red cards, and VAR checks</li>
-        </ul>
-
-        <h3>Managing the game clock</h3>
-        <ul>
-          <li>Start from the first half, reset for halftime</li>
-          <li>Always start the second half from 45:00 (not 0:00)</li>
-          <li>Add stoppage time when announced</li>
-          <li>Support for extra time periods if needed</li>
-        </ul>
-
-        <h3>Control from your phone</h3>
-        <p>Uno generates a QR code you can scan with your phone. This gives you a mobile control panel to adjust the score, add red cards, and manage the clock — all without alt-tabbing away from your stream.</p>
-
-        <h3>Adding to Prism</h3>
-        <p>Click <strong>Copy Output URL</strong> in Uno, then in Prism add a <strong>Browser</strong> source. Paste the URL, set the dimensions to 1280×720, and press <strong>Ctrl+F</strong> for full screen. Repeat for the lineup overlay.</p>
-
-        <h2 id="tut-golive">Going Live on YouTube</h2>
-        <p>Once your environment is set up with the webcam, overlay, widgets, scoreboard, and lineups — click <strong>Go Live</strong> in Prism. Connect your YouTube channel (first-time setup walks you through it). When you're live:</p>
-        <ul>
-          <li>The live chat widget auto-populates with viewer comments</li>
-          <li>The viewer count updates in real time</li>
-          <li>Use your phone to control the scoreboard and game clock</li>
-        </ul>
-
-        <h2 id="tut-tips">Tips for Growing Your Channel</h2>
-        <ul>
-          <li><strong>Be consistent</strong> — stream every match day so your audience knows when to tune in</li>
-          <li><strong>Start early</strong> — go live 10-15 minutes before kick-off to build the room</li>
-          <li><strong>Engage the chat</strong> — read and respond to comments; it's what makes watchalongs special</li>
-          <li><strong>Quality audio matters</strong> — invest in a decent microphone before upgrading anything else</li>
-          <li><strong>Create clips</strong> — post reaction highlights as shorts after the match to attract new viewers</li>
-          <li><strong>Cross-promote</strong> — share your stream link on X/Twitter and relevant football communities</li>
-          <li><strong>Submit your channel</strong> — <a href="/submit" onclick="event.preventDefault();navigate('/submit')">add yourself to FanReactionsFC</a> so fans can discover you</li>
-        </ul>
-
-        <h2 id="tut-faq">Frequently Asked Questions</h2>
-        <div class="tutorial-faq">
-          <details>
-            <summary>Is it free to start a football live streaming channel on YouTube?</summary>
-            <p>Yes. Prism Live Studio, Uno Overlays, and Canva all have free tiers that are more than sufficient. You don't need to pay for any software to start streaming football reactions and watchalongs.</p>
-          </details>
-          <details>
-            <summary>What equipment do I need for football live streaming?</summary>
-            <p>A mid-range laptop or desktop, a webcam (even your built-in one), and a microphone. Prism Live Studio is lighter than OBS, so you don't need an expensive setup. If you experience lag, try lowering the stream resolution to 720p.</p>
-          </details>
-          <details>
-            <summary>Can I use OBS instead of Prism Live Studio?</summary>
-            <p>Absolutely. Everything in this guide (Uno Overlays, Canva overlays) works with OBS too. Prism is recommended because it's simpler for beginners and has built-in widgets that OBS requires plugins for.</p>
-          </details>
-          <details>
-            <summary>How do I add a scoreboard and live chat overlay to my YouTube stream?</summary>
-            <p>Use Uno Overlays to create a scoreboard and game clock, then add it to Prism or OBS as a browser source. The live chat widget is built into Prism Live Studio. Both integrate seamlessly with your streaming setup.</p>
-          </details>
-          <details>
-            <summary>Can I show the football match on my live stream?</summary>
-            <p>You should never rebroadcast match footage on your stream. Football watchalongs are about your <strong>reaction</strong> — your commentary, emotions, and interaction with the chat — while viewers watch the match on their own screens.</p>
-          </details>
-          <details>
-            <summary>How many viewers do I need to start a football reaction channel?</summary>
-            <p>Zero. Every football fan reaction channel starts from scratch. Even streaming to 2-3 people is valuable — those early loyal viewers become the foundation of your community.</p>
-          </details>
-          <details>
-            <summary>Can I stream football reactions from my phone?</summary>
-            <p>This guide focuses on desktop streaming for the best quality. However, you can stream directly from the YouTube mobile app for a simpler setup — you just won't have overlays, scoreboards, or the professional look.</p>
-          </details>
-        </div>
-
-        <div class="tutorial-cta">
-          <div class="tutorial-cta-title">Ready to start your football channel?</div>
-          <p class="tutorial-cta-sub">Submit your channel to FanReactionsFC and get discovered by football fans worldwide.</p>
-          <a href="/submit" class="btn-yellow" onclick="event.preventDefault();navigate('/submit')">+ Submit Your Channel</a>
-        </div>
-      </div>
-    </div>
-    ${renderFooter()}
-  `;
 }
 
 // ── Feature Requests ─────────────────────────────────────────────────────
@@ -3329,8 +2162,6 @@ function frTimeAgo(dateStr) {
   const months = Math.floor(days / 30);
   return `${months}mo ago`;
 }
-
-// ── Feature Requests: Listing Page ───────────────────────────────────────
 
 async function renderFeatureRequests() {
   const app = document.getElementById('app');
@@ -3380,14 +2211,12 @@ async function loadFeatureRequests() {
     return;
   }
   _frCache = data || [];
-
   if (currentUser) {
     const { data: votes } = await sbGet(`frfc_feature_votes?select=feature_id&user_id=eq.${currentUser.id}`);
     _frUserVotes = new Set((votes || []).map(v => v.feature_id));
   } else {
     _frUserVotes = new Set();
   }
-
   filterFeatureRequests();
 }
 
@@ -3396,14 +2225,12 @@ function filterFeatureRequests() {
   const cat = document.getElementById('frCategoryFilter')?.value || '';
   const status = document.getElementById('frStatusFilter')?.value || '';
   const sort = document.getElementById('frSort')?.value || 'popular';
-
   let filtered = _frCache.filter(r => {
     if (cat && r.category !== cat) return false;
     if (status && r.status !== status) return false;
     if (search && !r.title.toLowerCase().includes(search) && !r.description.toLowerCase().includes(search)) return false;
     return true;
   });
-
   if (sort === 'popular') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || (b.vote_count - a.vote_count));
   else if (sort === 'newest') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || new Date(b.created_at) - new Date(a.created_at));
   else if (sort === 'trending') filtered.sort((a, b) => {
@@ -3412,15 +2239,9 @@ function filterFeatureRequests() {
     return (b.is_pinned - a.is_pinned) || ((b.vote_count / (bAge + 2)) - (a.vote_count / (aAge + 2)));
   });
   else if (sort === 'updated') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || new Date(b.updated_at) - new Date(a.updated_at));
-
   const list = document.getElementById('frList');
   if (!list) return;
-
-  if (!filtered.length) {
-    list.innerHTML = '<div class="fr-empty">No feature requests found.</div>';
-    return;
-  }
-
+  if (!filtered.length) { list.innerHTML = '<div class="fr-empty">No feature requests found.</div>'; return; }
   list.innerHTML = filtered.map(r => {
     const voted = _frUserVotes.has(r.id);
     return `
@@ -3448,14 +2269,10 @@ function filterFeatureRequests() {
   }).join('');
 }
 
-// ── Feature Requests: Vote Toggle ────────────────────────────────────────
-
 async function toggleFeatureVote(featureId) {
   if (!currentUser) { openModal('signin'); return; }
-
   const hasVote = _frUserVotes.has(featureId);
   const card = _frCache.find(r => r.id === featureId);
-
   if (hasVote) {
     _frUserVotes.delete(featureId);
     if (card) card.vote_count = Math.max(0, card.vote_count - 1);
@@ -3476,14 +2293,9 @@ async function toggleFeatureVote(featureId) {
 function updateDetailVoteUI(featureId, voted, count) {
   const btn = document.querySelector('.fr-detail-vote-btn');
   const countEl = document.querySelector('.fr-detail-vote-count');
-  if (btn) {
-    btn.classList.toggle('fr-vote-btn--active', voted);
-    btn.title = voted ? 'Remove vote' : 'Upvote this idea';
-  }
+  if (btn) { btn.classList.toggle('fr-vote-btn--active', voted); btn.title = voted ? 'Remove vote' : 'Upvote this idea'; }
   if (countEl && count !== undefined) countEl.textContent = count;
 }
-
-// ── Feature Requests: Submission Modal ───────────────────────────────────
 
 function openFeatureSubmitModal() {
   if (!currentUser) { openModal('signin'); return; }
@@ -3511,60 +2323,31 @@ async function submitFeatureRequest() {
   const category = document.getElementById('frCategory')?.value;
   const description = document.getElementById('frDesc')?.value.trim();
   const msg = document.getElementById('frMsg');
-
   if (!title || title.length < 5) { msg.textContent = 'Title must be at least 5 characters.'; msg.style.color = 'var(--red)'; return; }
   if (!description || description.length < 20) { msg.textContent = 'Description must be at least 20 characters.'; msg.style.color = 'var(--red)'; return; }
-
   msg.textContent = 'Submitting...'; msg.style.color = 'var(--text-dim)';
-
-  const { data, error } = await sbPost('frfc_feature_requests', {
-    user_id: currentUser.id,
-    title,
-    description,
-    category
-  }, { prefer: 'return=representation' });
-
-  if (error) {
-    msg.textContent = error.message || 'Failed to submit.';
-    msg.style.color = 'var(--red)';
-    return;
-  }
-
+  const { data, error } = await sbPost('frfc_feature_requests', { user_id: currentUser.id, title, description, category }, { prefer: 'return=representation' });
+  if (error) { msg.textContent = error.message || 'Failed to submit.'; msg.style.color = 'var(--red)'; return; }
   closeModal();
-  if (currentRoute.page === 'features') {
-    await loadFeatureRequests();
-  } else {
-    navigate('/community/features');
-  }
+  if (currentRoute.page === 'features') { await loadFeatureRequests(); } else { navigate('/community/features'); }
 }
-
-// ── Feature Requests: Detail Page ────────────────────────────────────────
 
 async function renderFeatureDetail(featureId) {
   const app = document.getElementById('app');
   app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div style="color:var(--text-dim)">Loading...</div></div>`;
-
   const { data, error } = await sbGet(`frfc_feature_requests?select=*&id=eq.${featureId}&limit=1`);
   if (error || !data || !data.length) {
     app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">Feature request not found</div><a href="/community/features" class="btn btn-primary" style="margin-top:12px">Back to Features</a></div></div>${renderFooter()}`;
     return;
   }
-
-  if (data[0].merged_into) {
-    navigate(`/community/features/${data[0].merged_into}`, false);
-    return;
-  }
-
+  if (data[0].merged_into) { navigate(`/community/features/${data[0].merged_into}`, false); return; }
   const r = data[0];
   updatePageMeta(`${r.title} | Feature Requests | FanReactionsFC`, r.description.slice(0, 160));
-
   if (currentUser) {
     const { data: votes } = await sbGet(`frfc_feature_votes?select=feature_id&user_id=eq.${currentUser.id}&feature_id=eq.${featureId}`);
     _frUserVotes = new Set((votes || []).map(v => v.feature_id));
   }
-
   const voted = _frUserVotes.has(r.id);
-
   let isAdmin = false;
   if (currentUser) {
     try {
@@ -3572,15 +2355,12 @@ async function renderFeatureDetail(featureId) {
       if (adminRes.ok) { const rows = await adminRes.json(); isAdmin = rows.length > 0; }
     } catch {}
   }
-
   let statusLog = [];
   const { data: logData } = await sbGet(`frfc_feature_status_log?select=*&feature_id=eq.${featureId}&order=created_at.desc`);
   statusLog = logData || [];
-
   app.innerHTML = `
     <div class="container fr-detail-container">
       <a href="/community/features" class="fr-back-link">← All Feature Requests</a>
-
       <div class="fr-detail">
         <div class="fr-detail-sidebar">
           <button class="fr-vote-btn fr-detail-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote this idea'}">
@@ -3589,7 +2369,6 @@ async function renderFeatureDetail(featureId) {
           <span class="fr-detail-vote-count">${r.vote_count}</span>
           <span class="fr-detail-vote-label">votes</span>
         </div>
-
         <div class="fr-detail-main">
           <div class="fr-detail-header">
             <h1 class="fr-detail-title">${escHtml(r.title)}</h1>
@@ -3601,14 +2380,12 @@ async function renderFeatureDetail(featureId) {
             <span>💬 ${r.comment_count} comments</span>
           </div>
           <div class="fr-detail-desc">${escHtml(r.description).replace(/\n/g, '<br>')}</div>
-
           ${r.admin_response ? `
             <div class="fr-official-response">
               <div class="fr-official-label">Official Response</div>
               <p>${escHtml(r.admin_response).replace(/\n/g, '<br>')}</p>
               ${r.admin_response_at ? `<div class="fr-official-time">${frTimeAgo(r.admin_response_at)}</div>` : ''}
             </div>` : ''}
-
           ${statusLog.length ? `
             <div class="fr-status-timeline">
               <h3>Status History</h3>
@@ -3619,9 +2396,7 @@ async function renderFeatureDetail(featureId) {
                   <span class="fr-status-time">${frTimeAgo(l.created_at)}</span>
                 </div>`).join('')}
             </div>` : ''}
-
           ${isAdmin ? renderFeatureAdminPanel(r) : ''}
-
           <div class="fr-comments-section" id="frComments">
             <h3>Discussion</h3>
             ${r.is_locked ? '<p class="fr-locked-notice">🔒 This discussion is locked.</p>' : ''}
@@ -3637,11 +2412,8 @@ async function renderFeatureDetail(featureId) {
       </div>
     </div>
     ${renderFooter()}`;
-
   loadFeatureComments(featureId);
 }
-
-// ── Feature Requests: Admin Panel ────────────────────────────────────────
 
 function renderFeatureAdminPanel(r) {
   return `
@@ -3661,7 +2433,7 @@ function renderFeatureAdminPanel(r) {
         <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="adminPostOfficialResponse('${r.id}')">Save Response</button>
       </div>
       <div class="fr-admin-row fr-admin-toggles">
-        <button class="btn btn-sm ${r.is_pinned ? 'btn-ghost' : 'btn-ghost'}" onclick="adminToggleFeaturePin('${r.id}', ${!r.is_pinned})">${r.is_pinned ? '📌 Unpin' : '📌 Pin'}</button>
+        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeaturePin('${r.id}', ${!r.is_pinned})">${r.is_pinned ? '📌 Unpin' : '📌 Pin'}</button>
         <button class="btn btn-sm btn-ghost" onclick="adminToggleFeatureLock('${r.id}', ${!r.is_locked})">${r.is_locked ? '🔓 Unlock' : '🔒 Lock'}</button>
         <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="adminDeleteFeatureRequest('${r.id}')">🗑 Delete</button>
       </div>
@@ -3679,17 +2451,10 @@ async function adminUpdateFeatureStatus(featureId) {
   const note = document.getElementById('frAdminStatusNote')?.value.trim();
   const msg = document.getElementById('frAdminMsg');
   if (!newStatus) return;
-
   const res = await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
-    method: 'PATCH',
-    headers: _sbAuthHeaders(),
-    body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() })
+    method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() })
   });
-
-  if (!res.ok) {
-    msg.textContent = 'Failed to update status.'; msg.style.color = 'var(--red)'; return;
-  }
-
+  if (!res.ok) { msg.textContent = 'Failed to update status.'; msg.style.color = 'var(--red)'; return; }
   await sbPost('frfc_feature_status_log', { feature_id: featureId, new_status: newStatus, changed_by: currentUser.id, note: note || null });
   msg.textContent = 'Status updated!'; msg.style.color = 'var(--green)';
   setTimeout(() => renderFeatureDetail(featureId), 800);
@@ -3698,29 +2463,21 @@ async function adminUpdateFeatureStatus(featureId) {
 async function adminPostOfficialResponse(featureId) {
   const body = document.getElementById('frAdminResponse')?.value.trim();
   const msg = document.getElementById('frAdminMsg');
-
   const res = await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
-    method: 'PATCH',
-    headers: _sbAuthHeaders(),
-    body: JSON.stringify({ admin_response: body || null, admin_response_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ admin_response: body || null, admin_response_at: new Date().toISOString(), updated_at: new Date().toISOString() })
   });
-
   if (!res.ok) { msg.textContent = 'Failed to save response.'; msg.style.color = 'var(--red)'; return; }
   msg.textContent = 'Response saved!'; msg.style.color = 'var(--green)';
   setTimeout(() => renderFeatureDetail(featureId), 800);
 }
 
 async function adminToggleFeaturePin(featureId, pinned) {
-  await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
-    method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ is_pinned: pinned })
-  });
+  await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, { method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ is_pinned: pinned }) });
   renderFeatureDetail(featureId);
 }
 
 async function adminToggleFeatureLock(featureId, locked) {
-  await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
-    method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ is_locked: locked })
-  });
+  await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, { method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ is_locked: locked }) });
   renderFeatureDetail(featureId);
 }
 
@@ -3739,12 +2496,9 @@ async function adminMergeFeature(sourceId) {
   setTimeout(() => navigate(`/community/features/${targetId}`), 800);
 }
 
-// ── Feature Requests: Comments ───────────────────────────────────────────
-
 async function loadFeatureComments(featureId) {
   const { data } = await sbGet(`frfc_feature_comments?select=*&feature_id=eq.${featureId}&order=created_at.asc`);
   const comments = data || [];
-
   let userLikes = new Set();
   if (currentUser) {
     const commentIds = comments.map(c => c.id);
@@ -3753,23 +2507,12 @@ async function loadFeatureComments(featureId) {
       userLikes = new Set((likes || []).map(l => l.comment_id));
     }
   }
-
-  // Build threaded structure
   const topLevel = comments.filter(c => !c.parent_id);
   const replies = {};
-  comments.filter(c => c.parent_id).forEach(c => {
-    if (!replies[c.parent_id]) replies[c.parent_id] = [];
-    replies[c.parent_id].push(c);
-  });
-
+  comments.filter(c => c.parent_id).forEach(c => { if (!replies[c.parent_id]) replies[c.parent_id] = []; replies[c.parent_id].push(c); });
   const list = document.getElementById('frCommentList');
   if (!list) return;
-
-  if (!comments.length) {
-    list.innerHTML = '<p style="color:var(--text-dim);font-size:.85rem">No comments yet. Be the first to share your thoughts!</p>';
-    return;
-  }
-
+  if (!comments.length) { list.innerHTML = '<p style="color:var(--text-dim);font-size:.85rem">No comments yet. Be the first to share your thoughts!</p>'; return; }
   function renderComment(c, isReply = false) {
     const liked = userLikes.has(c.id);
     return `
@@ -3789,7 +2532,6 @@ async function loadFeatureComments(featureId) {
         ${(replies[c.id] || []).map(r => renderComment(r, true)).join('')}
       </div>`;
   }
-
   list.innerHTML = topLevel.map(c => renderComment(c)).join('');
 }
 
@@ -3806,36 +2548,18 @@ function showReplyForm(parentId, featureId) {
 
 async function postFeatureComment(featureId, parentId) {
   if (!currentUser) { openModal('signin'); return; }
-
   const isReply = !!parentId;
   const bodyEl = isReply ? document.getElementById(`replyBody_${parentId}`) : document.getElementById('frCommentBody');
   const body = bodyEl?.value.trim();
   const msg = document.getElementById('frCommentMsg');
-
-  if (!body) {
-    if (msg) { msg.textContent = 'Comment cannot be empty.'; msg.style.color = 'var(--red)'; }
-    return;
-  }
-
+  if (!body) { if (msg) { msg.textContent = 'Comment cannot be empty.'; msg.style.color = 'var(--red)'; } return; }
   let isAdmin = false;
   try {
     const ar = await fetch(`${SUPABASE_URL}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${currentUser.id}`, { headers: _sbAuthHeaders() });
     if (ar.ok) { const rows = await ar.json(); isAdmin = rows.length > 0; }
   } catch {}
-
-  const { error } = await sbPost('frfc_feature_comments', {
-    feature_id: featureId,
-    user_id: currentUser.id,
-    parent_id: parentId || null,
-    body,
-    is_official: isAdmin || false
-  });
-
-  if (error) {
-    if (msg) { msg.textContent = error.message || 'Failed to post comment.'; msg.style.color = 'var(--red)'; }
-    return;
-  }
-
+  const { error } = await sbPost('frfc_feature_comments', { feature_id: featureId, user_id: currentUser.id, parent_id: parentId || null, body, is_official: isAdmin || false });
+  if (error) { if (msg) { msg.textContent = error.message || 'Failed to post comment.'; msg.style.color = 'var(--red)'; } return; }
   await sbRpc('frfc_feature_comment_added', { p_feature_id: featureId });
   bodyEl.value = '';
   loadFeatureComments(featureId);
@@ -3843,24 +2567,15 @@ async function postFeatureComment(featureId, parentId) {
 
 async function toggleCommentLike(commentId, featureId) {
   if (!currentUser) { openModal('signin'); return; }
-
   const btn = event.target.closest('.fr-like-btn');
   const isLiked = btn?.classList.contains('fr-like-btn--active');
-
   if (isLiked) {
     await sbDelete(`frfc_feature_comment_likes?comment_id=eq.${commentId}&user_id=eq.${currentUser.id}`);
-    await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_comments?id=eq.${commentId}`, {
-      method: 'PATCH', headers: _sbAuthHeaders(),
-      body: JSON.stringify({ like_count: Math.max(0, parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0) - 1) })
-    });
+    await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_comments?id=eq.${commentId}`, { method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ like_count: Math.max(0, parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0) - 1) }) });
   } else {
     await sbPost('frfc_feature_comment_likes', { comment_id: commentId, user_id: currentUser.id });
-    await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_comments?id=eq.${commentId}`, {
-      method: 'PATCH', headers: _sbAuthHeaders(),
-      body: JSON.stringify({ like_count: parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0) + 1 })
-    });
+    await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_comments?id=eq.${commentId}`, { method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ like_count: parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0) + 1 }) });
   }
-
   loadFeatureComments(featureId);
 }
 
@@ -3872,7 +2587,7 @@ function renderFooter() {
         <div class="footer-grid">
           <div>
             <div class="footer-brand"><span style="color:var(--yellow)">Fan</span><span style="color:var(--navy)">Reactions</span><span style="color:var(--yellow)">FC</span></div>
-            <div class="footer-desc">The definitive database of football YouTubers across Europe's top leagues. Editorially curated by @fanreactionsfc.</div>
+            <div class="footer-desc">The definitive database of football YouTubers across Europe's top leagues. Community-rated, creator-claimed, editorially curated by @fanreactionsfc.</div>
           </div>
           <div class="footer-col">
             <h4>Browse</h4>
@@ -3884,7 +2599,6 @@ function renderFooter() {
             <h4>Community</h4>
             <a href="/tools/generator">Description Generator</a>
             <a href="/submit">Submit a Creator</a>
-            <a href="/become-a-creator">Become a Creator</a>
             <a href="/community/features">Feature Requests</a>
             <a href="#" onclick="event.preventDefault();openModal('signin')">Sign In / Sign Up</a>
           </div>
@@ -3892,7 +2606,7 @@ function renderFooter() {
             <h4>FanReactionsFC</h4>
             <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube Channel</a>
             <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener">X (Twitter)</a>
-            <a href="/streamwall">Streamwall</a>
+            <a href="https://frfcstreamwall.netlify.app/" target="_blank" rel="noopener">Streamwall</a>
           </div>
         </div>
         <div class="footer-bottom">

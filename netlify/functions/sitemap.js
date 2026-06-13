@@ -30,7 +30,6 @@ exports.handler = async () => {
   const creators = await res.json();
 
   const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const escXml = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
   const now = new Date().toISOString().split('T')[0];
 
   // Static routes that always exist.
@@ -47,13 +46,13 @@ exports.handler = async () => {
   const urlEntries = [
     ...staticUrls.map(u => ({ loc: SITE_URL + u.loc, priority: u.priority, changefreq: u.changefreq, lastmod: now })),
     ...creators.map(c => ({
-      loc: escXml(`${SITE_URL}/creators/${c.slug || slugify(c.name)}`),
+      loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
       priority: '0.7',
       changefreq: 'weekly',
       lastmod: (c.last_youtube_sync || '').split('T')[0] || now,
     })),
     ...clubs.map(team => ({
-      loc: escXml(`${SITE_URL}/clubs/${encodeURIComponent(team)}`),
+      loc: `${SITE_URL}/clubs/${encodeURIComponent(team)}`,
       priority: '0.6',
       changefreq: 'weekly',
       lastmod: now,

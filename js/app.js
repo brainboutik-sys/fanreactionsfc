@@ -353,43 +353,23 @@ function getTeamsByLeague() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
-// Handle OAuth callback — Supabase redirects back with tokens in the URL hash
-function _handleOAuthCallback() {
-  const hash = window.location.hash;
-  if (!hash || !hash.includes('access_token')) return false;
-  const params = new URLSearchParams(hash.substring(1));
-  const access_token = params.get('access_token');
-  const refresh_token = params.get('refresh_token');
-  const expires_in = params.get('expires_in');
-  const token_type = params.get('token_type');
-  if (access_token) {
-    _saveSession({ access_token, refresh_token, expires_in: Number(expires_in), token_type });
-    // Clean up the URL hash and redirect to home
-    history.replaceState(null, '', '/');
-    return true;
-  }
-  return false;
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     initTheme();
-
-    // Check for OAuth callback (Google sign-in redirect)
-    const wasOAuth = _handleOAuthCallback();
-
     showLoading();
     await loadCreators();
-
-    // Render page immediately — don't block on auth
+    loadFavouriteCounts(); // fire-and-forget; non-critical
+    // Show sign-in button immediately (before auth resolves)
     updateAuthUI();
+    // Auth: don't let it block page render — 5s timeout
+    try {
+      const authTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('auth timeout')), 5000));
+      await Promise.race([refreshAuth(), authTimeout]);
+    } catch (_) { updateAuthUI(); /* auth timed out — ensure button shows */ }
+    // Session changes are handled by our raw auth helpers — no onAuthStateChange needed
     handleRoute();
     window.addEventListener('popstate', handleRoute);
     initSearch();
-
-    // Background: auth refresh + non-critical data (don't block page)
-    loadFavouriteCounts(); // fire-and-forget
-    refreshAuth().then(() => { updateAuthUI(); if (wasOAuth) handleRoute(); }).catch(() => updateAuthUI());
   } catch (e) {
     console.error('Init failed:', e);
     document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><h2>Something went wrong</h2><p style="color:var(--text-dim)">' + escHtml(e.message || '') + '</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>';
@@ -443,7 +423,7 @@ function renderAuthRequired(what) {
 }
 
 function updateNavActive(path) {
-  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navBecome: '/become-a-creator' };
+  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navBecome: '/become-a-creator', navCommunity: '/community' };
   Object.entries(links).forEach(([id, prefix]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -518,13 +498,17 @@ function handleRoute() {
       currentRoute = { page: 'becomeCreator' };
       updatePageMeta('How to Start a Football Live Streaming Channel on YouTube | FanReactionsFC', 'Free step-by-step guide to setting up a professional football watchalong channel on YouTube using Prism Live Studio, Uno Overlays, and Canva. Start streaming for free.');
       renderBecomeCreator();
+    } else if (path === '/community/features' || path === '/community/features/') {
+      currentRoute = { page: 'features' };
+      updatePageMeta('Community Feature Requests | FanReactionsFC', 'Suggest and vote on new features for FanReactionsFC. Help shape the future of the platform.');
+      renderFeatureRequests();
+    } else if (path.startsWith('/community/features/')) {
+      const featureId = path.split('/community/features/')[1].replace(/\/$/, '');
+      currentRoute = { page: 'featureDetail', featureId };
+      renderFeatureDetail(featureId);
     } else if (path === '/account') {
       currentRoute = { page: 'account' };
       renderAccount();
-    } else if (path === '/auth/callback') {
-      // OAuth callback — tokens are parsed in _handleOAuthCallback() before routing
-      currentRoute = { page: 'home' };
-      renderHome();
     } else if (path.startsWith('/admin')) {
       currentRoute = { page: 'admin' };
       renderAdmin();
@@ -557,10 +541,8 @@ function handleRoute() {
   }
 }
 
-// Click handler for internal links — respects Ctrl/Cmd+Click to open in new tab
-function isModifiedClick(e) { return e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button === 1; }
+// Click handler for internal links
 document.addEventListener('click', e => {
-  if (isModifiedClick(e)) return;
   const a = e.target.closest('a[href]');
   if (!a) return;
   const href = a.getAttribute('href');
@@ -665,12 +647,6 @@ async function signUp(email, password) {
   // If auto-confirm is off, user gets a confirmation email
   if (data && data.access_token) _saveSession(data);
   return null;
-}
-
-function signInWithGoogle() {
-  const siteUrl = window.location.hostname === 'localhost' ? window.location.origin : 'https://fanreactionsfc.com';
-  const redirectTo = encodeURIComponent(siteUrl + '/auth/callback');
-  window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
 }
 
 async function signOut() {
@@ -1067,7 +1043,6 @@ function renderHome() {
     <!-- Hero -->
     <section class="hero">
       <div class="container">
-        <img src="/img/logo-wide.png" alt="FanReactionsFC" class="hero-logo">
         <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
         <p class="subtitle">The definitive database of football YouTubers. Ranked weekly.</p>
         <div class="search-wrap">
@@ -1201,24 +1176,11 @@ function renderHome() {
       </div>
     </div>
 
-    <!-- Suggest CTA band -->
-    <div class="cta-band">
-      <div class="container">
-        <div class="cta-band-inner">
-          <div>
-            <div class="cta-band-title">Know a great football creator?</div>
-            <p class="cta-band-sub">Help us grow the database — submissions are reviewed and published within 24 hours.</p>
-          </div>
-          <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
-        </div>
-      </div>
-    </div>
-
     <!-- 2. Curated By / FRFC Channel banner -->
     <div class="container" style="padding-top:24px">
       <div class="frfc-banner">
         <div class="frfc-banner-logo-wrap">
-          <img src="/img/logo-round.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
+          <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
         </div>
         <div class="frfc-banner-main">
           <div class="frfc-banner-eyebrow">Curated by</div>
@@ -1275,9 +1237,22 @@ function renderHome() {
             <div class="become-text">
               <h3>Start Your Watchalong Journey</h3>
               <p>Learn how to set up a professional streaming environment for football watchalongs — completely free. Prism Live Studio, Uno Overlays, live scoreboards, and more.</p>
-              <a href="/become-a-creator" class="btn-yellow">Read the Full Guide &rarr;</a>
+              <a href="/become-a-creator" class="btn-yellow" onclick="event.preventDefault();navigate('/become-a-creator')">Read the Full Guide &rarr;</a>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suggest CTA band -->
+    <div class="cta-band">
+      <div class="container">
+        <div class="cta-band-inner">
+          <div>
+            <div class="cta-band-title">Know a great football creator?</div>
+            <p class="cta-band-sub">Help us grow the database — submissions are reviewed and published within 24 hours.</p>
+          </div>
+          <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
         </div>
       </div>
     </div>
@@ -1370,7 +1345,7 @@ function battleRenderHot() {
     const c = creators.find(x => x.id === r.creator_id);
     if (!c) return '';
     const winRate = r.total_battles > 0 ? Math.round(r.total_wins / r.total_battles * 100) : 0;
-    return `<a class="battle-hot-item" href="${creatorLink(c)}" >
+    return `<a class="battle-hot-item" href="${creatorLink(c)}" onclick="event.preventDefault();navigate('${creatorLink(c)}')">
       ${c.avatar ? `<img class="battle-hot-av" src="${c.avatar}" alt="">` : ''}
       <span class="battle-hot-name">${escHtml(c.name)}</span>
       <span class="battle-hot-wins">${winRate}% W</span>
@@ -2895,11 +2870,6 @@ function openModal(type = 'signin') {
     <button class="modal-close" onclick="closeModal()">&times;</button>
     <h2>${isSignIn ? 'Welcome back' : 'Create an account'}</h2>
     <p class="modal-sub">${isSignIn ? 'Sign in to follow and favourite creators.' : 'Join the community of football YouTube fans.'}</p>
-    <button class="btn-google" onclick="signInWithGoogle()">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.04 24.04 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Continue with Google
-    </button>
-    <div class="auth-divider"><span>or</span></div>
     <label>Email</label>
     <input type="email" id="authEmail" placeholder="you@example.com">
     <label>Password</label>
@@ -3280,7 +3250,7 @@ function renderBecomeCreator() {
           <li><strong>Quality audio matters</strong> — invest in a decent microphone before upgrading anything else</li>
           <li><strong>Create clips</strong> — post reaction highlights as shorts after the match to attract new viewers</li>
           <li><strong>Cross-promote</strong> — share your stream link on X/Twitter and relevant football communities</li>
-          <li><strong>Submit your channel</strong> — <a href="/submit">add yourself to FanReactionsFC</a> so fans can discover you</li>
+          <li><strong>Submit your channel</strong> — <a href="/submit" onclick="event.preventDefault();navigate('/submit')">add yourself to FanReactionsFC</a> so fans can discover you</li>
         </ul>
 
         <h2 id="tut-faq">Frequently Asked Questions</h2>
@@ -3318,12 +3288,580 @@ function renderBecomeCreator() {
         <div class="tutorial-cta">
           <div class="tutorial-cta-title">Ready to start your football channel?</div>
           <p class="tutorial-cta-sub">Submit your channel to FanReactionsFC and get discovered by football fans worldwide.</p>
-          <a href="/submit" class="btn-yellow">+ Submit Your Channel</a>
+          <a href="/submit" class="btn-yellow" onclick="event.preventDefault();navigate('/submit')">+ Submit Your Channel</a>
         </div>
       </div>
     </div>
     ${renderFooter()}
   `;
+}
+
+// ── Feature Requests ─────────────────────────────────────────────────────
+
+const FR_CATEGORIES = [
+  'Website Features','Mobile Experience','Watch Along Features','Community Features',
+  'Statistics & Data','User Profiles','Notifications','Fantasy & Prediction Games','Other'
+];
+
+const FR_STATUSES = {
+  open:           { label: 'Open',           color: 'var(--blue,#3b82f6)' },
+  under_review:   { label: 'Under Review',   color: 'var(--yellow,#f59e0b)' },
+  planned:        { label: 'Planned',        color: 'var(--purple,#8b5cf6)' },
+  in_development: { label: 'In Development', color: 'var(--orange,#f97316)' },
+  released:       { label: 'Released',       color: 'var(--green,#22c55e)' },
+  declined:       { label: 'Declined',       color: 'var(--red,#ef4444)' }
+};
+
+function frStatusBadge(status) {
+  const s = FR_STATUSES[status] || FR_STATUSES.open;
+  return `<span class="fr-status" style="--fr-status-color:${s.color}">${s.label}</span>`;
+}
+
+function frTimeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
+// ── Feature Requests: Listing Page ───────────────────────────────────────
+
+async function renderFeatureRequests() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="fr-hero">
+      <div class="container">
+        <h1>Community Feature Requests</h1>
+        <p class="fr-hero-sub">Help shape the future of Fan Reactions FC.</p>
+        <button class="btn btn-primary fr-suggest-btn" onclick="openFeatureSubmitModal()">+ Suggest a Feature</button>
+      </div>
+    </div>
+    <div class="container fr-container">
+      <div class="fr-toolbar">
+        <div class="fr-search-wrap">
+          <input type="text" class="fr-search" id="frSearch" placeholder="Search ideas..." oninput="filterFeatureRequests()">
+        </div>
+        <div class="fr-filters">
+          <select id="frCategoryFilter" class="fr-select" onchange="filterFeatureRequests()">
+            <option value="">All Categories</option>
+            ${FR_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+          <select id="frStatusFilter" class="fr-select" onchange="filterFeatureRequests()">
+            <option value="">All Statuses</option>
+            ${Object.entries(FR_STATUSES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}
+          </select>
+          <select id="frSort" class="fr-select" onchange="filterFeatureRequests()">
+            <option value="popular">Most Popular</option>
+            <option value="newest">Newest</option>
+            <option value="trending">Trending</option>
+            <option value="updated">Recently Updated</option>
+          </select>
+        </div>
+      </div>
+      <div id="frList" class="fr-list"><div class="fr-loading">Loading ideas...</div></div>
+    </div>
+    ${renderFooter()}`;
+  await loadFeatureRequests();
+}
+
+let _frCache = [];
+let _frUserVotes = new Set();
+
+async function loadFeatureRequests() {
+  const { data, error } = await sbGet('frfc_feature_requests?select=*&merged_into=is.null&order=is_pinned.desc,vote_count.desc,created_at.desc');
+  if (error) {
+    document.getElementById('frList').innerHTML = '<div class="fr-empty">Could not load feature requests.</div>';
+    return;
+  }
+  _frCache = data || [];
+
+  if (currentUser) {
+    const { data: votes } = await sbGet(`frfc_feature_votes?select=feature_id&user_id=eq.${currentUser.id}`);
+    _frUserVotes = new Set((votes || []).map(v => v.feature_id));
+  } else {
+    _frUserVotes = new Set();
+  }
+
+  filterFeatureRequests();
+}
+
+function filterFeatureRequests() {
+  const search = (document.getElementById('frSearch')?.value || '').toLowerCase();
+  const cat = document.getElementById('frCategoryFilter')?.value || '';
+  const status = document.getElementById('frStatusFilter')?.value || '';
+  const sort = document.getElementById('frSort')?.value || 'popular';
+
+  let filtered = _frCache.filter(r => {
+    if (cat && r.category !== cat) return false;
+    if (status && r.status !== status) return false;
+    if (search && !r.title.toLowerCase().includes(search) && !r.description.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (sort === 'popular') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || (b.vote_count - a.vote_count));
+  else if (sort === 'newest') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || new Date(b.created_at) - new Date(a.created_at));
+  else if (sort === 'trending') filtered.sort((a, b) => {
+    const aAge = (Date.now() - new Date(a.created_at).getTime()) / 3600000;
+    const bAge = (Date.now() - new Date(b.created_at).getTime()) / 3600000;
+    return (b.is_pinned - a.is_pinned) || ((b.vote_count / (bAge + 2)) - (a.vote_count / (aAge + 2)));
+  });
+  else if (sort === 'updated') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || new Date(b.updated_at) - new Date(a.updated_at));
+
+  const list = document.getElementById('frList');
+  if (!list) return;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="fr-empty">No feature requests found.</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(r => {
+    const voted = _frUserVotes.has(r.id);
+    return `
+      <div class="fr-card ${r.is_pinned ? 'fr-card--pinned' : ''}">
+        <div class="fr-vote-col">
+          <button class="fr-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="event.stopPropagation();toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote'}">
+            <svg width="14" height="10" viewBox="0 0 14 10"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
+          </button>
+          <span class="fr-vote-count">${r.vote_count}</span>
+        </div>
+        <div class="fr-card-body" onclick="navigate('/community/features/${r.id}')">
+          <div class="fr-card-header">
+            ${r.is_pinned ? '<span class="fr-pin" title="Pinned">📌</span>' : ''}
+            <h3 class="fr-card-title">${escHtml(r.title)}</h3>
+            ${frStatusBadge(r.status)}
+          </div>
+          <p class="fr-card-desc">${escHtml(r.description.length > 140 ? r.description.slice(0, 140) + '…' : r.description)}</p>
+          <div class="fr-card-meta">
+            <span class="fr-card-cat">${escHtml(r.category)}</span>
+            <span>💬 ${r.comment_count}</span>
+            <span>${frTimeAgo(r.created_at)}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Feature Requests: Vote Toggle ────────────────────────────────────────
+
+async function toggleFeatureVote(featureId) {
+  if (!currentUser) { openModal('signin'); return; }
+
+  const hasVote = _frUserVotes.has(featureId);
+  const card = _frCache.find(r => r.id === featureId);
+
+  if (hasVote) {
+    _frUserVotes.delete(featureId);
+    if (card) card.vote_count = Math.max(0, card.vote_count - 1);
+    filterFeatureRequests();
+    updateDetailVoteUI(featureId, false, card?.vote_count);
+    await sbDelete(`frfc_feature_votes?feature_id=eq.${featureId}&user_id=eq.${currentUser.id}`);
+    await sbRpc('frfc_feature_vote_down', { p_feature_id: featureId });
+  } else {
+    _frUserVotes.add(featureId);
+    if (card) card.vote_count++;
+    filterFeatureRequests();
+    updateDetailVoteUI(featureId, true, card?.vote_count);
+    await sbPost('frfc_feature_votes', { feature_id: featureId, user_id: currentUser.id });
+    await sbRpc('frfc_feature_vote_up', { p_feature_id: featureId });
+  }
+}
+
+function updateDetailVoteUI(featureId, voted, count) {
+  const btn = document.querySelector('.fr-detail-vote-btn');
+  const countEl = document.querySelector('.fr-detail-vote-count');
+  if (btn) {
+    btn.classList.toggle('fr-vote-btn--active', voted);
+    btn.title = voted ? 'Remove vote' : 'Upvote this idea';
+  }
+  if (countEl && count !== undefined) countEl.textContent = count;
+}
+
+// ── Feature Requests: Submission Modal ───────────────────────────────────
+
+function openFeatureSubmitModal() {
+  if (!currentUser) { openModal('signin'); return; }
+  const overlay = document.getElementById('authOverlay');
+  const modal = document.getElementById('authModal');
+  modal.innerHTML = `
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <h2>Suggest a Feature</h2>
+    <p class="modal-sub">Describe your idea and the community will vote on it.</p>
+    <label>Title</label>
+    <input type="text" id="frTitle" placeholder="Short, descriptive title" maxlength="120">
+    <label>Category</label>
+    <select id="frCategory" class="fr-select" style="width:100%;margin-bottom:14px">
+      ${FR_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <label>Description</label>
+    <textarea id="frDesc" placeholder="Explain what you'd like and why it matters..." style="width:100%;min-height:120px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical;margin-bottom:14px"></textarea>
+    <button class="btn btn-primary" style="width:100%" onclick="submitFeatureRequest()">Submit Idea</button>
+    <div class="auth-msg" id="frMsg"></div>`;
+  overlay.classList.add('open');
+}
+
+async function submitFeatureRequest() {
+  const title = document.getElementById('frTitle')?.value.trim();
+  const category = document.getElementById('frCategory')?.value;
+  const description = document.getElementById('frDesc')?.value.trim();
+  const msg = document.getElementById('frMsg');
+
+  if (!title || title.length < 5) { msg.textContent = 'Title must be at least 5 characters.'; msg.style.color = 'var(--red)'; return; }
+  if (!description || description.length < 20) { msg.textContent = 'Description must be at least 20 characters.'; msg.style.color = 'var(--red)'; return; }
+
+  msg.textContent = 'Submitting...'; msg.style.color = 'var(--text-dim)';
+
+  const { data, error } = await sbPost('frfc_feature_requests', {
+    user_id: currentUser.id,
+    title,
+    description,
+    category
+  }, { prefer: 'return=representation' });
+
+  if (error) {
+    msg.textContent = error.message || 'Failed to submit.';
+    msg.style.color = 'var(--red)';
+    return;
+  }
+
+  closeModal();
+  if (currentRoute.page === 'features') {
+    await loadFeatureRequests();
+  } else {
+    navigate('/community/features');
+  }
+}
+
+// ── Feature Requests: Detail Page ────────────────────────────────────────
+
+async function renderFeatureDetail(featureId) {
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div style="color:var(--text-dim)">Loading...</div></div>`;
+
+  const { data, error } = await sbGet(`frfc_feature_requests?select=*&id=eq.${featureId}&limit=1`);
+  if (error || !data || !data.length) {
+    app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">Feature request not found</div><a href="/community/features" class="btn btn-primary" style="margin-top:12px">Back to Features</a></div></div>${renderFooter()}`;
+    return;
+  }
+
+  if (data[0].merged_into) {
+    navigate(`/community/features/${data[0].merged_into}`, false);
+    return;
+  }
+
+  const r = data[0];
+  updatePageMeta(`${r.title} | Feature Requests | FanReactionsFC`, r.description.slice(0, 160));
+
+  if (currentUser) {
+    const { data: votes } = await sbGet(`frfc_feature_votes?select=feature_id&user_id=eq.${currentUser.id}&feature_id=eq.${featureId}`);
+    _frUserVotes = new Set((votes || []).map(v => v.feature_id));
+  }
+
+  const voted = _frUserVotes.has(r.id);
+
+  let isAdmin = false;
+  if (currentUser) {
+    try {
+      const adminRes = await fetch(`${SUPABASE_URL}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${currentUser.id}`, { headers: _sbAuthHeaders() });
+      if (adminRes.ok) { const rows = await adminRes.json(); isAdmin = rows.length > 0; }
+    } catch {}
+  }
+
+  let statusLog = [];
+  const { data: logData } = await sbGet(`frfc_feature_status_log?select=*&feature_id=eq.${featureId}&order=created_at.desc`);
+  statusLog = logData || [];
+
+  app.innerHTML = `
+    <div class="container fr-detail-container">
+      <a href="/community/features" class="fr-back-link">← All Feature Requests</a>
+
+      <div class="fr-detail">
+        <div class="fr-detail-sidebar">
+          <button class="fr-vote-btn fr-detail-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote this idea'}">
+            <svg width="18" height="12" viewBox="0 0 14 10"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
+          </button>
+          <span class="fr-detail-vote-count">${r.vote_count}</span>
+          <span class="fr-detail-vote-label">votes</span>
+        </div>
+
+        <div class="fr-detail-main">
+          <div class="fr-detail-header">
+            <h1 class="fr-detail-title">${escHtml(r.title)}</h1>
+            ${frStatusBadge(r.status)}
+          </div>
+          <div class="fr-detail-meta">
+            <span class="fr-card-cat">${escHtml(r.category)}</span>
+            <span>${frTimeAgo(r.created_at)}</span>
+            <span>💬 ${r.comment_count} comments</span>
+          </div>
+          <div class="fr-detail-desc">${escHtml(r.description).replace(/\n/g, '<br>')}</div>
+
+          ${r.admin_response ? `
+            <div class="fr-official-response">
+              <div class="fr-official-label">Official Response</div>
+              <p>${escHtml(r.admin_response).replace(/\n/g, '<br>')}</p>
+              ${r.admin_response_at ? `<div class="fr-official-time">${frTimeAgo(r.admin_response_at)}</div>` : ''}
+            </div>` : ''}
+
+          ${statusLog.length ? `
+            <div class="fr-status-timeline">
+              <h3>Status History</h3>
+              ${statusLog.map(l => `
+                <div class="fr-status-event">
+                  ${frStatusBadge(l.new_status)}
+                  ${l.note ? `<span class="fr-status-note">${escHtml(l.note)}</span>` : ''}
+                  <span class="fr-status-time">${frTimeAgo(l.created_at)}</span>
+                </div>`).join('')}
+            </div>` : ''}
+
+          ${isAdmin ? renderFeatureAdminPanel(r) : ''}
+
+          <div class="fr-comments-section" id="frComments">
+            <h3>Discussion</h3>
+            ${r.is_locked ? '<p class="fr-locked-notice">🔒 This discussion is locked.</p>' : ''}
+            <div id="frCommentList"><div style="color:var(--text-dim);font-size:.85rem">Loading comments...</div></div>
+            ${!r.is_locked ? `
+              <div class="fr-comment-form" id="frCommentForm">
+                <textarea id="frCommentBody" placeholder="${currentUser ? 'Add a comment...' : 'Sign in to comment'}" ${currentUser ? '' : 'disabled'} style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical"></textarea>
+                <button class="btn btn-primary" style="margin-top:8px" onclick="postFeatureComment('${r.id}')" ${currentUser ? '' : 'disabled'}>Post Comment</button>
+                <span class="auth-msg" id="frCommentMsg"></span>
+              </div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}`;
+
+  loadFeatureComments(featureId);
+}
+
+// ── Feature Requests: Admin Panel ────────────────────────────────────────
+
+function renderFeatureAdminPanel(r) {
+  return `
+    <div class="fr-admin-panel">
+      <h3>Admin Actions</h3>
+      <div class="fr-admin-row">
+        <label>Status</label>
+        <select id="frAdminStatus" class="fr-select">
+          ${Object.entries(FR_STATUSES).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${v.label}</option>`).join('')}
+        </select>
+        <input type="text" id="frAdminStatusNote" placeholder="Note (optional)" class="fr-admin-note-input">
+        <button class="btn btn-primary btn-sm" onclick="adminUpdateFeatureStatus('${r.id}')">Update Status</button>
+      </div>
+      <div class="fr-admin-row">
+        <label>Official Response</label>
+        <textarea id="frAdminResponse" style="width:100%;min-height:60px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.85rem;resize:vertical">${r.admin_response ? escHtml(r.admin_response) : ''}</textarea>
+        <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="adminPostOfficialResponse('${r.id}')">Save Response</button>
+      </div>
+      <div class="fr-admin-row fr-admin-toggles">
+        <button class="btn btn-sm ${r.is_pinned ? 'btn-ghost' : 'btn-ghost'}" onclick="adminToggleFeaturePin('${r.id}', ${!r.is_pinned})">${r.is_pinned ? '📌 Unpin' : '📌 Pin'}</button>
+        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeatureLock('${r.id}', ${!r.is_locked})">${r.is_locked ? '🔓 Unlock' : '🔒 Lock'}</button>
+        <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="adminDeleteFeatureRequest('${r.id}')">🗑 Delete</button>
+      </div>
+      <div class="fr-admin-row">
+        <label>Merge Into (paste target feature ID)</label>
+        <input type="text" id="frMergeTarget" placeholder="Target feature ID" style="flex:1">
+        <button class="btn btn-sm btn-ghost" onclick="adminMergeFeature('${r.id}')">Merge</button>
+      </div>
+      <div class="auth-msg" id="frAdminMsg"></div>
+    </div>`;
+}
+
+async function adminUpdateFeatureStatus(featureId) {
+  const newStatus = document.getElementById('frAdminStatus')?.value;
+  const note = document.getElementById('frAdminStatusNote')?.value.trim();
+  const msg = document.getElementById('frAdminMsg');
+  if (!newStatus) return;
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
+    method: 'PATCH',
+    headers: _sbAuthHeaders(),
+    body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() })
+  });
+
+  if (!res.ok) {
+    msg.textContent = 'Failed to update status.'; msg.style.color = 'var(--red)'; return;
+  }
+
+  await sbPost('frfc_feature_status_log', { feature_id: featureId, new_status: newStatus, changed_by: currentUser.id, note: note || null });
+  msg.textContent = 'Status updated!'; msg.style.color = 'var(--green)';
+  setTimeout(() => renderFeatureDetail(featureId), 800);
+}
+
+async function adminPostOfficialResponse(featureId) {
+  const body = document.getElementById('frAdminResponse')?.value.trim();
+  const msg = document.getElementById('frAdminMsg');
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
+    method: 'PATCH',
+    headers: _sbAuthHeaders(),
+    body: JSON.stringify({ admin_response: body || null, admin_response_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+  });
+
+  if (!res.ok) { msg.textContent = 'Failed to save response.'; msg.style.color = 'var(--red)'; return; }
+  msg.textContent = 'Response saved!'; msg.style.color = 'var(--green)';
+  setTimeout(() => renderFeatureDetail(featureId), 800);
+}
+
+async function adminToggleFeaturePin(featureId, pinned) {
+  await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
+    method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ is_pinned: pinned })
+  });
+  renderFeatureDetail(featureId);
+}
+
+async function adminToggleFeatureLock(featureId, locked) {
+  await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_requests?id=eq.${featureId}`, {
+    method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify({ is_locked: locked })
+  });
+  renderFeatureDetail(featureId);
+}
+
+async function adminDeleteFeatureRequest(featureId) {
+  if (!confirm('Delete this feature request permanently?')) return;
+  await sbDelete(`frfc_feature_requests?id=eq.${featureId}`);
+  navigate('/community/features');
+}
+
+async function adminMergeFeature(sourceId) {
+  const targetId = document.getElementById('frMergeTarget')?.value.trim();
+  const msg = document.getElementById('frAdminMsg');
+  if (!targetId) { msg.textContent = 'Enter target feature ID.'; msg.style.color = 'var(--red)'; return; }
+  await sbRpc('frfc_feature_merge', { p_source_id: sourceId, p_target_id: targetId });
+  msg.textContent = 'Merged! Redirecting...'; msg.style.color = 'var(--green)';
+  setTimeout(() => navigate(`/community/features/${targetId}`), 800);
+}
+
+// ── Feature Requests: Comments ───────────────────────────────────────────
+
+async function loadFeatureComments(featureId) {
+  const { data } = await sbGet(`frfc_feature_comments?select=*&feature_id=eq.${featureId}&order=created_at.asc`);
+  const comments = data || [];
+
+  let userLikes = new Set();
+  if (currentUser) {
+    const commentIds = comments.map(c => c.id);
+    if (commentIds.length) {
+      const { data: likes } = await sbGet(`frfc_feature_comment_likes?select=comment_id&user_id=eq.${currentUser.id}&comment_id=in.(${commentIds.join(',')})`);
+      userLikes = new Set((likes || []).map(l => l.comment_id));
+    }
+  }
+
+  // Build threaded structure
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replies = {};
+  comments.filter(c => c.parent_id).forEach(c => {
+    if (!replies[c.parent_id]) replies[c.parent_id] = [];
+    replies[c.parent_id].push(c);
+  });
+
+  const list = document.getElementById('frCommentList');
+  if (!list) return;
+
+  if (!comments.length) {
+    list.innerHTML = '<p style="color:var(--text-dim);font-size:.85rem">No comments yet. Be the first to share your thoughts!</p>';
+    return;
+  }
+
+  function renderComment(c, isReply = false) {
+    const liked = userLikes.has(c.id);
+    return `
+      <div class="fr-comment ${isReply ? 'fr-comment--reply' : ''} ${c.is_official ? 'fr-comment--official' : ''}">
+        <div class="fr-comment-header">
+          ${c.is_official ? '<span class="fr-official-badge">Official</span>' : ''}
+          <span class="fr-comment-time">${frTimeAgo(c.created_at)}</span>
+        </div>
+        <div class="fr-comment-body">${escHtml(c.body).replace(/\n/g, '<br>')}</div>
+        <div class="fr-comment-actions">
+          <button class="fr-like-btn ${liked ? 'fr-like-btn--active' : ''}" onclick="toggleCommentLike('${c.id}','${featureId}')">
+            ${liked ? '❤️' : '🤍'} ${c.like_count}
+          </button>
+          ${!isReply && currentUser ? `<button class="fr-reply-btn" onclick="showReplyForm('${c.id}','${featureId}')">Reply</button>` : ''}
+        </div>
+        <div id="replyForm_${c.id}"></div>
+        ${(replies[c.id] || []).map(r => renderComment(r, true)).join('')}
+      </div>`;
+  }
+
+  list.innerHTML = topLevel.map(c => renderComment(c)).join('');
+}
+
+function showReplyForm(parentId, featureId) {
+  const container = document.getElementById(`replyForm_${parentId}`);
+  if (!container) return;
+  if (container.innerHTML.trim()) { container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <div class="fr-reply-form">
+      <textarea id="replyBody_${parentId}" placeholder="Write a reply..." style="width:100%;min-height:50px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.84rem;resize:vertical"></textarea>
+      <button class="btn btn-primary btn-sm" style="margin-top:4px" onclick="postFeatureComment('${featureId}','${parentId}')">Reply</button>
+    </div>`;
+}
+
+async function postFeatureComment(featureId, parentId) {
+  if (!currentUser) { openModal('signin'); return; }
+
+  const isReply = !!parentId;
+  const bodyEl = isReply ? document.getElementById(`replyBody_${parentId}`) : document.getElementById('frCommentBody');
+  const body = bodyEl?.value.trim();
+  const msg = document.getElementById('frCommentMsg');
+
+  if (!body) {
+    if (msg) { msg.textContent = 'Comment cannot be empty.'; msg.style.color = 'var(--red)'; }
+    return;
+  }
+
+  let isAdmin = false;
+  try {
+    const ar = await fetch(`${SUPABASE_URL}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${currentUser.id}`, { headers: _sbAuthHeaders() });
+    if (ar.ok) { const rows = await ar.json(); isAdmin = rows.length > 0; }
+  } catch {}
+
+  const { error } = await sbPost('frfc_feature_comments', {
+    feature_id: featureId,
+    user_id: currentUser.id,
+    parent_id: parentId || null,
+    body,
+    is_official: isAdmin || false
+  });
+
+  if (error) {
+    if (msg) { msg.textContent = error.message || 'Failed to post comment.'; msg.style.color = 'var(--red)'; }
+    return;
+  }
+
+  await sbRpc('frfc_feature_comment_added', { p_feature_id: featureId });
+  bodyEl.value = '';
+  loadFeatureComments(featureId);
+}
+
+async function toggleCommentLike(commentId, featureId) {
+  if (!currentUser) { openModal('signin'); return; }
+
+  const btn = event.target.closest('.fr-like-btn');
+  const isLiked = btn?.classList.contains('fr-like-btn--active');
+
+  if (isLiked) {
+    await sbDelete(`frfc_feature_comment_likes?comment_id=eq.${commentId}&user_id=eq.${currentUser.id}`);
+    await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_comments?id=eq.${commentId}`, {
+      method: 'PATCH', headers: _sbAuthHeaders(),
+      body: JSON.stringify({ like_count: Math.max(0, parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0) - 1) })
+    });
+  } else {
+    await sbPost('frfc_feature_comment_likes', { comment_id: commentId, user_id: currentUser.id });
+    await fetch(`${SUPABASE_URL}/rest/v1/frfc_feature_comments?id=eq.${commentId}`, {
+      method: 'PATCH', headers: _sbAuthHeaders(),
+      body: JSON.stringify({ like_count: parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0) + 1 })
+    });
+  }
+
+  loadFeatureComments(featureId);
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────
@@ -3333,7 +3871,7 @@ function renderFooter() {
       <div class="container">
         <div class="footer-grid">
           <div>
-            <div class="footer-brand"><img src="/img/logo-wide.png" alt="FanReactionsFC" class="footer-logo"></div>
+            <div class="footer-brand"><span style="color:var(--yellow)">Fan</span><span style="color:var(--navy)">Reactions</span><span style="color:var(--yellow)">FC</span></div>
             <div class="footer-desc">The definitive database of football YouTubers across Europe's top leagues. Editorially curated by @fanreactionsfc.</div>
           </div>
           <div class="footer-col">
@@ -3347,6 +3885,7 @@ function renderFooter() {
             <a href="/tools/generator">Description Generator</a>
             <a href="/submit">Submit a Creator</a>
             <a href="/become-a-creator">Become a Creator</a>
+            <a href="/community/features">Feature Requests</a>
             <a href="#" onclick="event.preventDefault();openModal('signin')">Sign In / Sign Up</a>
           </div>
           <div class="footer-col">

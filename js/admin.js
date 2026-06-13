@@ -19,10 +19,24 @@ var creatorPage = 0;
 var reviewSearch = '';
 var PAGE_SIZE = 25;
 
+// ── Raw REST helper for admin (uses sbGet/sbPost/sbDelete/_sbAuthHeaders from app.js) ──
+async function sbPatch(path, body) {
+  try {
+    var res = await fetch(SUPABASE_URL + '/rest/v1/' + path, { method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify(body) });
+    if (!res.ok) {
+      var rb = await res.json().catch(function(){ return {}; });
+      return { data: null, error: { message: rb.message || rb.error || res.statusText, status: res.status } };
+    }
+    var ct = res.headers.get('content-type') || '';
+    var data = ct.includes('json') ? await res.json() : null;
+    return { data: data, error: null };
+  } catch (e) { return { data: null, error: e }; }
+}
+
 // ── Auth check ───────────────────────────────────────────────────────────────
 async function checkAdmin() {
-  const { data } = await sb.from('frfc_admin_roles').select('role').eq('user_id', currentUser?.id).single();
-  adminRole = data?.role || null;
+  var { data } = await sbGet('frfc_admin_roles?select=role&user_id=eq.' + (currentUser ? currentUser.id : ''));
+  adminRole = (data && data.length) ? data[0].role : null;
   return !!adminRole;
 }
 
@@ -38,16 +52,16 @@ function toast(msg, type) {
 
 // ── Log action ───────────────────────────────────────────────────────────────
 async function logAction(action, entityType, entityId, details) {
-  await sb.from('frfc_admin_log').insert({ user_id: currentUser.id, action: action, entity_type: entityType, entity_id: entityId, details: details || null });
+  await sbPost('frfc_admin_log', { user_id: currentUser.id, action: action, entity_type: entityType, entity_id: entityId, details: details || null }, { prefer: 'return=minimal' });
 }
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
   var [creatorsRes, reviewsRes, logRes, subsRes] = await Promise.all([
-    sb.from('frfc_streamers').select('*').order('name'),
-    sb.from('frfc_reviews').select('*').order('created_at', { ascending: false }),
-    sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
-    sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false })
+    sbGet('frfc_streamers?select=*&order=name'),
+    sbGet('frfc_reviews?select=*&order=created_at.desc'),
+    sbGet('frfc_admin_log?select=*&order=created_at.desc&limit=50'),
+    sbGet('frfc_submissions?select=*&order=submitted_at.desc')
   ]);
   allCreators = creatorsRes.data || [];
   allReviews = reviewsRes.data || [];
@@ -297,6 +311,8 @@ function openCreatorForm(c) {
       formField('League', 'cf_league', c?.league || '', 'select', ['Premier League','Championship','La Liga','Serie A','Bundesliga','Ligue 1'], 'Admin.onLeagueChange()') +
       '<div class="admin-form-row"><label class="admin-form-label" for="cf_team">Team</label><select class="admin-form-select" id="cf_team">' + buildTeamSelect(c?.league || '', c?.team || '') + '</select></div>' +
     '</div>' +
+    formField('Country Code', 'cf_country', c?.channel_country || '', 'text') +
+    '<div style="font-size:.72rem;color:var(--text-muted,#888);margin:-8px 0 12px">2-letter ISO code (e.g. GB, US, FR). Only needed if YouTube doesn\'t provide one.</div>' +
     '<div class="admin-form-grid">' +
       formCheck('Verified', 'cf_verified', c?.verified) +
       formCheck('Featured', 'cf_featured', c?.featured) +
@@ -309,46 +325,52 @@ function openCreatorForm(c) {
 }
 
 async function saveCreator(id) {
-  var channelUrl = document.getElementById('cf_channel').value.trim();
-  var name = document.getElementById('cf_name').value.trim();
-  // Auto-generate live_url from channel_url (append /streams)
-  var liveUrl = channelUrl ? channelUrl.replace(/\/+$/, '') + '/streams' : null;
-  var data = {
-    name: name,
-    team: document.getElementById('cf_team').value,
-    channel_url: channelUrl,
-    league: document.getElementById('cf_league').value,
-    slug: slugify(name),
-    live_url: liveUrl,
-    verified: document.getElementById('cf_verified').checked,
-    featured: document.getElementById('cf_featured').checked,
-    updated_at: new Date().toISOString()
-  };
-  if (!data.name) { toast('Channel name is required', 'error'); return; }
-  if (!data.team) { toast('Team is required', 'error'); return; }
+  try {
+    var channelUrl = document.getElementById('cf_channel').value.trim();
+    var name = document.getElementById('cf_name').value.trim();
+    // Auto-generate live_url from channel_url (append /streams)
+    var liveUrl = channelUrl ? channelUrl.replace(/\/+$/, '') + '/streams' : null;
+    var data = {
+      name: name,
+      team: document.getElementById('cf_team').value,
+      channel_url: channelUrl,
+      league: document.getElementById('cf_league').value,
+      slug: slugify(name),
+      live_url: liveUrl,
+      verified: document.getElementById('cf_verified').checked,
+      featured: document.getElementById('cf_featured').checked,
+      channel_country: document.getElementById('cf_country').value.trim().toUpperCase() || null,
+      updated_at: new Date().toISOString()
+    };
+    if (!data.name) { toast('Channel name is required', 'error'); return; }
+    if (!data.team) { toast('Team is required', 'error'); return; }
 
-  var err;
-  if (id) {
-    var res = await sb.from('frfc_streamers').update(data).eq('id', id);
-    err = res.error;
-    if (!err) await logAction('update', 'creator', id, { name: data.name });
-  } else {
-    data.created_by = currentUser.id;
-    var res = await sb.from('frfc_streamers').insert(data).select();
-    err = res.error;
-    if (!err) await logAction('create', 'creator', res.data?.[0]?.id, { name: data.name });
+    var err, res;
+    if (id) {
+      res = await sbPatch('frfc_streamers?id=eq.' + id, data);
+      err = res.error;
+      if (!err) await logAction('update', 'creator', id, { name: data.name });
+    } else {
+      data.created_by = currentUser.id;
+      res = await sbPost('frfc_streamers', data, { prefer: 'return=representation' });
+      err = res.error;
+      if (!err) await logAction('create', 'creator', (res.data && res.data[0]) ? res.data[0].id : null, { name: data.name });
+    }
+
+    if (err) { toast(err.message, 'error'); return; }
+    toast(id ? 'Creator updated' : 'Creator added', 'success');
+    closeModal();
+    await loadAdminData();
+    renderPage();
+  } catch (e) {
+    console.error('saveCreator error:', e);
+    toast('Error: ' + e.message, 'error');
   }
-
-  if (err) { toast(err.message, 'error'); return; }
-  toast(id ? 'Creator updated' : 'Creator added', 'success');
-  closeModal();
-  await loadAdminData();
-  renderPage();
 }
 
 async function deleteCreator(id, name) {
   if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
-  var { error } = await sb.from('frfc_streamers').delete().eq('id', id);
+  var { error } = await sbDelete('frfc_streamers?id=eq.' + id);
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'creator', id, { name: name });
   toast('Creator deleted', 'success');
@@ -394,7 +416,7 @@ async function approveSubmission(id) {
   // Create the creator in frfc_streamers
   var slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   var liveUrl = s.channel_url ? s.channel_url.replace(/\/+$/, '') + '/streams' : null;
-  var { error } = await sb.from('frfc_streamers').insert({
+  var { error } = await sbPost('frfc_streamers', {
     name: s.name,
     channel_url: s.channel_url,
     team: s.team,
@@ -402,11 +424,11 @@ async function approveSubmission(id) {
     slug: slug,
     live_url: liveUrl,
     created_by: currentUser.id
-  });
+  }, { prefer: 'return=minimal' });
   if (error) { toast('Failed to create creator: ' + error.message, 'error'); return; }
 
   // Mark submission as approved
-  await sb.from('frfc_submissions').update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
+  await sbPatch('frfc_submissions?id=eq.' + id, { status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id });
   await logAction('approve', 'submission', id, { name: s.name });
   toast(s.name + ' approved and added to database', 'success');
   await loadAdminData();
@@ -418,7 +440,7 @@ async function rejectSubmission(id) {
   if (!s) return;
   if (!confirm('Reject submission "' + s.name + '"?')) return;
 
-  await sb.from('frfc_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
+  await sbPatch('frfc_submissions?id=eq.' + id, { status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id });
   await logAction('reject', 'submission', id, { name: s.name });
   toast(s.name + ' rejected', 'info');
   await loadAdminData();
@@ -456,7 +478,7 @@ function searchReviews(q) { reviewSearch = q; renderPage(); }
 
 async function deleteReview(id) {
   if (!confirm('Delete this review?')) return;
-  var { error } = await sb.from('frfc_reviews').delete().eq('id', id);
+  var { error } = await sbDelete('frfc_reviews?id=eq.' + id);
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'review', id);
   toast('Review deleted', 'success');
@@ -604,11 +626,11 @@ async function runSync() {
         }
 
         // 3. Write to Supabase
-        await sb.from('frfc_streamers').update(update).eq('id', c.id);
+        await sbPatch('frfc_streamers?id=eq.' + c.id, update);
 
         // 4. Subscriber history
         if (update.subscriber_count > 0) {
-          await sb.from('frfc_subscriber_history').insert({ creator_id: c.id, subscriber_count: update.subscriber_count });
+          await sbPost('frfc_subscriber_history', { creator_id: c.id, subscriber_count: update.subscriber_count }, { prefer: 'return=minimal' });
         }
 
         ok++;
@@ -630,7 +652,7 @@ async function runSync() {
 
 async function resetAllLive() {
   if (!confirm('Reset is_live to false for all creators?')) return;
-  var { error } = await sb.from('frfc_streamers').update({ is_live: false, live_video_id: null }).neq('is_live', false);
+  var { error } = await sbPatch('frfc_streamers?is_live=neq.false', { is_live: false, live_video_id: null });
   if (error) { toast(error.message, 'error'); return; }
   await logAction('update', 'settings', null, { action: 'reset_all_live' });
   toast('All live statuses reset', 'success');
@@ -641,7 +663,7 @@ async function resetAllLive() {
 async function clearAllReviews() {
   if (!confirm('DELETE ALL REVIEWS? This cannot be undone!')) return;
   if (!confirm('Are you absolutely sure?')) return;
-  var { error } = await sb.from('frfc_reviews').delete().gte('created_at', '2000-01-01');
+  var { error } = await sbDelete('frfc_reviews?created_at=gte.2000-01-01');
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'reviews', null, { action: 'clear_all' });
   toast('All reviews deleted', 'success');

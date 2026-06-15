@@ -308,6 +308,11 @@ img.review-avatar{background:var(--bg-hover)}
 .modal .switch-link a{color:var(--accent);font-weight:600}
 .modal .auth-msg{font-size:.8rem;color:var(--red);margin-top:8px;min-height:1.2em}
 .modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:#fff;color:#3c4043;font-size:.9rem;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s,box-shadow .15s}
+.btn-google:hover{background:#f7f8f8;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.auth-divider{display:flex;align-items:center;text-align:center;color:var(--text-muted);font-size:.78rem;margin:16px 0}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.auth-divider span{padding:0 12px}
 
 /* ── Filters sidebar ───────────────────────────────────────────────────── */
 .discover-layout{display:grid;grid-template-columns:250px 1fr;gap:24px}

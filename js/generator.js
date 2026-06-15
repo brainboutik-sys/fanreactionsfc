@@ -92,6 +92,7 @@ function renderHTML() {
             <option>FA Cup</option>
             <option>Carabao Cup</option>
             <option>Conference League</option>
+            <option>FIFA World Cup</option>
           </select>
         </div>
       </div>

@@ -1,15 +1,17 @@
 // Netlify scheduled function — refreshes `is_live` / `live_video_id`
-// for all creators every 5 minutes by batch-checking their known latest
-// and live video IDs against YouTube's liveStreamingDetails.
+// for all creators by batch-checking their known latest and live video IDs
+// against YouTube's liveStreamingDetails.
+//
+// Off-peak baseline: every 30 minutes.
+// During peak match hours a companion function (live-check-peak.js) adds
+// 5-minute checks: weekdays 18–22 UTC, weekends 11–21 UTC.
 //
 // Required env vars:
 //   YOUTUBE_API_KEY             — server-side YouTube Data API key
 //   SUPABASE_URL                — Supabase project URL (optional, falls back to hardcoded)
 //   SUPABASE_SERVICE_ROLE_KEY   — service-role key so PATCH bypasses RLS
-//
-// Cost: ~3 YouTube quota units per run (for ~150 creators), ~864/day.
 
-exports.config = { schedule: '*/5 * * * *' };
+exports.config = { schedule: '*/30 * * * *' };
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 

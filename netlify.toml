@@ -7,6 +7,15 @@
 [functions."creator-og"]
   included_files = ["index.html"]
 
+# ── Scheduled functions ──────────────────────────────────────────────────
+# Baseline live-check: every 30 minutes
+[functions."live-check"]
+schedule = "*/30 * * * *"
+
+# Peak-hours live-check: every 5 minutes during match windows
+[functions."live-check-peak"]
+schedule = "*/5 * * * *"
+
 # Dynamic sitemap generated from the Supabase creator list.
 [[redirects]]
   from = "/sitemap.xml"

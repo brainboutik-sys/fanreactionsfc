@@ -19,24 +19,10 @@ var creatorPage = 0;
 var reviewSearch = '';
 var PAGE_SIZE = 25;
 
-// ── Raw REST helper for admin (uses sbGet/sbPost/sbDelete/_sbAuthHeaders from app.js) ──
-async function sbPatch(path, body) {
-  try {
-    var res = await fetch(SUPABASE_URL + '/rest/v1/' + path, { method: 'PATCH', headers: _sbAuthHeaders(), body: JSON.stringify(body) });
-    if (!res.ok) {
-      var rb = await res.json().catch(function(){ return {}; });
-      return { data: null, error: { message: rb.message || rb.error || res.statusText, status: res.status } };
-    }
-    var ct = res.headers.get('content-type') || '';
-    var data = ct.includes('json') ? await res.json() : null;
-    return { data: data, error: null };
-  } catch (e) { return { data: null, error: e }; }
-}
-
 // ── Auth check ───────────────────────────────────────────────────────────────
 async function checkAdmin() {
-  var { data } = await sbGet('frfc_admin_roles?select=role&user_id=eq.' + (currentUser ? currentUser.id : ''));
-  adminRole = (data && data.length) ? data[0].role : null;
+  const { data } = await sb.from('frfc_admin_roles').select('role').eq('user_id', currentUser?.id).single();
+  adminRole = data?.role || null;
   return !!adminRole;
 }
 
@@ -52,16 +38,16 @@ function toast(msg, type) {
 
 // ── Log action ───────────────────────────────────────────────────────────────
 async function logAction(action, entityType, entityId, details) {
-  await sbPost('frfc_admin_log', { user_id: currentUser.id, action: action, entity_type: entityType, entity_id: entityId, details: details || null }, { prefer: 'return=minimal' });
+  await sb.from('frfc_admin_log').insert({ user_id: currentUser.id, action: action, entity_type: entityType, entity_id: entityId, details: details || null });
 }
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
   var [creatorsRes, reviewsRes, logRes, subsRes] = await Promise.all([
-    sbGet('frfc_streamers?select=*&order=name'),
-    sbGet('frfc_reviews?select=*&order=created_at.desc'),
-    sbGet('frfc_admin_log?select=*&order=created_at.desc&limit=50'),
-    sbGet('frfc_submissions?select=*&order=submitted_at.desc')
+    sb.from('frfc_streamers').select('*').order('name'),
+    sb.from('frfc_reviews').select('*').order('created_at', { ascending: false }),
+    sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
+    sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false })
   ]);
   allCreators = creatorsRes.data || [];
   allReviews = reviewsRes.data || [];
@@ -347,14 +333,14 @@ async function saveCreator(id) {
 
     var err, res;
     if (id) {
-      res = await sbPatch('frfc_streamers?id=eq.' + id, data);
+      res = await sb.from('frfc_streamers').update(data).eq('id', id);
       err = res.error;
       if (!err) await logAction('update', 'creator', id, { name: data.name });
     } else {
       data.created_by = currentUser.id;
-      res = await sbPost('frfc_streamers', data, { prefer: 'return=representation' });
+      res = await sb.from('frfc_streamers').insert(data).select();
       err = res.error;
-      if (!err) await logAction('create', 'creator', (res.data && res.data[0]) ? res.data[0].id : null, { name: data.name });
+      if (!err) await logAction('create', 'creator', res.data?.[0]?.id, { name: data.name });
     }
 
     if (err) { toast(err.message, 'error'); return; }
@@ -370,7 +356,7 @@ async function saveCreator(id) {
 
 async function deleteCreator(id, name) {
   if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
-  var { error } = await sbDelete('frfc_streamers?id=eq.' + id);
+  var { error } = await sb.from('frfc_streamers').delete().eq('id', id);
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'creator', id, { name: name });
   toast('Creator deleted', 'success');
@@ -416,7 +402,7 @@ async function approveSubmission(id) {
   // Create the creator in frfc_streamers
   var slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   var liveUrl = s.channel_url ? s.channel_url.replace(/\/+$/, '') + '/streams' : null;
-  var { error } = await sbPost('frfc_streamers', {
+  var { error } = await sb.from('frfc_streamers').insert({
     name: s.name,
     channel_url: s.channel_url,
     team: s.team,
@@ -424,11 +410,11 @@ async function approveSubmission(id) {
     slug: slug,
     live_url: liveUrl,
     created_by: currentUser.id
-  }, { prefer: 'return=minimal' });
+  });
   if (error) { toast('Failed to create creator: ' + error.message, 'error'); return; }
 
   // Mark submission as approved
-  await sbPatch('frfc_submissions?id=eq.' + id, { status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id });
+  await sb.from('frfc_submissions').update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
   await logAction('approve', 'submission', id, { name: s.name });
   toast(s.name + ' approved and added to database', 'success');
   await loadAdminData();
@@ -440,7 +426,7 @@ async function rejectSubmission(id) {
   if (!s) return;
   if (!confirm('Reject submission "' + s.name + '"?')) return;
 
-  await sbPatch('frfc_submissions?id=eq.' + id, { status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id });
+  await sb.from('frfc_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
   await logAction('reject', 'submission', id, { name: s.name });
   toast(s.name + ' rejected', 'info');
   await loadAdminData();
@@ -478,7 +464,7 @@ function searchReviews(q) { reviewSearch = q; renderPage(); }
 
 async function deleteReview(id) {
   if (!confirm('Delete this review?')) return;
-  var { error } = await sbDelete('frfc_reviews?id=eq.' + id);
+  var { error } = await sb.from('frfc_reviews').delete().eq('id', id);
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'review', id);
   toast('Review deleted', 'success');
@@ -626,11 +612,11 @@ async function runSync() {
         }
 
         // 3. Write to Supabase
-        await sbPatch('frfc_streamers?id=eq.' + c.id, update);
+        await sb.from('frfc_streamers').update(update).eq('id', c.id);
 
         // 4. Subscriber history
         if (update.subscriber_count > 0) {
-          await sbPost('frfc_subscriber_history', { creator_id: c.id, subscriber_count: update.subscriber_count }, { prefer: 'return=minimal' });
+          await sb.from('frfc_subscriber_history').insert({ creator_id: c.id, subscriber_count: update.subscriber_count });
         }
 
         ok++;
@@ -652,7 +638,7 @@ async function runSync() {
 
 async function resetAllLive() {
   if (!confirm('Reset is_live to false for all creators?')) return;
-  var { error } = await sbPatch('frfc_streamers?is_live=neq.false', { is_live: false, live_video_id: null });
+  var { error } = await sb.from('frfc_streamers').update({ is_live: false, live_video_id: null }).neq('is_live', false);
   if (error) { toast(error.message, 'error'); return; }
   await logAction('update', 'settings', null, { action: 'reset_all_live' });
   toast('All live statuses reset', 'success');
@@ -663,7 +649,7 @@ async function resetAllLive() {
 async function clearAllReviews() {
   if (!confirm('DELETE ALL REVIEWS? This cannot be undone!')) return;
   if (!confirm('Are you absolutely sure?')) return;
-  var { error } = await sbDelete('frfc_reviews?created_at=gte.2000-01-01');
+  var { error } = await sb.from('frfc_reviews').delete().gte('created_at', '2000-01-01');
   if (error) { toast(error.message, 'error'); return; }
   await logAction('delete', 'reviews', null, { action: 'clear_all' });
   toast('All reviews deleted', 'success');

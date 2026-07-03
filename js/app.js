@@ -326,7 +326,7 @@ function renderAuthRequired(what) {
 }
 
 function updateNavActive(path) {
-  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navBecome: '/become-a-creator' };
+  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navBecome: '/become-a-creator', navCommunity: '/community' };
   Object.entries(links).forEach(([id, prefix]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -401,6 +401,14 @@ function handleRoute() {
       currentRoute = { page: 'becomeCreator' };
       updatePageMeta('How to Start a Football Live Streaming Channel on YouTube | FanReactionsFC', 'Free step-by-step guide to setting up a professional football watchalong channel on YouTube using Prism Live Studio, Uno Overlays, and Canva. Start streaming for free.');
       renderBecomeCreator();
+    } else if (path === '/community/features' || path === '/community/features/') {
+      currentRoute = { page: 'features' };
+      updatePageMeta('Community Feature Requests | FanReactionsFC', 'Suggest and vote on new features for FanReactionsFC. Help shape the future of the platform.');
+      renderFeatureRequests();
+    } else if (path.startsWith('/community/features/')) {
+      const featureId = path.split('/community/features/')[1].replace(/\/$/, '');
+      currentRoute = { page: 'featureDetail', featureId };
+      renderFeatureDetail(featureId);
     } else if (path === '/account') {
       currentRoute = { page: 'account' };
       renderAccount();
@@ -508,6 +516,17 @@ async function signIn(email, password) {
   await refreshAuth();
   closeModal();
   return null;
+}
+
+// Google OAuth — supabase-js handles the redirect back automatically
+// (detectSessionInUrl is on by default), firing onAuthStateChange → refreshAuth.
+async function signInWithGoogle() {
+  const msg = document.getElementById('authMsg');
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  });
+  if (error && msg) { msg.textContent = error.message; msg.style.color = 'var(--red)'; }
 }
 
 async function signUp(email, password) {
@@ -2653,6 +2672,11 @@ function openModal(type = 'signin') {
     <button class="modal-close" onclick="closeModal()">&times;</button>
     <h2>${isSignIn ? 'Welcome back' : 'Create an account'}</h2>
     <p class="modal-sub">${isSignIn ? 'Sign in to follow and favourite creators.' : 'Join the community of football YouTube fans.'}</p>
+    <button type="button" class="btn-google" onclick="signInWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.71-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.97 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+      Continue with Google
+    </button>
+    <div class="auth-divider"><span>or</span></div>
     <label>Email</label>
     <input type="email" id="authEmail" placeholder="you@example.com">
     <label>Password</label>
@@ -3078,6 +3102,459 @@ function renderBecomeCreator() {
   `;
 }
 
+// ── Feature Requests ─────────────────────────────────────────────────────
+// Data access uses the supabase-js `sb` client (RLS-aware). Backing tables:
+// frfc_feature_requests / _votes / _comments / _comment_likes / _status_log.
+
+const FR_CATEGORIES = [
+  'Website Features','Mobile Experience','Watch Along Features','Community Features',
+  'Statistics & Data','User Profiles','Notifications','Fantasy & Prediction Games','Other'
+];
+
+const FR_STATUSES = {
+  open:           { label: 'Open',           color: 'var(--blue,#3b82f6)' },
+  under_review:   { label: 'Under Review',   color: 'var(--yellow,#f59e0b)' },
+  planned:        { label: 'Planned',        color: 'var(--purple,#8b5cf6)' },
+  in_development: { label: 'In Development', color: 'var(--orange,#f97316)' },
+  released:       { label: 'Released',       color: 'var(--green,#22c55e)' },
+  declined:       { label: 'Declined',       color: 'var(--red,#ef4444)' }
+};
+
+function frStatusBadge(status) {
+  const s = FR_STATUSES[status] || FR_STATUSES.open;
+  return `<span class="fr-status" style="--fr-status-color:${s.color}">${s.label}</span>`;
+}
+
+function frTimeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+// Cache the admin check per session so we don't re-query on every render.
+let _frIsAdmin = null;
+async function frCheckAdmin() {
+  if (!currentUser) return false;
+  if (_frIsAdmin !== null) return _frIsAdmin;
+  try {
+    const { data } = await sb.from('frfc_admin_roles').select('role').eq('user_id', currentUser.id);
+    _frIsAdmin = !!(data && data.length);
+  } catch (_) { _frIsAdmin = false; }
+  return _frIsAdmin;
+}
+
+let _frCache = [];
+let _frUserVotes = new Set();
+
+async function renderFeatureRequests() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="fr-hero">
+      <div class="container">
+        <h1>Community Feature Requests</h1>
+        <p class="fr-hero-sub">Help shape the future of Fan Reactions FC.</p>
+        <button class="btn btn-primary fr-suggest-btn" onclick="openFeatureSubmitModal()">+ Suggest a Feature</button>
+      </div>
+    </div>
+    <div class="container fr-container">
+      <div class="fr-toolbar">
+        <div class="fr-search-wrap">
+          <input type="text" class="fr-search" id="frSearch" placeholder="Search ideas..." oninput="filterFeatureRequests()">
+        </div>
+        <div class="fr-filters">
+          <select id="frCategoryFilter" class="fr-select" onchange="filterFeatureRequests()">
+            <option value="">All Categories</option>
+            ${FR_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+          <select id="frStatusFilter" class="fr-select" onchange="filterFeatureRequests()">
+            <option value="">All Statuses</option>
+            ${Object.entries(FR_STATUSES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}
+          </select>
+          <select id="frSort" class="fr-select" onchange="filterFeatureRequests()">
+            <option value="popular">Most Popular</option>
+            <option value="newest">Newest</option>
+            <option value="trending">Trending</option>
+            <option value="updated">Recently Updated</option>
+          </select>
+        </div>
+      </div>
+      <div id="frList" class="fr-list"><div class="fr-loading">Loading ideas...</div></div>
+    </div>
+    ${renderFooter()}`;
+  await loadFeatureRequests();
+}
+
+async function loadFeatureRequests() {
+  const { data, error } = await sb.from('frfc_feature_requests')
+    .select('*').is('merged_into', null)
+    .order('is_pinned', { ascending: false })
+    .order('vote_count', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) {
+    const el = document.getElementById('frList');
+    if (el) el.innerHTML = '<div class="fr-empty">Could not load feature requests.</div>';
+    return;
+  }
+  _frCache = data || [];
+  if (currentUser) {
+    const { data: votes } = await sb.from('frfc_feature_votes').select('feature_id').eq('user_id', currentUser.id);
+    _frUserVotes = new Set((votes || []).map(v => v.feature_id));
+  } else {
+    _frUserVotes = new Set();
+  }
+  filterFeatureRequests();
+}
+
+function filterFeatureRequests() {
+  const search = (document.getElementById('frSearch')?.value || '').toLowerCase();
+  const cat = document.getElementById('frCategoryFilter')?.value || '';
+  const status = document.getElementById('frStatusFilter')?.value || '';
+  const sort = document.getElementById('frSort')?.value || 'popular';
+  let filtered = _frCache.filter(r => {
+    if (cat && r.category !== cat) return false;
+    if (status && r.status !== status) return false;
+    if (search && !r.title.toLowerCase().includes(search) && !r.description.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  if (sort === 'popular') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || (b.vote_count - a.vote_count));
+  else if (sort === 'newest') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || new Date(b.created_at) - new Date(a.created_at));
+  else if (sort === 'trending') filtered.sort((a, b) => {
+    const aAge = (Date.now() - new Date(a.created_at).getTime()) / 3600000;
+    const bAge = (Date.now() - new Date(b.created_at).getTime()) / 3600000;
+    return (b.is_pinned - a.is_pinned) || ((b.vote_count / (bAge + 2)) - (a.vote_count / (aAge + 2)));
+  });
+  else if (sort === 'updated') filtered.sort((a, b) => (b.is_pinned - a.is_pinned) || new Date(b.updated_at) - new Date(a.updated_at));
+  const list = document.getElementById('frList');
+  if (!list) return;
+  if (!filtered.length) { list.innerHTML = '<div class="fr-empty">No feature requests found.</div>'; return; }
+  list.innerHTML = filtered.map(r => {
+    const voted = _frUserVotes.has(r.id);
+    return `
+      <div class="fr-card ${r.is_pinned ? 'fr-card--pinned' : ''}">
+        <div class="fr-vote-col">
+          <button class="fr-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="event.stopPropagation();toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote'}">
+            <svg width="14" height="10" viewBox="0 0 14 10"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
+          </button>
+          <span class="fr-vote-count">${r.vote_count}</span>
+        </div>
+        <div class="fr-card-body" onclick="navigate('/community/features/${r.id}')">
+          <div class="fr-card-header">
+            ${r.is_pinned ? '<span class="fr-pin" title="Pinned">📌</span>' : ''}
+            <h3 class="fr-card-title">${escHtml(r.title)}</h3>
+            ${frStatusBadge(r.status)}
+          </div>
+          <p class="fr-card-desc">${escHtml(r.description.length > 140 ? r.description.slice(0, 140) + '…' : r.description)}</p>
+          <div class="fr-card-meta">
+            <span class="fr-card-cat">${escHtml(r.category)}</span>
+            <span>💬 ${r.comment_count}</span>
+            <span>${frTimeAgo(r.created_at)}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function toggleFeatureVote(featureId) {
+  if (!currentUser) { openModal('signin'); return; }
+  const hasVote = _frUserVotes.has(featureId);
+  const card = _frCache.find(r => r.id === featureId);
+  if (hasVote) {
+    _frUserVotes.delete(featureId);
+    if (card) card.vote_count = Math.max(0, card.vote_count - 1);
+    filterFeatureRequests();
+    updateDetailVoteUI(featureId, false, card?.vote_count);
+    await sb.from('frfc_feature_votes').delete().eq('feature_id', featureId).eq('user_id', currentUser.id);
+    await sb.rpc('frfc_feature_vote_down', { p_feature_id: featureId });
+  } else {
+    _frUserVotes.add(featureId);
+    if (card) card.vote_count++;
+    filterFeatureRequests();
+    updateDetailVoteUI(featureId, true, card?.vote_count);
+    await sb.from('frfc_feature_votes').insert({ feature_id: featureId, user_id: currentUser.id });
+    await sb.rpc('frfc_feature_vote_up', { p_feature_id: featureId });
+  }
+}
+
+function updateDetailVoteUI(featureId, voted, count) {
+  const btn = document.querySelector('.fr-detail-vote-btn');
+  const countEl = document.querySelector('.fr-detail-vote-count');
+  if (btn) { btn.classList.toggle('fr-vote-btn--active', voted); btn.title = voted ? 'Remove vote' : 'Upvote this idea'; }
+  if (countEl && count !== undefined) countEl.textContent = count;
+}
+
+function openFeatureSubmitModal() {
+  if (!currentUser) { openModal('signin'); return; }
+  const overlay = document.getElementById('authOverlay');
+  const modal = document.getElementById('authModal');
+  modal.innerHTML = `
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <h2>Suggest a Feature</h2>
+    <p class="modal-sub">Describe your idea and the community will vote on it.</p>
+    <label>Title</label>
+    <input type="text" id="frTitle" placeholder="Short, descriptive title" maxlength="120">
+    <label>Category</label>
+    <select id="frCategory" class="fr-select" style="width:100%;margin-bottom:14px">
+      ${FR_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <label>Description</label>
+    <textarea id="frDesc" placeholder="Explain what you'd like and why it matters..." style="width:100%;min-height:120px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical;margin-bottom:14px"></textarea>
+    <button class="btn btn-primary" style="width:100%" onclick="submitFeatureRequest()">Submit Idea</button>
+    <div class="auth-msg" id="frMsg"></div>`;
+  overlay.classList.add('open');
+}
+
+async function submitFeatureRequest() {
+  const title = document.getElementById('frTitle')?.value.trim();
+  const category = document.getElementById('frCategory')?.value;
+  const description = document.getElementById('frDesc')?.value.trim();
+  const msg = document.getElementById('frMsg');
+  if (!title || title.length < 5) { msg.textContent = 'Title must be at least 5 characters.'; msg.style.color = 'var(--red)'; return; }
+  if (!description || description.length < 20) { msg.textContent = 'Description must be at least 20 characters.'; msg.style.color = 'var(--red)'; return; }
+  msg.textContent = 'Submitting...'; msg.style.color = 'var(--text-dim)';
+  const { error } = await sb.from('frfc_feature_requests').insert({ user_id: currentUser.id, title, description, category });
+  if (error) { msg.textContent = error.message || 'Failed to submit.'; msg.style.color = 'var(--red)'; return; }
+  closeModal();
+  if (currentRoute.page === 'features') { await loadFeatureRequests(); } else { navigate('/community/features'); }
+}
+
+async function renderFeatureDetail(featureId) {
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div style="color:var(--text-dim)">Loading...</div></div>`;
+  const { data, error } = await sb.from('frfc_feature_requests').select('*').eq('id', featureId).limit(1);
+  if (error || !data || !data.length) {
+    app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">Feature request not found</div><a href="/community/features" class="btn btn-primary" style="margin-top:12px">Back to Features</a></div></div>${renderFooter()}`;
+    return;
+  }
+  const r = data[0];
+  if (r.merged_into) { navigate(`/community/features/${r.merged_into}`, false); return; }
+  updatePageMeta(`${r.title} | Feature Requests | FanReactionsFC`, r.description.slice(0, 160));
+  if (currentUser) {
+    const { data: votes } = await sb.from('frfc_feature_votes').select('feature_id').eq('user_id', currentUser.id).eq('feature_id', featureId);
+    _frUserVotes = new Set((votes || []).map(v => v.feature_id));
+  }
+  const voted = _frUserVotes.has(r.id);
+  const isAdmin = await frCheckAdmin();
+  const { data: logData } = await sb.from('frfc_feature_status_log').select('*').eq('feature_id', featureId).order('created_at', { ascending: false });
+  const statusLog = logData || [];
+  app.innerHTML = `
+    <div class="container fr-detail-container">
+      <a href="/community/features" class="fr-back-link">← All Feature Requests</a>
+      <div class="fr-detail">
+        <div class="fr-detail-sidebar">
+          <button class="fr-vote-btn fr-detail-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote this idea'}">
+            <svg width="18" height="12" viewBox="0 0 14 10"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
+          </button>
+          <span class="fr-detail-vote-count">${r.vote_count}</span>
+          <span class="fr-detail-vote-label">votes</span>
+        </div>
+        <div class="fr-detail-main">
+          <div class="fr-detail-header">
+            <h1 class="fr-detail-title">${escHtml(r.title)}</h1>
+            ${frStatusBadge(r.status)}
+          </div>
+          <div class="fr-detail-meta">
+            <span class="fr-card-cat">${escHtml(r.category)}</span>
+            <span>${frTimeAgo(r.created_at)}</span>
+            <span>💬 ${r.comment_count} comments</span>
+          </div>
+          <div class="fr-detail-desc">${escHtml(r.description).replace(/\n/g, '<br>')}</div>
+          ${r.admin_response ? `
+            <div class="fr-official-response">
+              <div class="fr-official-label">Official Response</div>
+              <p>${escHtml(r.admin_response).replace(/\n/g, '<br>')}</p>
+              ${r.admin_response_at ? `<div class="fr-official-time">${frTimeAgo(r.admin_response_at)}</div>` : ''}
+            </div>` : ''}
+          ${statusLog.length ? `
+            <div class="fr-status-timeline">
+              <h3>Status History</h3>
+              ${statusLog.map(l => `
+                <div class="fr-status-event">
+                  ${frStatusBadge(l.new_status)}
+                  ${l.note ? `<span class="fr-status-note">${escHtml(l.note)}</span>` : ''}
+                  <span class="fr-status-time">${frTimeAgo(l.created_at)}</span>
+                </div>`).join('')}
+            </div>` : ''}
+          ${isAdmin ? renderFeatureAdminPanel(r) : ''}
+          <div class="fr-comments-section" id="frComments">
+            <h3>Discussion</h3>
+            ${r.is_locked ? '<p class="fr-locked-notice">🔒 This discussion is locked.</p>' : ''}
+            <div id="frCommentList"><div style="color:var(--text-dim);font-size:.85rem">Loading comments...</div></div>
+            ${!r.is_locked ? `
+              <div class="fr-comment-form" id="frCommentForm">
+                <textarea id="frCommentBody" placeholder="${currentUser ? 'Add a comment...' : 'Sign in to comment'}" ${currentUser ? '' : 'disabled'} style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical"></textarea>
+                <button class="btn btn-primary" style="margin-top:8px" onclick="postFeatureComment('${r.id}')" ${currentUser ? '' : 'disabled'}>Post Comment</button>
+                <span class="auth-msg" id="frCommentMsg"></span>
+              </div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}`;
+  loadFeatureComments(featureId);
+}
+
+function renderFeatureAdminPanel(r) {
+  return `
+    <div class="fr-admin-panel">
+      <h3>Admin Actions</h3>
+      <div class="fr-admin-row">
+        <label>Status</label>
+        <select id="frAdminStatus" class="fr-select">
+          ${Object.entries(FR_STATUSES).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${v.label}</option>`).join('')}
+        </select>
+        <input type="text" id="frAdminStatusNote" placeholder="Note (optional)" class="fr-admin-note-input">
+        <button class="btn btn-primary btn-sm" onclick="adminUpdateFeatureStatus('${r.id}')">Update Status</button>
+      </div>
+      <div class="fr-admin-row">
+        <label>Official Response</label>
+        <textarea id="frAdminResponse" style="width:100%;min-height:60px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.85rem;resize:vertical">${r.admin_response ? escHtml(r.admin_response) : ''}</textarea>
+        <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="adminPostOfficialResponse('${r.id}')">Save Response</button>
+      </div>
+      <div class="fr-admin-row fr-admin-toggles">
+        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeaturePin('${r.id}', ${!r.is_pinned})">${r.is_pinned ? '📌 Unpin' : '📌 Pin'}</button>
+        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeatureLock('${r.id}', ${!r.is_locked})">${r.is_locked ? '🔓 Unlock' : '🔒 Lock'}</button>
+        <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="adminDeleteFeatureRequest('${r.id}')">🗑 Delete</button>
+      </div>
+      <div class="fr-admin-row">
+        <label>Merge Into (paste target feature ID)</label>
+        <input type="text" id="frMergeTarget" placeholder="Target feature ID" style="flex:1">
+        <button class="btn btn-sm btn-ghost" onclick="adminMergeFeature('${r.id}')">Merge</button>
+      </div>
+      <div class="auth-msg" id="frAdminMsg"></div>
+    </div>`;
+}
+
+async function adminUpdateFeatureStatus(featureId) {
+  const newStatus = document.getElementById('frAdminStatus')?.value;
+  const note = document.getElementById('frAdminStatusNote')?.value.trim();
+  const msg = document.getElementById('frAdminMsg');
+  if (!newStatus) return;
+  const { error } = await sb.from('frfc_feature_requests').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', featureId);
+  if (error) { msg.textContent = 'Failed to update status.'; msg.style.color = 'var(--red)'; return; }
+  await sb.from('frfc_feature_status_log').insert({ feature_id: featureId, new_status: newStatus, changed_by: currentUser.id, note: note || null });
+  msg.textContent = 'Status updated!'; msg.style.color = 'var(--green)';
+  setTimeout(() => renderFeatureDetail(featureId), 800);
+}
+
+async function adminPostOfficialResponse(featureId) {
+  const body = document.getElementById('frAdminResponse')?.value.trim();
+  const msg = document.getElementById('frAdminMsg');
+  const { error } = await sb.from('frfc_feature_requests').update({ admin_response: body || null, admin_response_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', featureId);
+  if (error) { msg.textContent = 'Failed to save response.'; msg.style.color = 'var(--red)'; return; }
+  msg.textContent = 'Response saved!'; msg.style.color = 'var(--green)';
+  setTimeout(() => renderFeatureDetail(featureId), 800);
+}
+
+async function adminToggleFeaturePin(featureId, pinned) {
+  await sb.from('frfc_feature_requests').update({ is_pinned: pinned }).eq('id', featureId);
+  renderFeatureDetail(featureId);
+}
+
+async function adminToggleFeatureLock(featureId, locked) {
+  await sb.from('frfc_feature_requests').update({ is_locked: locked }).eq('id', featureId);
+  renderFeatureDetail(featureId);
+}
+
+async function adminDeleteFeatureRequest(featureId) {
+  if (!confirm('Delete this feature request permanently?')) return;
+  await sb.from('frfc_feature_requests').delete().eq('id', featureId);
+  navigate('/community/features');
+}
+
+async function adminMergeFeature(sourceId) {
+  const targetId = document.getElementById('frMergeTarget')?.value.trim();
+  const msg = document.getElementById('frAdminMsg');
+  if (!targetId) { msg.textContent = 'Enter target feature ID.'; msg.style.color = 'var(--red)'; return; }
+  const { error } = await sb.rpc('frfc_feature_merge', { p_source_id: sourceId, p_target_id: targetId });
+  if (error) { msg.textContent = error.message || 'Merge failed.'; msg.style.color = 'var(--red)'; return; }
+  msg.textContent = 'Merged! Redirecting...'; msg.style.color = 'var(--green)';
+  setTimeout(() => navigate(`/community/features/${targetId}`), 800);
+}
+
+async function loadFeatureComments(featureId) {
+  const { data } = await sb.from('frfc_feature_comments').select('*').eq('feature_id', featureId).order('created_at', { ascending: true });
+  const comments = data || [];
+  let userLikes = new Set();
+  if (currentUser && comments.length) {
+    const { data: likes } = await sb.from('frfc_feature_comment_likes').select('comment_id')
+      .eq('user_id', currentUser.id).in('comment_id', comments.map(c => c.id));
+    userLikes = new Set((likes || []).map(l => l.comment_id));
+  }
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replies = {};
+  comments.filter(c => c.parent_id).forEach(c => { (replies[c.parent_id] = replies[c.parent_id] || []).push(c); });
+  const list = document.getElementById('frCommentList');
+  if (!list) return;
+  if (!comments.length) { list.innerHTML = '<p style="color:var(--text-dim);font-size:.85rem">No comments yet. Be the first to share your thoughts!</p>'; return; }
+  function renderComment(c, isReply = false) {
+    const liked = userLikes.has(c.id);
+    return `
+      <div class="fr-comment ${isReply ? 'fr-comment--reply' : ''} ${c.is_official ? 'fr-comment--official' : ''}">
+        <div class="fr-comment-header">
+          ${c.is_official ? '<span class="fr-official-badge">Official</span>' : ''}
+          <span class="fr-comment-time">${frTimeAgo(c.created_at)}</span>
+        </div>
+        <div class="fr-comment-body">${escHtml(c.body).replace(/\n/g, '<br>')}</div>
+        <div class="fr-comment-actions">
+          <button class="fr-like-btn ${liked ? 'fr-like-btn--active' : ''}" onclick="toggleCommentLike('${c.id}','${featureId}')">
+            ${liked ? '❤️' : '🤍'} ${c.like_count}
+          </button>
+          ${!isReply && currentUser ? `<button class="fr-reply-btn" onclick="showReplyForm('${c.id}','${featureId}')">Reply</button>` : ''}
+        </div>
+        <div id="replyForm_${c.id}"></div>
+        ${(replies[c.id] || []).map(rp => renderComment(rp, true)).join('')}
+      </div>`;
+  }
+  list.innerHTML = topLevel.map(c => renderComment(c)).join('');
+}
+
+function showReplyForm(parentId, featureId) {
+  const container = document.getElementById(`replyForm_${parentId}`);
+  if (!container) return;
+  if (container.innerHTML.trim()) { container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <div class="fr-reply-form">
+      <textarea id="replyBody_${parentId}" placeholder="Write a reply..." style="width:100%;min-height:50px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.84rem;resize:vertical"></textarea>
+      <button class="btn btn-primary btn-sm" style="margin-top:4px" onclick="postFeatureComment('${featureId}','${parentId}')">Reply</button>
+    </div>`;
+}
+
+async function postFeatureComment(featureId, parentId) {
+  if (!currentUser) { openModal('signin'); return; }
+  const isReply = !!parentId;
+  const bodyEl = isReply ? document.getElementById(`replyBody_${parentId}`) : document.getElementById('frCommentBody');
+  const body = bodyEl?.value.trim();
+  const msg = document.getElementById('frCommentMsg');
+  if (!body) { if (msg) { msg.textContent = 'Comment cannot be empty.'; msg.style.color = 'var(--red)'; } return; }
+  const isAdmin = await frCheckAdmin();
+  const { error } = await sb.from('frfc_feature_comments').insert({ feature_id: featureId, user_id: currentUser.id, parent_id: parentId || null, body, is_official: isAdmin || false });
+  if (error) { if (msg) { msg.textContent = error.message || 'Failed to post comment.'; msg.style.color = 'var(--red)'; } return; }
+  await sb.rpc('frfc_feature_comment_added', { p_feature_id: featureId });
+  bodyEl.value = '';
+  loadFeatureComments(featureId);
+}
+
+async function toggleCommentLike(commentId, featureId) {
+  if (!currentUser) { openModal('signin'); return; }
+  const btn = event.target.closest('.fr-like-btn');
+  const isLiked = btn?.classList.contains('fr-like-btn--active');
+  const current = parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0);
+  if (isLiked) {
+    await sb.from('frfc_feature_comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id);
+    await sb.from('frfc_feature_comments').update({ like_count: Math.max(0, current - 1) }).eq('id', commentId);
+  } else {
+    await sb.from('frfc_feature_comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
+    await sb.from('frfc_feature_comments').update({ like_count: current + 1 }).eq('id', commentId);
+  }
+  loadFeatureComments(featureId);
+}
+
 // ── Footer ────────────────────────────────────────────────────────────────
 function renderFooter() {
   return `
@@ -3099,6 +3576,7 @@ function renderFooter() {
             <a href="/tools/generator">Description Generator</a>
             <a href="/submit">Submit a Creator</a>
             <a href="/become-a-creator">Become a Creator</a>
+            <a href="/community/features">Feature Requests</a>
             <a href="#" onclick="event.preventDefault();openModal('signin')">Sign In / Sign Up</a>
           </div>
           <div class="footer-col">

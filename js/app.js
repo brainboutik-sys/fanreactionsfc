@@ -264,11 +264,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLoading();
     await loadCreators();
     loadFavouriteCounts(); // fire-and-forget; non-critical
-    await refreshAuth();
-    sb.auth.onAuthStateChange(() => refreshAuth());
+    updateAuthUI();        // show Sign In button immediately
     handleRoute();
     window.addEventListener('popstate', handleRoute);
     initSearch();
+    // Resolve the session in the background so first paint doesn't wait on
+    // the auth round-trip. If a user turns out to be signed in, re-render
+    // the current route once so auth-dependent UI (account/admin pages,
+    // favourite hearts, feature-vote state) reflects the session.
+    refreshAuth().then(() => { if (currentUser) handleRoute(); }).catch(() => {});
+    sb.auth.onAuthStateChange(() => refreshAuth());
   } catch (e) {
     console.error('Init failed:', e);
     document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><h2>Something went wrong</h2><p style="color:var(--text-dim)">' + e.message + '</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>';

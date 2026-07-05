@@ -233,9 +233,6 @@ function crestImg(team, cls = 'crest') {
   return `<img src="${url}" alt="" class="${cls}" loading="lazy" onerror="this.style.display='none'">`;
 }
 
-// ── Theme ─────────────────────────────────────────────────────────────────
-function initTheme() { /* light-only, no toggle needed */ }
-
 // ── Teams (derived from DB) ───────────────────────────────────────────────
 function getTeams() {
   const teams = new Set(creators.map(c => c.team).filter(Boolean));
@@ -264,7 +261,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     if (!sb && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     if (!sb) throw new Error('Supabase library failed to load. Please reload the page.');
-    initTheme();
     showLoading();
     await loadCreators();
     loadFavouriteCounts(); // fire-and-forget; non-critical
@@ -655,11 +651,10 @@ function countryName(code) {
   if (!code || code.length !== 2) return '';
   return COUNTRY_NAMES[code.toUpperCase()] || '';
 }
-function avatarUrl(c) { return c.avatar || ''; }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
 function avatarOnerror(img, name) { img.onerror=null; img.style.display='none'; const el=document.createElement('div'); el.className=img.className+' avatar-fallback'; el.textContent=avatarInitials(name); img.parentNode.insertBefore(el,img); }
 function avatarImg(c, cls = 'cc-avatar') {
-  const url = avatarUrl(c);
+  const url = c.avatar || '';
   if (!url) return `<div class="${cls} avatar-fallback">${avatarInitials(c.name)}</div>`;
   return `<img class="${cls}" src="${url}" alt="" loading="lazy" onerror="avatarOnerror(this,'${escHtml(c.name.replace(/'/g, "\\'"))}')">`;
 }
@@ -1138,25 +1133,10 @@ let battleLeaderboard = [];
 let battleSessionVotes = 0;
 let battleSignupDismissed = false;
 
-const BATTLE_TAGS = [
-  'Passionate','Tactical','Funny','Matchday Vibes','Entertaining',
-  'Knowledgeable','High Energy','Underrated','Fan Favourite','Rising Star'
-];
-
 function battleFingerprint() {
   let fp = localStorage.getItem('frfc_fp');
   if (!fp) { fp = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('frfc_fp', fp); }
   return fp;
-}
-
-function battleGetTags(c) {
-  // Deterministic pseudo-random tags from creator id
-  const hash = c.id.split('').reduce((h, ch) => ((h << 5) - h + ch.charCodeAt(0)) | 0, 0);
-  const idx1 = Math.abs(hash) % BATTLE_TAGS.length;
-  const idx2 = Math.abs(hash * 7 + 3) % BATTLE_TAGS.length;
-  const tags = [BATTLE_TAGS[idx1]];
-  if (idx2 !== idx1) tags.push(BATTLE_TAGS[idx2]);
-  return tags;
 }
 
 function battleInit() {
@@ -1370,12 +1350,6 @@ function dismissBattleSignup() {
 function hexToRgb(hex) {
   const h = hex.replace('#', '');
   return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)].join(',');
-}
-
-function countryFlag(code) {
-  if (!code || code.length !== 2) return '';
-  const c = code.toUpperCase();
-  return String.fromCodePoint(...[...c].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
 }
 
 function switchTopCreators(mode, btn) {

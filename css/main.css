@@ -91,6 +91,7 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
 .nav-brand{display:flex;align-items:center;gap:8px;font-size:1.15rem;font-weight:700;color:var(--text);white-space:nowrap}
 .nav-brand .brand-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}
+.nav-brand .brand-logo-round{width:40px;height:40px;object-fit:contain;flex-shrink:0;border-radius:50%}
 .nav-brand .brand-fan{color:var(--yellow);font-weight:800}
 .nav-brand .brand-reactions{color:var(--navy);font-weight:800}
 .nav-brand .brand-fc{color:var(--yellow);font-weight:800}

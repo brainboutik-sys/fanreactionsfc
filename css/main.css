@@ -512,6 +512,7 @@ img.review-avatar{background:var(--bg-hover)}
 .footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px}
 @media(max-width:768px){.footer-grid{grid-template-columns:1fr 1fr;gap:20px}}
 .footer-brand{font-size:1rem;font-weight:700;color:var(--text);margin-bottom:8px}
+.footer-logo{height:44px;width:auto;object-fit:contain}
 .footer-desc{font-size:.8rem;color:var(--text-dim);line-height:1.5;max-width:300px}
 .footer-col h4{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px}
 .footer-col a{display:block;padding:3px 0;color:var(--text-dim);font-size:.82rem;transition:color .15s}

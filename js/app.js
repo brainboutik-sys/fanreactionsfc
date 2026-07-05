@@ -3563,7 +3563,7 @@ function renderFooter() {
       <div class="container">
         <div class="footer-grid">
           <div>
-            <div class="footer-brand"><span style="color:var(--yellow)">Fan</span><span style="color:var(--navy)">Reactions</span><span style="color:var(--yellow)">FC</span></div>
+            <div class="footer-brand"><img src="/img/logo-wide.png" alt="FanReactionsFC" class="footer-logo"></div>
             <div class="footer-desc">The definitive database of football YouTubers across Europe's top leagues. Editorially curated by @fanreactionsfc.</div>
           </div>
           <div class="footer-col">

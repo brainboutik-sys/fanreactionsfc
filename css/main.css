@@ -129,6 +129,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .hero::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(6,26,93,.75) 0%,rgba(6,26,93,.55) 50%,rgba(6,26,93,.7) 100%);pointer-events:none}
 .hero > *{position:relative;z-index:1}
 .hero .container{position:relative;z-index:1}
+.hero-logo{display:block;margin:0 auto 20px;height:110px;width:auto;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.3))}
+@media(max-width:600px){.hero-logo{height:72px;margin-bottom:16px}}
 .hero h1{font-size:2.4rem;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin-bottom:10px;color:#fff}
 .hero h1 .accent{color:var(--yellow)}
 .hero .subtitle{color:rgba(255,255,255,.65);font-size:1.05rem;margin-bottom:28px}

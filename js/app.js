@@ -3245,20 +3245,22 @@ async function toggleFeatureVote(featureId) {
   if (!currentUser) { openModal('signin'); return; }
   const hasVote = _frUserVotes.has(featureId);
   const card = _frCache.find(r => r.id === featureId);
+  // vote_count is maintained by a DB trigger on the votes table; the client
+  // only inserts/deletes the vote row and updates the UI optimistically.
   if (hasVote) {
     _frUserVotes.delete(featureId);
     if (card) card.vote_count = Math.max(0, card.vote_count - 1);
     filterFeatureRequests();
     updateDetailVoteUI(featureId, false, card?.vote_count);
-    await sb.from('frfc_feature_votes').delete().eq('feature_id', featureId).eq('user_id', currentUser.id);
-    await sb.rpc('frfc_feature_vote_down', { p_feature_id: featureId });
+    const { error } = await sb.from('frfc_feature_votes').delete().eq('feature_id', featureId).eq('user_id', currentUser.id);
+    if (error) { _frUserVotes.add(featureId); if (card) card.vote_count++; filterFeatureRequests(); updateDetailVoteUI(featureId, true, card?.vote_count); }
   } else {
     _frUserVotes.add(featureId);
     if (card) card.vote_count++;
     filterFeatureRequests();
     updateDetailVoteUI(featureId, true, card?.vote_count);
-    await sb.from('frfc_feature_votes').insert({ feature_id: featureId, user_id: currentUser.id });
-    await sb.rpc('frfc_feature_vote_up', { p_feature_id: featureId });
+    const { error } = await sb.from('frfc_feature_votes').insert({ feature_id: featureId, user_id: currentUser.id });
+    if (error) { _frUserVotes.delete(featureId); if (card) card.vote_count = Math.max(0, card.vote_count - 1); filterFeatureRequests(); updateDetailVoteUI(featureId, false, card?.vote_count); }
   }
 }
 
@@ -3513,10 +3515,10 @@ async function postFeatureComment(featureId, parentId) {
   const body = bodyEl?.value.trim();
   const msg = document.getElementById('frCommentMsg');
   if (!body) { if (msg) { msg.textContent = 'Comment cannot be empty.'; msg.style.color = 'var(--red)'; } return; }
-  const isAdmin = await frCheckAdmin();
-  const { error } = await sb.from('frfc_feature_comments').insert({ feature_id: featureId, user_id: currentUser.id, parent_id: parentId || null, body, is_official: isAdmin || false });
+  // is_official and comment_count are derived server-side (trigger checks
+  // frfc_admin_roles); the client just inserts the comment row.
+  const { error } = await sb.from('frfc_feature_comments').insert({ feature_id: featureId, user_id: currentUser.id, parent_id: parentId || null, body });
   if (error) { if (msg) { msg.textContent = error.message || 'Failed to post comment.'; msg.style.color = 'var(--red)'; } return; }
-  await sb.rpc('frfc_feature_comment_added', { p_feature_id: featureId });
   bodyEl.value = '';
   loadFeatureComments(featureId);
 }
@@ -3525,13 +3527,11 @@ async function toggleCommentLike(commentId, featureId) {
   if (!currentUser) { openModal('signin'); return; }
   const btn = event.target.closest('.fr-like-btn');
   const isLiked = btn?.classList.contains('fr-like-btn--active');
-  const current = parseInt(btn.textContent.trim().match(/\d+/)?.[0] || 0);
+  // like_count is maintained by a DB trigger on the likes table.
   if (isLiked) {
     await sb.from('frfc_feature_comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id);
-    await sb.from('frfc_feature_comments').update({ like_count: Math.max(0, current - 1) }).eq('id', commentId);
   } else {
     await sb.from('frfc_feature_comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
-    await sb.from('frfc_feature_comments').update({ like_count: current + 1 }).eq('id', commentId);
   }
   loadFeatureComments(featureId);
 }

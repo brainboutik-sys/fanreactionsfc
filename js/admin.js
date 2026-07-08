@@ -489,7 +489,7 @@ function renderUsers() {
 function renderSettings() {
   return '<div class="admin-page-header"><div><h1 class="admin-page-title">Settings</h1><div class="admin-page-subtitle">Platform configuration</div></div></div>' +
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">YouTube API</span></div><div class="admin-card-body">' +
-    '<div class="admin-form-row"><div class="admin-form-label">API Key</div><div style="font-size:.85rem;color:var(--text-dim);font-family:monospace">AIza...xcNA (configured in scripts)</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">API Key</div><div style="font-size:.85rem;color:var(--text-dim)">Configured server-side (Netlify env var YOUTUBE_API_KEY)</div></div>' +
     '<div class="admin-form-row"><div class="admin-form-label">Daily Quota</div><div style="font-size:.85rem">10,000 units/day (YouTube Data API v3)</div></div>' +
     '<div class="admin-form-row"><div class="admin-form-label">Last Sync</div><div style="font-size:.85rem">' + getLastSync() + '</div></div>' +
     '<div style="display:flex;align-items:center;gap:12px;margin-top:8px"><button class="btn-admin btn-admin-primary" onclick="Admin.runSync()">Run YouTube Sync Now</button><span id="syncStatus" style="font-size:.82rem;color:var(--text-dim)"></span></div>' +

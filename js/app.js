@@ -677,7 +677,7 @@ function countryFlag(code) {
   const up = code.toUpperCase();
   // Use flagcdn.com SVG instead of Unicode flag emoji — Windows Chrome/Edge
   // don't render flag emojis and fall back to showing the country code.
-  return `<img src="https://flagcdn.com/${cc}.svg" alt="${up}" title="${up}" class="country-flag">`;
+  return `<img src="https://flagcdn.com/${cc}.svg" alt="${up}" title="${up}" class="country-flag" loading="lazy">`;
 }
 
 function timeAgo(dateStr) {
@@ -1179,7 +1179,7 @@ function battleRenderHot() {
     if (!c) return '';
     const winRate = r.total_battles > 0 ? Math.round(r.total_wins / r.total_battles * 100) : 0;
     return `<a class="battle-hot-item" href="${creatorLink(c)}" onclick="event.preventDefault();navigate('${creatorLink(c)}')">
-      ${c.avatar ? `<img class="battle-hot-av" src="${c.avatar}" alt="">` : ''}
+      ${c.avatar ? `<img class="battle-hot-av" src="${c.avatar}" alt="" loading="lazy">` : ''}
       <span class="battle-hot-name">${escHtml(c.name)}</span>
       <span class="battle-hot-wins">${winRate}% W</span>
     </a>`;
@@ -1264,13 +1264,13 @@ function battleCardHTML(c, idx) {
   const [tc1, tc2] = getTeamColor(c.team);
   const crestUrl = TEAM_CRESTS[c.team] || '';
   return `<div class="battle-card" id="bcard${idx}" style="--tc:${tc1};--tc2:${tc2};--tcr:${hexToRgb(tc1)}">
-    ${crestUrl ? `<img class="battle-crest-bg" src="${crestUrl}" alt="" onerror="this.style.display='none'">` : ''}
+    ${crestUrl ? `<img class="battle-crest-bg" src="${crestUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
     <div class="battle-team-row">
-      ${crestUrl ? `<img class="battle-crest" src="${crestUrl}" alt="" onerror="this.style.display='none'">` : ''}
+      ${crestUrl ? `<img class="battle-crest" src="${crestUrl}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
       <span class="battle-team-name">${escHtml(c.team)}</span>
     </div>
     <div class="battle-avatar-wrap">
-      ${c.avatar ? `<img class="battle-avatar" src="${c.avatar}" alt="" onerror="this.style.display='none'">` : '<div class="battle-avatar"></div>'}
+      ${c.avatar ? `<img class="battle-avatar" src="${c.avatar}" alt="" loading="lazy" onerror="this.style.display='none'">` : '<div class="battle-avatar"></div>'}
       ${streak}
     </div>
     <div class="battle-name">${escHtml(c.name)}</div>
@@ -3097,18 +3097,21 @@ const FR_CATEGORIES = [
   'Statistics & Data','User Profiles','Notifications','Fantasy & Prediction Games','Other'
 ];
 
+// rgb triplets mirror the hex values of the design-system tokens below so
+// the badge background can use plain rgba() — color-mix() isn't supported
+// in older Safari and was silently dropping these backgrounds/borders.
 const FR_STATUSES = {
-  open:           { label: 'Open',           color: 'var(--blue,#3b82f6)' },
-  under_review:   { label: 'Under Review',   color: 'var(--yellow,#f59e0b)' },
-  planned:        { label: 'Planned',        color: 'var(--purple,#8b5cf6)' },
-  in_development: { label: 'In Development', color: 'var(--orange,#f97316)' },
-  released:       { label: 'Released',       color: 'var(--green,#22c55e)' },
-  declined:       { label: 'Declined',       color: 'var(--red,#ef4444)' }
+  open:           { label: 'Open',           color: 'var(--blue)',   rgb: '59,130,246' },
+  under_review:   { label: 'Under Review',   color: 'var(--yellow)', rgb: '246,190,6' },
+  planned:        { label: 'Planned',        color: 'var(--purple)', rgb: '139,92,246' },
+  in_development: { label: 'In Development', color: 'var(--orange)', rgb: '249,115,22' },
+  released:       { label: 'Released',       color: 'var(--green)',  rgb: '46,204,113' },
+  declined:       { label: 'Declined',       color: 'var(--red)',    rgb: '230,57,70' }
 };
 
 function frStatusBadge(status) {
   const s = FR_STATUSES[status] || FR_STATUSES.open;
-  return `<span class="fr-status" style="--fr-status-color:${s.color}">${s.label}</span>`;
+  return `<span class="fr-status" style="--fr-status-color:${s.color};--fr-status-rgb:${s.rgb}">${s.label}</span>`;
 }
 
 function frTimeAgo(dateStr) {
@@ -3151,7 +3154,7 @@ async function renderFeatureRequests() {
     <div class="container fr-container">
       <div class="fr-toolbar">
         <div class="fr-search-wrap">
-          <input type="text" class="fr-search" id="frSearch" placeholder="Search ideas..." oninput="filterFeatureRequests()">
+          <input type="text" class="fr-search" id="frSearch" placeholder="Search ideas..." oninput="frSearchInput()">
         </div>
         <div class="fr-filters">
           <select id="frCategoryFilter" class="fr-select" onchange="filterFeatureRequests()">
@@ -3195,6 +3198,12 @@ async function loadFeatureRequests() {
     _frUserVotes = new Set();
   }
   filterFeatureRequests();
+}
+
+let _frSearchTimer = null;
+function frSearchInput() {
+  clearTimeout(_frSearchTimer);
+  _frSearchTimer = setTimeout(filterFeatureRequests, 150);
 }
 
 function filterFeatureRequests() {

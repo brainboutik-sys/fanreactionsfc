@@ -33,6 +33,8 @@
   --red:      #E63946;
   --green:    #2ECC71;
   --blue:     #3B82F6;
+  --purple:   #8B5CF6;
+  --orange:   #F97316;
   /* ── Radii ── */
   --radius-sm:6px;
   --radius:   10px;
@@ -976,7 +978,7 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-card-desc{font-size:.85rem;color:var(--text-dim);margin-bottom:8px;line-height:1.5}
 .fr-card-meta{display:flex;gap:12px;font-size:.78rem;color:var(--text-muted);flex-wrap:wrap}
 .fr-card-cat{background:var(--bg-hover);padding:2px 8px;border-radius:10px;font-size:.75rem}
-.fr-status{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.3px;background:color-mix(in srgb,var(--fr-status-color) 15%,transparent);color:var(--fr-status-color);border:1px solid color-mix(in srgb,var(--fr-status-color) 30%,transparent)}
+.fr-status{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.3px;background:rgba(var(--fr-status-rgb),.15);color:var(--fr-status-color);border:1px solid rgba(var(--fr-status-rgb),.3)}
 .fr-detail-container{padding-top:24px;padding-bottom:48px;max-width:800px}
 .fr-back-link{display:inline-block;color:var(--text-dim);font-size:.85rem;margin-bottom:16px;text-decoration:none}
 .fr-back-link:hover{color:var(--yellow)}
@@ -990,8 +992,8 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-detail-title{font-size:1.4rem;font-weight:800;margin:0;line-height:1.3}
 .fr-detail-meta{display:flex;gap:12px;font-size:.82rem;color:var(--text-muted);margin-bottom:16px;flex-wrap:wrap}
 .fr-detail-desc{font-size:.95rem;line-height:1.7;color:var(--text-dim);margin-bottom:24px;white-space:pre-wrap}
-.fr-official-response{background:color-mix(in srgb,var(--green,#22c55e) 8%,var(--bg-card));border:1px solid color-mix(in srgb,var(--green,#22c55e) 25%,transparent);border-radius:var(--radius);padding:16px;margin-bottom:24px}
-.fr-official-label{font-weight:700;font-size:.82rem;color:var(--green,#22c55e);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.fr-official-response{background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.25);border-radius:var(--radius);padding:16px;margin-bottom:24px}
+.fr-official-label{font-weight:700;font-size:.82rem;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
 .fr-official-response p{margin:0;font-size:.9rem;line-height:1.6;color:var(--text)}
 .fr-official-time{margin-top:8px;font-size:.75rem;color:var(--text-muted)}
 .fr-status-timeline{margin-bottom:24px}
@@ -1010,15 +1012,15 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-locked-notice{color:var(--text-muted);font-size:.85rem;font-style:italic}
 .fr-comment{border-left:2px solid var(--border);padding:12px 0 12px 14px;margin-bottom:8px}
 .fr-comment--reply{margin-left:20px;border-left-color:var(--bg-hover)}
-.fr-comment--official{border-left-color:var(--green,#22c55e);background:color-mix(in srgb,var(--green,#22c55e) 5%,transparent);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding-right:12px}
+.fr-comment--official{border-left-color:var(--green);background:rgba(46,204,113,.05);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding-right:12px}
 .fr-comment-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
-.fr-official-badge{background:var(--green,#22c55e);color:#fff;font-size:.68rem;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase}
+.fr-official-badge{background:var(--green);color:#fff;font-size:.68rem;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase}
 .fr-comment-time{font-size:.75rem;color:var(--text-muted)}
 .fr-comment-body{font-size:.88rem;line-height:1.6;color:var(--text);margin-bottom:6px}
 .fr-comment-actions{display:flex;gap:12px;align-items:center}
 .fr-like-btn,.fr-reply-btn{background:none;border:none;font-size:.78rem;color:var(--text-muted);cursor:pointer;padding:2px 4px}
 .fr-like-btn:hover,.fr-reply-btn:hover{color:var(--text)}
-.fr-like-btn--active{color:var(--red,#ef4444)}
+.fr-like-btn--active{color:var(--red)}
 .fr-reply-form{padding:8px 0 8px 14px}
 .fr-comment-form{margin-top:16px}
 @media(max-width:600px){

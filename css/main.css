@@ -969,7 +969,7 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-vote-btn:hover{border-color:var(--yellow);color:var(--yellow)}
 .fr-vote-btn--active{background:var(--yellow);border-color:var(--yellow);color:var(--navy)}
 .fr-vote-count{font-weight:700;font-size:1.05rem;color:var(--text)}
-.fr-card-body{flex:1;cursor:pointer;min-width:0}
+.fr-card-body{flex:1;cursor:pointer;min-width:0;display:block;text-decoration:none;color:inherit}
 .fr-card-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .fr-card-title{font-size:1rem;font-weight:700;margin:0;color:var(--text)}
 .fr-pin{font-size:.75rem}

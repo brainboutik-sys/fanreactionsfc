@@ -448,6 +448,11 @@ function handleRoute() {
 
 // Click handler for internal links
 document.addEventListener('click', e => {
+  // Let the browser handle modified clicks natively (Ctrl/Cmd/Shift/Alt +
+  // click, or non-primary buttons) so internal links can open in a new
+  // tab/window. Middle-click fires `auxclick`, not `click`, so it's already
+  // untouched here.
+  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   const a = e.target.closest('a[href]');
   if (!a) return;
   const href = a.getAttribute('href');
@@ -3224,7 +3229,7 @@ function filterFeatureRequests() {
           </button>
           <span class="fr-vote-count">${r.vote_count}</span>
         </div>
-        <div class="fr-card-body" onclick="navigate('/community/features/${r.id}')">
+        <a class="fr-card-body" href="/community/features/${r.id}">
           <div class="fr-card-header">
             ${r.is_pinned ? '<span class="fr-pin" title="Pinned">📌</span>' : ''}
             <h3 class="fr-card-title">${escHtml(r.title)}</h3>
@@ -3236,7 +3241,7 @@ function filterFeatureRequests() {
             <span>💬 ${r.comment_count}</span>
             <span>${frTimeAgo(r.created_at)}</span>
           </div>
-        </div>
+        </a>
       </div>`;
   }).join('');
 }

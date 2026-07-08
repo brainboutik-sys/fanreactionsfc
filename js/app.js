@@ -990,7 +990,7 @@ function renderHome() {
     <div class="container" style="${liveNow.length ? '' : 'padding-top:28px'}">
       <div class="frfc-banner">
         <div class="frfc-banner-logo-wrap">
-          <img src="/img/logo.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
+          <img src="/img/logo-round.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
         </div>
         <div class="frfc-banner-main">
           <div class="frfc-banner-eyebrow">Curated by</div>

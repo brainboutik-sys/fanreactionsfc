@@ -356,6 +356,7 @@ function handleRoute() {
   const path = location.pathname;
   const app = document.getElementById('app');
   closeModal();
+  document.getElementById('navLinks')?.classList.remove('open'); // close mobile nav
   if (typeof Gen !== 'undefined' && Gen.cleanup) Gen.cleanup();
   window.scrollTo(0, 0);
 

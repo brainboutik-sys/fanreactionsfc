@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    FanReactionsFC — Admin Panel
-   Full back-office: dashboard, creator CRUD, reviews, users, settings
+   Full back-office: dashboard, creator CRUD, submissions, users, settings
    Exposed on window.Admin
    ═══════════════════════════════════════════════════════════════════════════ */
 (function() {
@@ -9,14 +9,12 @@
 var adminRole = null;
 var adminPage = 'dashboard';
 var allCreators = [];
-var allReviews = [];
 var allSubmissions = [];
 var allUsers = [];
 var adminLog = [];
 var creatorSearch = '';
 var creatorSort = 'name';
 var creatorPage = 0;
-var reviewSearch = '';
 var PAGE_SIZE = 25;
 
 // ── Auth check ───────────────────────────────────────────────────────────────
@@ -43,14 +41,12 @@ async function logAction(action, entityType, entityId, details) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
-  var [creatorsRes, reviewsRes, logRes, subsRes] = await Promise.all([
+  var [creatorsRes, logRes, subsRes] = await Promise.all([
     sb.from('frfc_streamers').select('*').order('name'),
-    sb.from('frfc_reviews').select('*').order('created_at', { ascending: false }),
     sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
     sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false })
   ]);
   allCreators = creatorsRes.data || [];
-  allReviews = reviewsRes.data || [];
   adminLog = logRes.data || [];
   allSubmissions = subsRes.data || [];
 }
@@ -61,7 +57,6 @@ function renderHTML() {
     { id: 'dashboard', icon: '&#9632;', label: 'Dashboard' },
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
     { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
-    { id: 'reviews',   icon: '&#9998;', label: 'Reviews', badge: allReviews.length },
     { id: 'users',     icon: '&#9823;', label: 'Users' },
     { id: 'settings',  icon: '&#9881;', label: 'Settings' },
     { id: 'logs',      icon: '&#9776;', label: 'Activity Log' }
@@ -111,7 +106,6 @@ function renderPage() {
   if (adminPage === 'dashboard')  content.innerHTML = toggle + renderDashboard();
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
-  else if (adminPage === 'reviews')  content.innerHTML = toggle + renderReviews();
   else if (adminPage === 'users')    content.innerHTML = toggle + renderUsers();
   else if (adminPage === 'settings') content.innerHTML = toggle + renderSettings();
   else if (adminPage === 'logs')     content.innerHTML = toggle + renderLogs();
@@ -131,7 +125,6 @@ function renderDashboard() {
 
   '<div class="admin-stats">' +
     stat('Creators', allCreators.length, 'In database') +
-    stat('Reviews', allReviews.length, 'Total ratings') +
     stat('Total Subscribers', fmtBig(totalSubs), 'Across all creators') +
     stat('Total Views', fmtBig(totalViews), 'Lifetime channel views') +
     stat('Live Now', liveCount, liveCount ? 'Streaming' : 'No one live') +
@@ -141,7 +134,7 @@ function renderDashboard() {
   '<div class="admin-quick-actions">' +
     '<div class="admin-quick-action" onclick="Admin.go(\'creators\')" role="button" tabindex="0"><span class="qa-icon">&#9733;</span><span class="qa-label">Manage Creators</span><span class="qa-desc">Add, edit, delete</span></div>' +
     '<div class="admin-quick-action" onclick="Admin.openAddCreator()" role="button" tabindex="0"><span class="qa-icon">&#43;</span><span class="qa-label">Add Creator</span><span class="qa-desc">New YouTube channel</span></div>' +
-    '<div class="admin-quick-action" onclick="Admin.go(\'reviews\')" role="button" tabindex="0"><span class="qa-icon">&#9998;</span><span class="qa-label">Reviews</span><span class="qa-desc">Moderate content</span></div>' +
+    '<div class="admin-quick-action" onclick="Admin.go(\'submissions\')" role="button" tabindex="0"><span class="qa-icon">&#9993;</span><span class="qa-label">Submissions</span><span class="qa-desc">Review pending</span></div>' +
     '<div class="admin-quick-action" onclick="Admin.runSync()" role="button" tabindex="0"><span class="qa-icon">&#8635;</span><span class="qa-label">YouTube Sync</span><span class="qa-desc">Refresh all data</span></div>' +
   '</div>' +
 
@@ -356,14 +349,15 @@ async function saveCreator(id) {
   }
 }
 
-async function deleteCreator(id, name) {
-  if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
-  var { error } = await sb.from('frfc_streamers').delete().eq('id', id);
-  if (error) { toast(error.message, 'error'); return; }
-  await logAction('delete', 'creator', id, { name: name });
-  toast('Creator deleted', 'success');
-  await loadAdminData();
-  renderPage();
+function deleteCreator(id, name) {
+  confirmDialog('Delete "' + name + '"? This cannot be undone.', async function() {
+    var res = await sb.from('frfc_streamers').delete().eq('id', id);
+    if (res.error) { toast(res.error.message, 'error'); return; }
+    await logAction('delete', 'creator', id, { name: name });
+    toast('Creator deleted', 'success');
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Delete creator', confirmLabel: 'Delete' });
 }
 
 // ── Submissions page ─────────────────────────────────────────────────────────
@@ -423,55 +417,16 @@ async function approveSubmission(id) {
   renderPage();
 }
 
-async function rejectSubmission(id) {
+function rejectSubmission(id) {
   var s = allSubmissions.find(function(x){return x.id===id});
   if (!s) return;
-  if (!confirm('Reject submission "' + s.name + '"?')) return;
-
-  await sb.from('frfc_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
-  await logAction('reject', 'submission', id, { name: s.name });
-  toast(s.name + ' rejected', 'info');
-  await loadAdminData();
-  renderPage();
-}
-
-// ── Reviews page ─────────────────────────────────────────────────────────────
-function renderReviews() {
-  var filtered = allReviews.slice();
-  if (reviewSearch) {
-    var q = reviewSearch.toLowerCase();
-    filtered = filtered.filter(function(r) {
-      var creator = allCreators.find(function(c){return c.id===r.creator_id});
-      return (r.review_text || '').toLowerCase().includes(q) || (creator?.name || '').toLowerCase().includes(q);
-    });
-  }
-
-  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Reviews</h1><div class="admin-page-subtitle">' + allReviews.length + ' total reviews</div></div></div>' +
-  '<div class="admin-table-wrap">' +
-    '<div class="admin-table-toolbar"><input class="admin-table-search" placeholder="Search reviews..." value="' + escHtml(reviewSearch) + '" oninput="Admin.searchReviews(this.value)"></div>' +
-    '<table class="admin-table"><thead><tr><th>Creator</th><th>Rating</th><th>Review</th><th>Date</th><th>Actions</th></tr></thead><tbody>' +
-    filtered.map(function(r) {
-      var creator = allCreators.find(function(c){return c.id===r.creator_id});
-      return '<tr><td class="row-name">' + escHtml(creator?.name || 'Unknown') + '</td>' +
-        '<td>' + '★'.repeat(r.rating) + '<span style="color:var(--border)">' + '★'.repeat(5-r.rating) + '</span></td>' +
-        '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(r.review_text || '—') + '</td>' +
-        '<td class="row-dim">' + new Date(r.created_at).toLocaleDateString() + '</td>' +
-        '<td><button class="btn-admin btn-admin-danger" onclick="Admin.deleteReview(\'' + r.id + '\')">Delete</button></td></tr>';
-    }).join('') +
-    (filtered.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">No reviews yet</td></tr>' : '') +
-    '</tbody></table></div>';
-}
-
-function searchReviews(q) { reviewSearch = q; renderPage(); }
-
-async function deleteReview(id) {
-  if (!confirm('Delete this review?')) return;
-  var { error } = await sb.from('frfc_reviews').delete().eq('id', id);
-  if (error) { toast(error.message, 'error'); return; }
-  await logAction('delete', 'review', id);
-  toast('Review deleted', 'success');
-  await loadAdminData();
-  renderPage();
+  confirmDialog('Reject submission "' + s.name + '"?', async function() {
+    await sb.from('frfc_submissions').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', id);
+    await logAction('reject', 'submission', id, { name: s.name });
+    toast(s.name + ' rejected', 'info');
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Reject submission', confirmLabel: 'Reject' });
 }
 
 // ── Users page ───────────────────────────────────────────────────────────────
@@ -482,7 +437,7 @@ function renderUsers() {
     stat('Admin Users', '1', 'super_admin role') +
   '</div>' +
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">User Management</span></div><div class="admin-card-body">' +
-    '<p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">User accounts are managed through Supabase Auth. Favorites and reviews are linked to auth.users via foreign keys.</p>' +
+    '<p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">User accounts are managed through Supabase Auth. Favorites are linked to auth.users via foreign keys.</p>' +
     '<a href="https://supabase.com/dashboard/project/dsxijgrpxsfywxuffbmt/auth/users" target="_blank" rel="noopener" class="btn-admin btn-admin-primary">Open Supabase Auth Dashboard</a>' +
   '</div></div>';
 }
@@ -506,7 +461,6 @@ function renderSettings() {
 
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Danger Zone</span></div><div class="admin-card-body">' +
     '<button class="btn-admin btn-admin-danger" onclick="Admin.resetAllLive()">Reset All Live Status</button>' +
-    ' <button class="btn-admin btn-admin-danger" onclick="Admin.clearAllReviews()">Clear All Reviews</button>' +
   '</div></div>';
 }
 
@@ -638,26 +592,17 @@ async function runSync() {
   }
 }
 
-async function resetAllLive() {
-  if (!confirm('Reset is_live to false for all creators?')) return;
-  var { error } = await sb.from('frfc_streamers').update({ is_live: false, live_video_id: null }).neq('is_live', false);
-  if (error) { toast(error.message, 'error'); return; }
-  await logAction('update', 'settings', null, { action: 'reset_all_live' });
-  toast('All live statuses reset', 'success');
-  await loadAdminData();
-  renderPage();
+function resetAllLive() {
+  confirmDialog('Reset is_live to false for all creators?', async function() {
+    var res = await sb.from('frfc_streamers').update({ is_live: false, live_video_id: null }).neq('is_live', false);
+    if (res.error) { toast(res.error.message, 'error'); return; }
+    await logAction('update', 'settings', null, { action: 'reset_all_live' });
+    toast('All live statuses reset', 'success');
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Reset live status', confirmLabel: 'Reset' });
 }
 
-async function clearAllReviews() {
-  if (!confirm('DELETE ALL REVIEWS? This cannot be undone!')) return;
-  if (!confirm('Are you absolutely sure?')) return;
-  var { error } = await sb.from('frfc_reviews').delete().gte('created_at', '2000-01-01');
-  if (error) { toast(error.message, 'error'); return; }
-  await logAction('delete', 'reviews', null, { action: 'clear_all' });
-  toast('All reviews deleted', 'success');
-  await loadAdminData();
-  renderPage();
-}
 
 // ── Activity Log ─────────────────────────────────────────────────────────────
 function renderLogs() {
@@ -725,11 +670,8 @@ window.Admin = {
   creatorNext: creatorNext,
   approveSubmission: approveSubmission,
   rejectSubmission: rejectSubmission,
-  searchReviews: searchReviews,
-  deleteReview: deleteReview,
   runSync: runSync,
   resetAllLive: resetAllLive,
-  clearAllReviews: clearAllReviews,
   closeModal: closeModal,
   toast: toast
 };

@@ -123,6 +123,9 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .btn-secondary:hover{border-color:var(--text-dim);background:var(--bg-input)}
 .btn-ghost{background:transparent;color:var(--text-dim);padding:6px 12px;border-color:transparent}
 .btn-ghost:hover{color:var(--text);background:var(--bg-hover)}
+.btn-danger{background:rgba(230,57,70,.08);color:var(--red);border-color:rgba(230,57,70,.25)}
+.btn-danger:hover{background:var(--red);color:#fff}
+.cp-claimed-badge{display:inline-flex;align-items:center;gap:4px;font-size:.82rem;color:var(--green);font-weight:600;padding:6px 4px}
 .btn-sm{padding:5px 12px;font-size:.78rem}
 .btn-icon{width:36px;height:36px;padding:0;border-radius:50%}
 
@@ -605,6 +608,16 @@ img.review-avatar{background:var(--bg-hover)}
 .btn-cta-band--yellow{background:var(--yellow);color:var(--navy)}
 .btn-cta-band--yellow:hover{background:#ffd000;box-shadow:0 6px 20px rgba(246,190,6,.45)}
 @media(max-width:600px){.cta-band-inner{flex-direction:column;text-align:center}.btn-cta-band{width:100%;justify-content:center}}
+
+/* ── Homepage community promo row ─────────────────────────────────────── */
+.home-promo-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.home-promo-card{display:flex;align-items:center;gap:14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;text-decoration:none;color:var(--text);transition:border-color .15s,box-shadow .15s,transform .15s}
+.home-promo-card:hover{border-color:var(--yellow);box-shadow:0 2px 12px rgba(0,0,0,.08);transform:translateY(-1px)}
+.home-promo-icon{font-size:1.6rem;flex-shrink:0}
+.home-promo-title{font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:2px}
+.home-promo-sub{font-size:.82rem;color:var(--text-dim);line-height:1.4}
+.home-promo-arrow{margin-left:auto;color:var(--text-muted);font-size:1.1rem;flex-shrink:0}
+@media(max-width:700px){.home-promo-row{grid-template-columns:1fr}}
 
 /* ── Header user button / avatar ──────────────────────────────────────── */
 .auth-btn{background:none;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}

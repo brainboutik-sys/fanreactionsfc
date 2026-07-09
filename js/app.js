@@ -635,7 +635,8 @@ async function fetchCreatorsFromNetwork() {
     upcomingVideoTitle: r.upcoming_video_title || '',
     upcomingVideoThumbnail: r.upcoming_video_thumbnail || '',
     upcomingVideoScheduledAt: r.upcoming_video_scheduled_at || null,
-    subscriberCountPrev: r.subscriber_count_prev || 0
+    subscriberCountPrev: r.subscriber_count_prev || 0,
+    claimedBy: r.claimed_by || null
   }));
   updateLiveCountChip();
   saveCreatorsToCache();
@@ -690,6 +691,19 @@ async function toggleFavorite(id) {
 // ── Helpers ───────────────────────────────────────────────────────────────
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// Safe to embed as a single-quoted JS string literal inside a double-quoted
+// HTML onclick="..." attribute — e.g. onclick="fn('${jsAttrStr(name)}')".
+// JSON.stringify() is NOT safe here: it always wraps the value in literal
+// double quotes, which breaks out of the attribute for every string.
+function jsAttrStr(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 function safeId(s) { return (s || '').replace(/[^A-Za-z0-9_-]/g, ''); }
 function safeUrl(s) { try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
 // Subtle, pulsing red dot used next to a creator's name site-wide when
@@ -815,6 +829,19 @@ function subscriberSparkline(series, width = 220, height = 48) {
 // ── Search ────────────────────────────────────────────────────────────────
 let _searchTimer = null;
 
+// Static pages the hero/nav search can jump to — matched by name or keyword
+// so "vote", "battle", "stream" etc. surface the right page even if the
+// query doesn't literally appear in its title.
+const SITE_PAGES = [
+  { name: 'Rankings', path: '/rankings', icon: '🏆', keywords: ['leaderboard', 'top', 'chart'] },
+  { name: 'Community Feature Requests', path: '/community/features', icon: '💡', keywords: ['suggest', 'idea', 'vote', 'request'] },
+  { name: 'Creator Battle', path: '/', icon: '⚔️', keywords: ['battle', 'vote', 'vs'] },
+  { name: 'Streamwall', path: '/streamwall', icon: '📡', keywords: ['live', 'watch', 'stream'] },
+  { name: 'Become a Creator', path: '/become-a-creator', icon: '🎬', keywords: ['start', 'stream', 'guide', 'tutorial'] },
+  { name: 'Description Generator', path: '/tools/generator', icon: '📝', keywords: ['title', 'tags', 'description'] },
+  { name: 'Submit a Creator', path: '/submit', icon: '➕', keywords: ['add', 'suggest', 'new channel'] },
+];
+
 function renderSearchResults(q, input) {
   const wrap = input.closest('.search-wrap');
   const box = wrap.querySelector('.search-results');
@@ -841,13 +868,28 @@ function renderSearchResults(q, input) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4);
 
-  if (!creatorMatches.length && !clubMatches.length) {
+  // Match site pages — name or any keyword
+  const pageMatches = SITE_PAGES.filter(p =>
+    p.name.toLowerCase().includes(q) || p.keywords.some(k => k.includes(q))
+  ).slice(0, 3);
+
+  if (!creatorMatches.length && !clubMatches.length && !pageMatches.length) {
     box.innerHTML = '<div class="search-empty">No results found</div>';
     box.classList.add('open');
     return;
   }
 
   let html = '';
+  if (pageMatches.length) {
+    html += '<div class="search-group-head">Pages</div>';
+    html += pageMatches.map(p => `
+      <a href="${p.path}" class="search-result">
+        <span class="cc-avatar search-crest-wrap" style="display:flex;align-items:center;justify-content:center;font-size:1.1rem">${p.icon}</span>
+        <div class="sr-info">
+          <div class="sr-name">${escHtml(p.name)}</div>
+        </div>
+      </a>`).join('');
+  }
   if (creatorMatches.length) {
     html += '<div class="search-group-head">Creators</div>';
     html += creatorMatches.map(c => `
@@ -1136,6 +1178,28 @@ function renderHome() {
           </div>
           <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
         </div>
+      </div>
+    </div>
+
+    <!-- Explore the community -->
+    <div class="container" style="padding-top:24px">
+      <div class="home-promo-row">
+        <a href="/community/features" class="home-promo-card">
+          <span class="home-promo-icon">💡</span>
+          <div>
+            <div class="home-promo-title">Shape what we build next</div>
+            <p class="home-promo-sub">Suggest a feature and vote on what the community wants most.</p>
+          </div>
+          <span class="home-promo-arrow">&rarr;</span>
+        </a>
+        <a href="/streamwall" class="home-promo-card">
+          <span class="home-promo-icon">📡</span>
+          <div>
+            <div class="home-promo-title">Watch live, all in one place</div>
+            <p class="home-promo-sub">Streamwall lines up every live football creator side by side.</p>
+          </div>
+          <span class="home-promo-arrow">&rarr;</span>
+        </a>
       </div>
     </div>
 
@@ -1693,7 +1757,10 @@ async function renderProfile(slug) {
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-yellow cp-cta">▶ Watch on YouTube</a>` : ''}
               ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-ghost-white">📡 Live / Streams</a>` : ''}
               <button class="btn btn-ghost-white${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
-              <button class="cp-report-link" onclick="openReportModal('${c.id}',${JSON.stringify(c.name)})">Report issue</button>
+              <button class="cp-report-link" onclick="openReportModal('${c.id}','${jsAttrStr(c.name)}')">Report issue</button>
+              ${c.claimedBy && currentUser && c.claimedBy === currentUser.id
+                ? '<span class="cp-claimed-badge" title="You manage this channel">✓ You manage this channel</span>'
+                : !c.claimedBy ? `<button class="cp-report-link" onclick="openClaimModal('${c.id}','${jsAttrStr(c.name)}')">Claim this channel</button>` : ''}
             </div>
           </div>
         </div>
@@ -2733,7 +2800,24 @@ function deactivateModalA11y() {
 }
 
 // ── Auth Modal ────────────────────────────────────────────────────────────
-function openModal(type = 'signin') {
+// `reason` customizes the modal's subtitle so a user who got interrupted
+// mid-action (voting, commenting, claiming a channel...) sees why they're
+// being asked to sign in, instead of generic copy.
+const AUTH_MODAL_REASONS = {
+  vote: 'Sign in to vote on this idea.',
+  comment: 'Sign in to join the discussion.',
+  like: 'Sign in to like this comment.',
+  submitFeature: 'Sign in to suggest a feature.',
+  claim: 'Sign in to claim this channel.',
+};
+let _lastAuthReason = null;
+
+// `reason` fully determines the subtitle on every call — pass '' (or omit)
+// for the generic "just clicked Sign In" case. Internal links that switch
+// between signin/signup or open the reset-password screen forward
+// `_lastAuthReason` explicitly so the context survives that navigation.
+function openModal(type = 'signin', reason = '') {
+  _lastAuthReason = reason || null;
   const overlay = document.getElementById('authOverlay');
   const modal = document.getElementById('authModal');
   if (type === 'reset') {
@@ -2746,17 +2830,19 @@ function openModal(type = 'signin') {
       <button class="btn btn-primary" onclick="handleResetPassword()">Send Reset Link</button>
       <div class="auth-msg" id="authMsg"></div>
       <div class="switch-link">
-        <a href="#" onclick="event.preventDefault();openModal('signin')">Back to Sign In</a>
+        <a href="#" onclick="event.preventDefault();openModal('signin', _lastAuthReason)">Back to Sign In</a>
       </div>`;
     overlay.classList.add('open');
     activateModalA11y(overlay, modal, closeModal);
     return;
   }
   const isSignIn = type === 'signin';
+  const subtitle = (reason && AUTH_MODAL_REASONS[reason])
+    || (isSignIn ? 'Sign in to follow and favourite creators.' : 'Join the community of football YouTube fans.');
   modal.innerHTML = `
     <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
     <h2>${isSignIn ? 'Welcome back' : 'Create an account'}</h2>
-    <p class="modal-sub">${isSignIn ? 'Sign in to follow and favourite creators.' : 'Join the community of football YouTube fans.'}</p>
+    <p class="modal-sub">${subtitle}</p>
     <button type="button" class="btn-google" onclick="signInWithGoogle()">
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.71-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.97 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
       Continue with Google
@@ -2766,12 +2852,12 @@ function openModal(type = 'signin') {
     <input type="email" id="authEmail" placeholder="you@example.com">
     <label>Password</label>
     <input type="password" id="authPass" placeholder="${isSignIn ? 'Your password' : 'Choose a password'}">
-    ${isSignIn ? '<a href="#" class="forgot-link" onclick="event.preventDefault();openModal(\'reset\')">Forgot your password?</a>' : ''}
+    ${isSignIn ? '<a href="#" class="forgot-link" onclick="event.preventDefault();openModal(\'reset\', _lastAuthReason)">Forgot your password?</a>' : ''}
     <button class="btn btn-primary" onclick="handleAuth('${type}')">${isSignIn ? 'Sign In' : 'Create Account'}</button>
     <div class="auth-msg" id="authMsg"></div>
     <div class="switch-link">
-      ${isSignIn ? "Don't have an account? <a href=\"#\" onclick=\"event.preventDefault();openModal('signup')\">Sign up</a>" :
-        "Already have an account? <a href=\"#\" onclick=\"event.preventDefault();openModal('signin')\">Sign in</a>"}
+      ${isSignIn ? "Don't have an account? <a href=\"#\" onclick=\"event.preventDefault();openModal('signup', _lastAuthReason)\">Sign up</a>" :
+        "Already have an account? <a href=\"#\" onclick=\"event.preventDefault();openModal('signin', _lastAuthReason)\">Sign in</a>"}
     </div>`;
   overlay.classList.add('open');
   activateModalA11y(overlay, modal, closeModal);
@@ -2837,6 +2923,80 @@ async function submitReport(creatorId) {
     msg.style.color = 'var(--red)';
     msg.textContent = 'Network error. Please try again.';
   }
+}
+
+// ── Claim-a-channel modal ────────────────────────────────────────────────
+// Verifies ownership by asking the creator to paste a short code into
+// their YouTube channel description, then calling the claim-creator
+// Netlify function which checks it server-side via the YouTube API.
+function openClaimModal(creatorId, creatorName) {
+  if (!currentUser) { openModal('signin', 'claim'); return; }
+  const overlay = document.getElementById('authOverlay');
+  const modal = document.getElementById('authModal');
+  if (!overlay || !modal) return;
+  const code = 'FRFC-' + currentUser.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+  modal.innerHTML = `
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
+    <h2>Claim this channel</h2>
+    <p class="modal-sub">Verify you run <strong>${escHtml(creatorName)}</strong> to manage this profile.</p>
+    <ol style="font-size:.85rem;color:var(--text-dim);line-height:1.7;padding-left:20px;margin-bottom:14px">
+      <li>Open your channel's <strong>About</strong> section on YouTube.</li>
+      <li>Add this code anywhere in the description: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-weight:700;color:var(--text)">${code}</code></li>
+      <li>Save, then click Verify below.</li>
+    </ol>
+    <button class="btn btn-primary" style="width:100%" onclick="submitClaim('${creatorId}')">Verify</button>
+    <div class="auth-msg" id="claimMsg"></div>`;
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+}
+
+async function submitClaim(creatorId) {
+  const msg = document.getElementById('claimMsg');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Checking your channel description…';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { msg.style.color = 'var(--red)'; msg.textContent = 'Please sign in again.'; return; }
+    const res = await fetch('/.netlify/functions/claim-creator', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ creatorId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { msg.style.color = 'var(--red)'; msg.textContent = data.error || 'Verification failed.'; return; }
+    msg.style.color = 'var(--green)';
+    msg.textContent = data.message || 'Verified!';
+    const c = creators.find(cr => cr.id === creatorId);
+    if (c) c.claimedBy = currentUser.id;
+    setTimeout(() => { closeModal(); handleRoute(); }, 1200);
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error. Please try again.';
+  }
+}
+
+// ── Custom confirm dialog (replaces window.confirm) ──────────────────────
+// Reuses the auth modal overlay. Resolves nothing itself — callers pass a
+// callback to run if the user confirms, matching the call-site shape of
+// `if (!confirm(...)) return; doTheThing();`.
+function confirmDialog(message, onConfirm, opts = {}) {
+  const overlay = document.getElementById('authOverlay');
+  const modal = document.getElementById('authModal');
+  if (!overlay || !modal) { if (window.confirm(message)) onConfirm(); return; }
+  const danger = opts.danger !== false;
+  const confirmLabel = opts.confirmLabel || 'Confirm';
+  modal.innerHTML = `
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
+    <h2>${opts.title ? escHtml(opts.title) : 'Are you sure?'}</h2>
+    <p class="modal-sub">${escHtml(message)}</p>
+    <div class="switch-link" style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="confirmDialogBtn">${escHtml(confirmLabel)}</button>
+    </div>`;
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+  document.getElementById('confirmDialogBtn').onclick = () => { closeModal(); onConfirm(); };
 }
 
 async function handleResetPassword() {
@@ -3358,7 +3518,7 @@ function filterFeatureRequests() {
 }
 
 async function toggleFeatureVote(featureId) {
-  if (!currentUser) { openModal('signin'); return; }
+  if (!currentUser) { openModal('signin', 'vote'); return; }
   const hasVote = _frUserVotes.has(featureId);
   const card = _frCache.find(r => r.id === featureId);
   // vote_count is maintained by a DB trigger on the votes table; the client
@@ -3393,7 +3553,7 @@ function updateDetailVoteUI(featureId, voted, count) {
 }
 
 function openFeatureSubmitModal() {
-  if (!currentUser) { openModal('signin'); return; }
+  if (!currentUser) { openModal('signin', 'submitFeature'); return; }
   const overlay = document.getElementById('authOverlay');
   const modal = document.getElementById('authModal');
   modal.innerHTML = `
@@ -3566,10 +3726,11 @@ async function adminToggleFeatureLock(featureId, locked) {
   renderFeatureDetail(featureId);
 }
 
-async function adminDeleteFeatureRequest(featureId) {
-  if (!confirm('Delete this feature request permanently?')) return;
-  await sb.from('frfc_feature_requests').delete().eq('id', featureId);
-  navigate('/community/features');
+function adminDeleteFeatureRequest(featureId) {
+  confirmDialog('Delete this feature request permanently?', async () => {
+    await sb.from('frfc_feature_requests').delete().eq('id', featureId);
+    navigate('/community/features');
+  }, { title: 'Delete feature request', confirmLabel: 'Delete' });
 }
 
 async function adminMergeFeature(sourceId) {
@@ -3631,7 +3792,7 @@ function showReplyForm(parentId, featureId) {
 }
 
 async function postFeatureComment(featureId, parentId) {
-  if (!currentUser) { openModal('signin'); return; }
+  if (!currentUser) { openModal('signin', 'comment'); return; }
   const isReply = !!parentId;
   const bodyEl = isReply ? document.getElementById(`replyBody_${parentId}`) : document.getElementById('frCommentBody');
   const body = bodyEl?.value.trim();
@@ -3646,7 +3807,7 @@ async function postFeatureComment(featureId, parentId) {
 }
 
 async function toggleCommentLike(commentId, featureId) {
-  if (!currentUser) { openModal('signin'); return; }
+  if (!currentUser) { openModal('signin', 'like'); return; }
   const btn = event.target.closest('.fr-like-btn');
   const isLiked = btn?.classList.contains('fr-like-btn--active');
   // like_count is maintained by a DB trigger on the likes table.

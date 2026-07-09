@@ -990,9 +990,11 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-card-body{flex:1;cursor:pointer;min-width:0;display:block;text-decoration:none;color:inherit}
 .fr-card-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .fr-card-title{font-size:1rem;font-weight:700;margin:0;color:var(--text)}
-.fr-pin{font-size:.75rem}
+.fr-pin{display:inline-flex;color:var(--yellow)}
 .fr-card-desc{font-size:.85rem;color:var(--text-dim);margin-bottom:8px;line-height:1.5}
 .fr-card-meta{display:flex;gap:12px;font-size:.78rem;color:var(--text-muted);flex-wrap:wrap}
+.fr-meta-icon{display:inline-flex;align-items:center;gap:4px}
+.fr-meta-icon svg{flex-shrink:0}
 .fr-card-cat{background:var(--bg-hover);padding:2px 8px;border-radius:10px;font-size:.75rem}
 .fr-status{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.3px;background:rgba(var(--fr-status-rgb),.15);color:var(--fr-status-color);border:1px solid rgba(var(--fr-status-rgb),.3)}
 .fr-detail-container{padding-top:24px;padding-bottom:48px;max-width:800px}
@@ -1025,7 +1027,8 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-admin-toggles{gap:8px}
 .fr-comments-section{margin-top:24px}
 .fr-comments-section h3{font-size:.95rem;font-weight:700;margin-bottom:14px}
-.fr-locked-notice{color:var(--text-muted);font-size:.85rem;font-style:italic}
+.fr-locked-notice{display:flex;align-items:center;gap:6px;color:var(--text-muted);font-size:.85rem;font-style:italic}
+.fr-locked-notice svg{flex-shrink:0}
 .fr-comment{border-left:2px solid var(--border);padding:12px 0 12px 14px;margin-bottom:8px}
 .fr-comment--reply{margin-left:20px;border-left-color:var(--bg-hover)}
 .fr-comment--official{border-left-color:var(--green);background:rgba(46,204,113,.05);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding-right:12px}
@@ -1034,7 +1037,8 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-comment-time{font-size:.75rem;color:var(--text-muted)}
 .fr-comment-body{font-size:.88rem;line-height:1.6;color:var(--text);margin-bottom:6px}
 .fr-comment-actions{display:flex;gap:12px;align-items:center}
-.fr-like-btn,.fr-reply-btn{background:none;border:none;font-size:.78rem;color:var(--text-muted);cursor:pointer;padding:2px 4px}
+.fr-like-btn,.fr-reply-btn{display:inline-flex;align-items:center;gap:4px;background:none;border:none;font-size:.78rem;color:var(--text-muted);cursor:pointer;padding:2px 4px}
+.fr-like-btn svg{flex-shrink:0}
 .fr-like-btn:hover,.fr-reply-btn:hover{color:var(--text)}
 .fr-like-btn--active{color:var(--red)}
 .fr-reply-form{padding:8px 0 8px 14px}

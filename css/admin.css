@@ -85,14 +85,19 @@
 .admin-form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
 
 /* ── Action buttons ───────────────────────────────────────────────────────── */
-.btn-admin{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--radius-sm);font-size:.78rem;font-weight:600;border:none;cursor:pointer;transition:all .15s}
+/* Same visual language as the site's .btn (radius token, font-weight,
+   1px-solid-transparent border reserved on every variant so a bare
+   .btn-admin-primary and a bordered .btn-admin-ghost sit at an identical
+   box size next to each other) — just a smaller, denser scale to suit
+   admin's data-table-heavy layout. */
+.btn-admin{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--radius-sm);font-size:.78rem;font-weight:600;border:1px solid transparent;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
 .btn-admin-primary{background:var(--navy);color:var(--yellow)}
 .btn-admin-primary:hover{background:var(--accent-hover)}
-.btn-admin-danger{background:rgba(230,57,70,.08);color:var(--red);border:1px solid rgba(230,57,70,.2)}
+.btn-admin-danger{background:rgba(230,57,70,.08);color:var(--red);border-color:rgba(230,57,70,.2)}
 .btn-admin-danger:hover{background:rgba(230,57,70,.15)}
-.btn-admin-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
+.btn-admin-ghost{background:transparent;color:var(--text-dim);border-color:var(--border)}
 .btn-admin-ghost:hover{border-color:var(--text-muted);color:var(--text)}
-.btn-admin-success{background:rgba(46,204,113,.08);color:var(--green);border:1px solid rgba(46,204,113,.2)}
+.btn-admin-success{background:rgba(46,204,113,.08);color:var(--green);border-color:rgba(46,204,113,.2)}
 .btn-admin-success:hover{background:rgba(46,204,113,.15)}
 
 /* ── Activity log ─────────────────────────────────────────────────────────── */

@@ -3210,6 +3210,19 @@ const FR_CATEGORIES = [
   'Statistics & Data','User Profiles','Notifications','Fantasy & Prediction Games','Other'
 ];
 
+// Small inline SVG icon set for the Feature Requests page — replaces emoji
+// (📌💬🔒❤️), which renders inconsistently across OS/browsers and reads as
+// a mismatched style next to the site's crest/logo art. 14–16px, currentColor
+// so each inherits its container's text color.
+const FR_ICONS = {
+  pin: '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1c-2.3 0-4.2 1.9-4.2 4.2 0 3.2 4.2 8.3 4.2 8.3s4.2-5.1 4.2-8.3C12.2 2.9 10.3 1 8 1zm0 5.7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>',
+  comment: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6l-3.5 3V12H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/></svg>',
+  lockClosed: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
+  lockOpen: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7"/></svg>',
+  heartFilled: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 13.6 2.6 8.5C1 7 1 4.6 2.6 3.2c1.5-1.4 3.8-1.2 5.1.3l.3.4.3-.4c1.3-1.5 3.6-1.7 5.1-.3 1.6 1.4 1.6 3.8 0 5.3L8 13.6z"/></svg>',
+  heartOutline: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M8 13.6 2.6 8.5C1 7 1 4.6 2.6 3.2c1.5-1.4 3.8-1.2 5.1.3l.3.4.3-.4c1.3-1.5 3.6-1.7 5.1-.3 1.6 1.4 1.6 3.8 0 5.3L8 13.6z"/></svg>',
+};
+
 // rgb triplets mirror the hex values of the design-system tokens below so
 // the badge background can use plain rgba() — color-mix() isn't supported
 // in older Safari and was silently dropping these backgrounds/borders.
@@ -3359,14 +3372,14 @@ function filterFeatureRequests() {
         </div>
         <a class="fr-card-body" href="/community/features/${r.id}">
           <div class="fr-card-header">
-            ${r.is_pinned ? '<span class="fr-pin" title="Pinned">📌</span>' : ''}
+            ${r.is_pinned ? `<span class="fr-pin" title="Pinned">${FR_ICONS.pin}</span>` : ''}
             <h3 class="fr-card-title">${escHtml(r.title)}</h3>
             ${frStatusBadge(r.status)}
           </div>
           <p class="fr-card-desc">${escHtml(r.description.length > 140 ? r.description.slice(0, 140) + '…' : r.description)}</p>
           <div class="fr-card-meta">
             <span class="fr-card-cat">${escHtml(r.category)}</span>
-            <span>💬 ${r.comment_count}</span>
+            <span class="fr-meta-icon">${FR_ICONS.comment} ${r.comment_count}</span>
             <span>${timeAgo(r.created_at)}</span>
           </div>
         </a>
@@ -3499,7 +3512,7 @@ async function renderFeatureDetail(featureId) {
           <div class="fr-detail-meta">
             <span class="fr-card-cat">${escHtml(r.category)}</span>
             <span>${timeAgo(r.created_at)}</span>
-            <span>💬 ${r.comment_count} comments</span>
+            <span class="fr-meta-icon">${FR_ICONS.comment} ${r.comment_count} comments</span>
           </div>
           <div class="fr-detail-desc">${escHtml(r.description).replace(/\n/g, '<br>')}</div>
           ${r.admin_response ? `
@@ -3521,7 +3534,7 @@ async function renderFeatureDetail(featureId) {
           ${isAdmin ? renderFeatureAdminPanel(r) : ''}
           <div class="fr-comments-section" id="frComments">
             <h3>Discussion</h3>
-            ${r.is_locked ? '<p class="fr-locked-notice">🔒 This discussion is locked.</p>' : ''}
+            ${r.is_locked ? `<p class="fr-locked-notice">${FR_ICONS.lockClosed} This discussion is locked.</p>` : ''}
             <div id="frCommentList"><div style="color:var(--text-dim);font-size:.85rem">Loading comments...</div></div>
             ${!r.is_locked ? `
               <div class="fr-comment-form" id="frCommentForm">
@@ -3555,8 +3568,8 @@ function renderFeatureAdminPanel(r) {
         <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="adminPostOfficialResponse('${r.id}')">Save Response</button>
       </div>
       <div class="fr-admin-row fr-admin-toggles">
-        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeaturePin('${r.id}', ${!r.is_pinned})">${r.is_pinned ? '📌 Unpin' : '📌 Pin'}</button>
-        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeatureLock('${r.id}', ${!r.is_locked})">${r.is_locked ? '🔓 Unlock' : '🔒 Lock'}</button>
+        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeaturePin('${r.id}', ${!r.is_pinned})">${FR_ICONS.pin} ${r.is_pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="btn btn-sm btn-ghost" onclick="adminToggleFeatureLock('${r.id}', ${!r.is_locked})">${r.is_locked ? FR_ICONS.lockOpen + ' Unlock' : FR_ICONS.lockClosed + ' Lock'}</button>
         <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="adminDeleteFeatureRequest('${r.id}')">🗑 Delete</button>
       </div>
       <div class="fr-admin-row">
@@ -3642,7 +3655,7 @@ async function loadFeatureComments(featureId) {
         <div class="fr-comment-body">${escHtml(c.body).replace(/\n/g, '<br>')}</div>
         <div class="fr-comment-actions">
           <button class="fr-like-btn ${liked ? 'fr-like-btn--active' : ''}" onclick="toggleCommentLike('${c.id}','${featureId}')" aria-pressed="${liked}" aria-label="${liked ? 'Unlike' : 'Like'} this comment">
-            <span aria-hidden="true">${liked ? '❤️' : '🤍'}</span> ${c.like_count}
+            ${liked ? FR_ICONS.heartFilled : FR_ICONS.heartOutline} ${c.like_count}
           </button>
           ${!isReply && currentUser ? `<button class="fr-reply-btn" onclick="showReplyForm('${c.id}','${featureId}')">Reply</button>` : ''}
         </div>

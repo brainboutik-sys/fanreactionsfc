@@ -261,7 +261,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     if (!sb && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     if (!sb) throw new Error('Supabase library failed to load. Please reload the page.');
-    showLoading();
+    // Skip the loading skeleton when we can render instantly from a cached
+    // creators list — loadCreators() still revalidates in the background.
+    const hadCreatorsCache = loadCreatorsFromCache();
+    if (!hadCreatorsCache) showLoading();
     await loadCreators();
     loadFavouriteCounts(); // fire-and-forget; non-critical
     updateAuthUI();        // show Sign In button immediately
@@ -552,7 +555,33 @@ async function signOut() {
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────
-async function loadCreators() {
+// ── Creators cache (stale-while-revalidate) ─────────────────────────────
+// A full creators fetch is the single biggest thing blocking first paint.
+// If we have a cached copy from a previous visit, render it immediately
+// and refresh from the network in the background — only re-rendering if
+// the refresh actually succeeds, so a flaky network never wipes out a
+// perfectly good cached view. First-ever visit (no cache) still blocks
+// on the network, same as before.
+const CREATORS_CACHE_KEY = 'frfc_creators_cache_v1';
+
+function loadCreatorsFromCache() {
+  try {
+    const raw = localStorage.getItem(CREATORS_CACHE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.creators) || !parsed.creators.length) return false;
+    creators = parsed.creators;
+    updateLiveCountChip();
+    return true;
+  } catch (e) { return false; }
+}
+
+function saveCreatorsToCache() {
+  try { localStorage.setItem(CREATORS_CACHE_KEY, JSON.stringify({ creators, cachedAt: Date.now() })); }
+  catch (e) { /* storage full/unavailable — non-critical, just skip caching */ }
+}
+
+async function fetchCreatorsFromNetwork() {
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 10000));
   let data, error;
   try {
@@ -561,10 +590,9 @@ async function loadCreators() {
     error = result.error;
   } catch (e) {
     console.error('loadCreators failed:', e);
-    creators = [];
-    return;
+    return false;
   }
-  if (error) { console.error('loadCreators error:', error); creators = []; return; }
+  if (error) { console.error('loadCreators error:', error); return false; }
   creators = data.map(r => ({
     id: r.id,
     name: r.name,
@@ -598,6 +626,21 @@ async function loadCreators() {
     subscriberCountPrev: r.subscriber_count_prev || 0
   }));
   updateLiveCountChip();
+  saveCreatorsToCache();
+  return true;
+}
+
+async function loadCreators() {
+  const hadCache = loadCreatorsFromCache();
+  if (hadCache) {
+    // Fast path: caller can render immediately with `creators` already
+    // populated. Revalidate in the background; only re-render on success.
+    fetchCreatorsFromNetwork().then(ok => { if (ok) handleRoute(); });
+    return;
+  }
+  // No cache yet (first visit, or storage was cleared) — block as before.
+  const ok = await fetchCreatorsFromNetwork();
+  if (!ok) creators = [];
 }
 
 async function loadFavorites() {

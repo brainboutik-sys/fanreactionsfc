@@ -31,10 +31,13 @@ css/
   generator.css         description-generator styles
   admin.css             admin panel styles
 js/
+  data/teams.js         team/league reference data (crests, colors,
+                        league→team map) — loaded before app.js
   app.js                the app: router, auth, data, all page renderers,
                         Creator Battle, Community Feature Requests
   generator.js          YouTube description generator (window.Gen)
-  admin.js              admin back-office (window.Admin)
+  admin.js              admin back-office (window.Admin) — lazy-loaded
+                        by app.js only when a signed-in user visits /admin
 netlify/functions/
   youtube-proxy.js      browser -> YouTube API proxy (keeps key server-side;
                         origin/referer allowlisted)

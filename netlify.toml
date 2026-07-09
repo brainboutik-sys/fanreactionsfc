@@ -30,6 +30,21 @@ schedule = "*/5 * * * *"
   to = "/.netlify/functions/creator-og"
   status = 200
 
+# Keep internal dev docs off the production domain (they still live in the
+# repo/GitHub, just shouldn't be served from fanreactionsfc.com).
+[[redirects]]
+  from = "/docs/*"
+  to = "/index.html"
+  status = 404
+[[redirects]]
+  from = "/README.md"
+  to = "/index.html"
+  status = 404
+[[redirects]]
+  from = "/CHANGES.md"
+  to = "/index.html"
+  status = 404
+
 # SPA fallback — Netlify serves real files first, then falls back to index.html
 [[redirects]]
   from = "/*"

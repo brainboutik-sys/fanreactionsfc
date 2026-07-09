@@ -125,8 +125,8 @@ function renderDashboard() {
 
   '<div class="admin-stats">' +
     stat('Creators', allCreators.length, 'In database') +
-    stat('Total Subscribers', fmtBig(totalSubs), 'Across all creators') +
-    stat('Total Views', fmtBig(totalViews), 'Lifetime channel views') +
+    stat('Total Subscribers', formatNum(totalSubs), 'Across all creators') +
+    stat('Total Views', formatNum(totalViews), 'Lifetime channel views') +
     stat('Live Now', liveCount, liveCount ? 'Streaming' : 'No one live') +
     stat('Active (30d)', activeCount, 'Uploaded recently') +
   '</div>' +
@@ -147,7 +147,7 @@ function renderDashboard() {
     '</div></div>' +
     '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Top by Views</span></div><div class="admin-card-body no-pad">' +
       '<div class="admin-activity">' + topByViews.map(function(c) {
-        return '<div class="admin-activity-item"><div class="admin-activity-dot create"></div><div class="admin-activity-text"><strong>' + escHtml(c.name) + '</strong> &middot; ' + escHtml(c.team || '') + '</div><div class="admin-activity-time">' + fmtBig(c.total_view_count || 0) + ' views</div></div>';
+        return '<div class="admin-activity-item"><div class="admin-activity-dot create"></div><div class="admin-activity-text"><strong>' + escHtml(c.name) + '</strong> &middot; ' + escHtml(c.team || '') + '</div><div class="admin-activity-time">' + formatNum(c.total_view_count || 0) + ' views</div></div>';
       }).join('') + '</div>' +
     '</div></div>' +
   '</div>' +
@@ -159,13 +159,6 @@ function renderDashboard() {
 
 function stat(label, value, sub) {
   return '<div class="admin-stat"><div class="admin-stat-label">' + label + '</div><div class="admin-stat-value">' + value + '</div><div class="admin-stat-sub">' + sub + '</div></div>';
-}
-
-function fmtBig(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return n.toString();
 }
 
 // ── Creators page ────────────────────────────────────────────────────────────
@@ -197,8 +190,8 @@ function renderCreators() {
         '<td><div style="display:flex;align-items:center;gap:10px">' + avatarHtml + '<div><div class="row-name">' + escHtml(c.name) + '</div><div class="row-dim">' + escHtml(c.channel_url || '') + '</div></div></div></td>' +
         '<td>' + escHtml(c.team || '') + '</td>' +
         '<td><span class="admin-badge admin-badge-dim">' + escHtml(c.league || 'Other') + '</span></td>' +
-        '<td>' + fmtBig(c.subscriber_count || 0) + '</td>' +
-        '<td>' + fmtBig(c.total_view_count || 0) + '</td>' +
+        '<td>' + formatNum(c.subscriber_count || 0) + '</td>' +
+        '<td>' + formatNum(c.total_view_count || 0) + '</td>' +
         '<td>' + escHtml(c.upload_frequency || '—') + '</td>' +
         '<td>' + (c.verified ? '<span class="admin-badge admin-badge-green">Verified</span>' : '') + (c.is_live ? ' <span class="admin-badge admin-badge-red">LIVE</span>' : '') + (c.featured ? ' <span class="admin-badge admin-badge-yellow">Featured</span>' : '') + (!c.verified && !c.is_live && !c.featured ? '<span class="admin-badge admin-badge-dim">Standard</span>' : '') + '</td>' +
         '<td><div class="row-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.editCreator(\'' + c.id + '\')">Edit</button><button class="btn-admin btn-admin-danger" onclick="Admin.deleteCreator(\'' + c.id + '\',\'' + escHtml(c.name).replace(/'/g,"\\'") + '\')">Del</button></div></td>' +
@@ -471,6 +464,18 @@ function getLastSync() {
 }
 
 // ── In-browser YouTube Sync (via server-side proxy) ─────────────────────────
+// This intentionally duplicates a SUBSET of netlify/functions/sync-background.js
+// (which also runs on a schedule, server-side, with the service-role key).
+// It exists separately — not shared code — because sync-background.js is a
+// Netlify *background function*: calling it over HTTP returns an empty 202
+// immediately and the work continues out-of-band, so it can't drive the live
+// "Syncing 4/260: creator name" progress UI below. There's no build step in
+// this repo to share a module between browser JS and the Node function, so
+// duplication is the pragmatic choice — just keep it deliberate, not silent.
+//
+// KNOWN GAP vs sync-background.js: this client version does NOT detect
+// upcoming/scheduled livestreams (upcoming_video_* fields) — only
+// sync-background.js does. If you add fields to one, check the other.
 var syncRunning = false;
 
 async function ytFetch(endpoint, params) {

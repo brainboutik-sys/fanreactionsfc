@@ -753,6 +753,7 @@ function timeAgo(dateStr) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
   if (mins < 60) return mins + 'm ago';
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return hrs + 'h ago';
@@ -1051,6 +1052,7 @@ function renderHome() {
         <div class="battle-arena" id="battleArena">
           <div class="battle-loading">Loading matchup...</div>
         </div>
+        <button class="battle-skip-btn" id="battleSkip" style="display:none" onclick="battleSkipDelay()">Next matchup &rarr;</button>
         <div class="battle-hot" id="battleHot" style="display:none">
           <div class="battle-hot-title">&#128293; Hot Creators</div>
           <div class="battle-hot-strip" id="battleHotStrip"></div>
@@ -1259,6 +1261,7 @@ function renderHome() {
 const battleSeen = new Set();
 let battlePair = [null, null];
 let battleVoteCount = 0;
+let battleAdvanceTimer = null;
 let battleLeaderboard = [];
 let battleSessionVotes = 0;
 let battleSignupDismissed = false;
@@ -1346,6 +1349,9 @@ function battlePairKey(a, b) { return [a.id, b.id].sort().join(':'); }
 function battleNextMatchup() {
   const arena = document.getElementById('battleArena');
   if (!arena) return;
+  if (battleAdvanceTimer) { clearTimeout(battleAdvanceTimer); battleAdvanceTimer = null; }
+  const skipBtn = document.getElementById('battleSkip');
+  if (skipBtn) skipBtn.style.display = 'none';
   const pool = battleGetPool();
   if (pool.length < 2) {
     arena.innerHTML = '<div class="battle-loading">Not enough creators for this filter — try a broader selection.</div>';
@@ -1452,7 +1458,13 @@ async function battleVote(winIdx) {
     document.getElementById('bpct' + winIdx).textContent = '✓';
   }
 
-  setTimeout(() => battleNextMatchup(), 1800);
+  const skipBtn = document.getElementById('battleSkip');
+  if (skipBtn) skipBtn.style.display = '';
+  battleAdvanceTimer = setTimeout(() => { battleAdvanceTimer = null; battleNextMatchup(); }, 1800);
+}
+
+function battleSkipDelay() {
+  battleNextMatchup();
 }
 
 function showBattleSignupPrompt() {
@@ -1935,8 +1947,9 @@ async function renderProfile(slug) {
 
 
 function formatNum(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return n.toString();
 }
 
@@ -2721,14 +2734,34 @@ async function saveAccount() {
   }
 }
 
+// Loads js/admin.js on first visit to /admin instead of shipping it (and
+// its window.Admin API) to every page load. Idempotent — safe to call on
+// every renderAdmin(); subsequent calls resolve immediately once loaded.
+let _adminAssetsPromise = null;
+function loadAdminAssets() {
+  if (typeof Admin !== 'undefined') return Promise.resolve();
+  if (_adminAssetsPromise) return _adminAssetsPromise;
+  _adminAssetsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/js/admin.js';
+    script.onload = resolve;
+    script.onerror = () => { _adminAssetsPromise = null; reject(new Error('Failed to load admin.js')); };
+    document.body.appendChild(script);
+  });
+  return _adminAssetsPromise;
+}
+
 // ── Render: Admin ────────────────────────────────────────────────────────
 async function renderAdmin() {
   if (!currentUser) return renderAuthRequired('open the admin panel');
-  if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module not loaded.</p></div>'; return; }
-
-  // Show an immediate loading state so the user knows the click registered,
-  // even while the async admin-role check is in flight.
   document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><div style="color:var(--text-dim);font-size:.9rem">Loading admin…</div></div>';
+  try {
+    await loadAdminAssets();
+  } catch (e) {
+    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module failed to load.</p></div>';
+    return;
+  }
+  if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module not loaded.</p></div>'; return; }
 
   // Use direct PostgREST fetch instead of supabase-js — the latter has
   // been observed hanging on production for certain reads.
@@ -3376,17 +3409,6 @@ function frStatusBadge(status) {
   return `<span class="fr-status" style="--fr-status-color:${s.color};--fr-status-rgb:${s.rgb}">${s.label}</span>`;
 }
 
-function frTimeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
 
 // Cache the admin check per session so we don't re-query on every render.
 let _frIsAdmin = null;
@@ -3510,7 +3532,7 @@ function filterFeatureRequests() {
           <div class="fr-card-meta">
             <span class="fr-card-cat">${escHtml(r.category)}</span>
             <span>💬 ${r.comment_count}</span>
-            <span>${frTimeAgo(r.created_at)}</span>
+            <span>${timeAgo(r.created_at)}</span>
           </div>
         </a>
       </div>`;
@@ -3625,7 +3647,7 @@ async function renderFeatureDetail(featureId) {
           </div>
           <div class="fr-detail-meta">
             <span class="fr-card-cat">${escHtml(r.category)}</span>
-            <span>${frTimeAgo(r.created_at)}</span>
+            <span>${timeAgo(r.created_at)}</span>
             <span>💬 ${r.comment_count} comments</span>
           </div>
           <div class="fr-detail-desc">${escHtml(r.description).replace(/\n/g, '<br>')}</div>
@@ -3633,7 +3655,7 @@ async function renderFeatureDetail(featureId) {
             <div class="fr-official-response">
               <div class="fr-official-label">Official Response</div>
               <p>${escHtml(r.admin_response).replace(/\n/g, '<br>')}</p>
-              ${r.admin_response_at ? `<div class="fr-official-time">${frTimeAgo(r.admin_response_at)}</div>` : ''}
+              ${r.admin_response_at ? `<div class="fr-official-time">${timeAgo(r.admin_response_at)}</div>` : ''}
             </div>` : ''}
           ${statusLog.length ? `
             <div class="fr-status-timeline">
@@ -3642,7 +3664,7 @@ async function renderFeatureDetail(featureId) {
                 <div class="fr-status-event">
                   ${frStatusBadge(l.new_status)}
                   ${l.note ? `<span class="fr-status-note">${escHtml(l.note)}</span>` : ''}
-                  <span class="fr-status-time">${frTimeAgo(l.created_at)}</span>
+                  <span class="fr-status-time">${timeAgo(l.created_at)}</span>
                 </div>`).join('')}
             </div>` : ''}
           ${isAdmin ? renderFeatureAdminPanel(r) : ''}
@@ -3764,7 +3786,7 @@ async function loadFeatureComments(featureId) {
       <div class="fr-comment ${isReply ? 'fr-comment--reply' : ''} ${c.is_official ? 'fr-comment--official' : ''}">
         <div class="fr-comment-header">
           ${c.is_official ? '<span class="fr-official-badge">Official</span>' : ''}
-          <span class="fr-comment-time">${frTimeAgo(c.created_at)}</span>
+          <span class="fr-comment-time">${timeAgo(c.created_at)}</span>
         </div>
         <div class="fr-comment-body">${escHtml(c.body).replace(/\n/g, '<br>')}</div>
         <div class="fr-comment-actions">

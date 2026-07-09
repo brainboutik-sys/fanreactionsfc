@@ -817,6 +817,8 @@ img.review-avatar{background:var(--bg-hover)}
 .battle-vs-text{width:50px;height:50px;border-radius:50%;background:linear-gradient(145deg,#ffd700,#f59e0b,#d97706);color:#1a1a2e;font-size:.9rem;font-weight:900;display:flex;align-items:center;justify-content:center;letter-spacing:.02em;box-shadow:0 0 24px rgba(246,190,6,.5),0 0 48px rgba(246,190,6,.2),0 4px 12px rgba(0,0,0,.4);z-index:2;animation:battle-vs-pulse 2.5s ease-in-out infinite;border:2px solid rgba(255,255,255,.3)}
 @keyframes battle-vs-pulse{0%,100%{box-shadow:0 0 24px rgba(246,190,6,.5),0 0 48px rgba(246,190,6,.2),0 4px 12px rgba(0,0,0,.4)}50%{box-shadow:0 0 32px rgba(246,190,6,.7),0 0 56px rgba(246,190,6,.3),0 4px 16px rgba(0,0,0,.4)}}
 .battle-loading{display:flex;align-items:center;justify-content:center;grid-column:1/-1;padding:32px;color:var(--text-muted);font-size:.85rem}
+.battle-skip-btn{display:block;margin:10px auto 0;padding:6px 16px;background:none;border:1px solid var(--border);border-radius:var(--radius-pill);color:var(--text-dim);font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s}
+.battle-skip-btn:hover{border-color:var(--yellow);color:var(--text)}
 /* Hot creators strip */
 .battle-hot{padding:0 20px 14px;border-top:1px solid var(--border);margin:0 0;padding-top:14px}
 .battle-hot-title{font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}

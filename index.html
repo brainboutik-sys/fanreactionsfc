@@ -61,6 +61,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <script src="/js/app.js" defer></script>
   <script src="/js/generator.js" defer></script>
-  <script src="/js/admin.js" defer></script>
+  <!-- admin.js (~35KB) is loaded on demand by renderAdmin() only when a
+       signed-in user actually visits /admin — see loadAdminAssets() in
+       app.js. admin.css stays eager: several of its classes (.admin-form-*)
+       are reused by the public Submit/Account/Report-issue forms. -->
+
 </body>
 </html>

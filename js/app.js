@@ -1241,12 +1241,10 @@ async function battleVote(winIdx) {
   const toast = document.getElementById('btoast' + winIdx);
   if (toast) toast.textContent = '✓ Vote counted';
 
-  // Record vote via RPC (SECURITY DEFINER bypasses publishable-key restrictions)
-  const { error: voteErr } = await sb.rpc('record_battle_vote', {
-    w_id: winner.id, l_id: loser.id, fp: battleFingerprint(),
-    v_id: currentUser ? currentUser.id : null
-  });
-  if (voteErr) console.error('Battle vote insert failed:', voteErr);
+  // Record vote via RPC (SECURITY DEFINER; validates + rate-limits server-
+  // side). Since the 2026-07 consolidation it also returns both creators'
+  // win counts computed after the insert — one round-trip instead of three,
+  // and no client-side +1 (the old version double-counted the fresh vote).
   battleVoteCount++;
 
   // Signup prompt for anonymous users after 3 votes
@@ -1257,14 +1255,15 @@ async function battleVote(winIdx) {
   const totalEl = document.getElementById('battleTotalVotes');
   if (totalEl) totalEl.textContent = '🗳 ' + formatNum(battleVoteCount) + ' votes cast';
 
-  // Get total battle wins for each creator
   try {
-    const [winnerStats, loserStats] = await Promise.all([
-      sb.rpc('get_creator_battle_stats', { cid: winner.id }),
-      sb.rpc('get_creator_battle_stats', { cid: loser.id })
-    ]);
-    const winnerWins = (winnerStats.data && winnerStats.data.length ? Number(winnerStats.data[0].wins) : 0) + 1;
-    const loserWins = loserStats.data && loserStats.data.length ? Number(loserStats.data[0].wins) : 0;
+    const { data, error: voteErr } = await sb.rpc('record_battle_vote', {
+      w_id: winner.id, l_id: loser.id, fp: battleFingerprint(),
+      v_id: currentUser ? currentUser.id : null
+    });
+    if (voteErr) throw voteErr;
+    const row = Array.isArray(data) ? data[0] : data;
+    const winnerWins = Number(row?.winner_wins) || 0;
+    const loserWins = Number(row?.loser_wins) || 0;
     const total = winnerWins + loserWins;
     const winnerPct = total ? Math.round(winnerWins / total * 100) : 100;
 
@@ -1273,6 +1272,7 @@ async function battleVote(winIdx) {
     document.getElementById('bfill' + winIdx).style.width = winnerPct + '%';
     document.getElementById('bfill' + (1 - winIdx)).style.width = (100 - winnerPct) + '%';
   } catch (e) {
+    console.error('Battle vote failed:', e);
     document.getElementById('bpct' + winIdx).textContent = '✓';
   }
 
@@ -2660,6 +2660,7 @@ const AUTH_MODAL_REASONS = {
   like: 'Sign in to like this comment.',
   submitFeature: 'Sign in to suggest a feature.',
   claim: 'Sign in to claim this channel.',
+  follow: 'Sign in to follow this request and get status updates by email.',
 };
 let _lastAuthReason = null;
 
@@ -3221,6 +3222,7 @@ const FR_ICONS = {
   lockOpen: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7"/></svg>',
   heartFilled: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 13.6 2.6 8.5C1 7 1 4.6 2.6 3.2c1.5-1.4 3.8-1.2 5.1.3l.3.4.3-.4c1.3-1.5 3.6-1.7 5.1-.3 1.6 1.4 1.6 3.8 0 5.3L8 13.6z"/></svg>',
   heartOutline: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M8 13.6 2.6 8.5C1 7 1 4.6 2.6 3.2c1.5-1.4 3.8-1.2 5.1.3l.3.4.3-.4c1.3-1.5 3.6-1.7 5.1-.3 1.6 1.4 1.6 3.8 0 5.3L8 13.6z"/></svg>',
+  bell: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M8 2a4 4 0 0 0-4 4v2.6L2.7 11h10.6L12 8.6V6a4 4 0 0 0-4-4z"/><path d="M6.5 13.2a1.6 1.6 0 0 0 3 0"/></svg>',
 };
 
 // rgb triplets mirror the hex values of the design-system tokens below so
@@ -3422,6 +3424,39 @@ function updateDetailVoteUI(featureId, voted, count) {
   if (countEl && count !== undefined) countEl.textContent = count;
 }
 
+// Follow/unfollow a feature request. Followers get an email when an admin
+// changes the request's status (trg_frfc_notify_status → notify-feature-status
+// edge function → Resend). The row insert/delete is all the client does.
+async function toggleFeatureFollow(featureId) {
+  if (!currentUser) { openModal('signin', 'follow'); return; }
+  const btn = document.getElementById('frFollowBtn');
+  const label = document.getElementById('frFollowLabel');
+  const countEl = document.getElementById('frFollowCount');
+  const wasFollowing = btn?.classList.contains('fr-follow-btn--active');
+  const currentCount = parseInt((countEl?.textContent || '').match(/\d+/)?.[0] || 0);
+
+  // Optimistic UI, rolled back if the write fails
+  const setUI = (on, count) => {
+    if (btn) {
+      btn.classList.toggle('fr-follow-btn--active', on);
+      btn.setAttribute('aria-pressed', on);
+      btn.title = on ? 'Unfollow' : 'Get emailed when the status changes';
+    }
+    if (label) label.textContent = on ? 'Following' : 'Follow';
+    if (countEl) countEl.textContent = count > 0 ? count + ' follower' + (count !== 1 ? 's' : '') : '';
+  };
+
+  if (wasFollowing) {
+    setUI(false, Math.max(0, currentCount - 1));
+    const { error } = await sb.from('frfc_feature_follows').delete().eq('feature_id', featureId).eq('user_id', currentUser.id);
+    if (error) setUI(true, currentCount);
+  } else {
+    setUI(true, currentCount + 1);
+    const { error } = await sb.from('frfc_feature_follows').insert({ feature_id: featureId, user_id: currentUser.id });
+    if (error) setUI(false, currentCount);
+  }
+}
+
 function openFeatureSubmitModal() {
   if (!currentUser) { openModal('signin', 'submitFeature'); return; }
   const overlay = document.getElementById('authOverlay');
@@ -3493,6 +3528,18 @@ async function renderFeatureDetail(featureId) {
   const isAdmin = await frCheckAdmin();
   const { data: logData } = await sb.from('frfc_feature_status_log').select('*').eq('feature_id', featureId).order('created_at', { ascending: false });
   const statusLog = logData || [];
+
+  // Follow state: is the current user following, and how many followers total?
+  let following = false;
+  let followerCount = 0;
+  try {
+    const { count } = await sb.from('frfc_feature_follows').select('id', { count: 'exact', head: true }).eq('feature_id', featureId);
+    followerCount = count || 0;
+    if (currentUser) {
+      const { data: mine } = await sb.from('frfc_feature_follows').select('id').eq('feature_id', featureId).eq('user_id', currentUser.id);
+      following = !!(mine && mine.length);
+    }
+  } catch (_) { /* non-critical */ }
   app.innerHTML = `
     <div class="container fr-detail-container">
       <a href="/community/features" class="fr-back-link">← All Feature Requests</a>
@@ -3503,6 +3550,10 @@ async function renderFeatureDetail(featureId) {
           </button>
           <span class="fr-detail-vote-count">${r.vote_count}</span>
           <span class="fr-detail-vote-label">votes</span>
+          <button class="fr-follow-btn ${following ? 'fr-follow-btn--active' : ''}" id="frFollowBtn" onclick="toggleFeatureFollow('${r.id}')" aria-pressed="${following}" aria-label="${following ? 'Unfollow this request' : 'Follow this request for status updates'}" title="${following ? 'Unfollow' : 'Get emailed when the status changes'}">
+            ${FR_ICONS.bell} <span id="frFollowLabel">${following ? 'Following' : 'Follow'}</span>
+          </button>
+          <span class="fr-follow-count" id="frFollowCount">${followerCount > 0 ? followerCount + ' follower' + (followerCount !== 1 ? 's' : '') : ''}</span>
         </div>
         <div class="fr-detail-main">
           <div class="fr-detail-header">

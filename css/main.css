@@ -1005,6 +1005,11 @@ img.review-avatar{background:var(--bg-hover)}
 .fr-detail-vote-btn{width:52px;height:40px}
 .fr-detail-vote-count{font-size:1.4rem;font-weight:800;color:var(--text)}
 .fr-detail-vote-label{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+.fr-follow-btn{display:inline-flex;align-items:center;gap:5px;margin-top:14px;padding:6px 12px;background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-pill);color:var(--text-dim);font-size:.75rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.fr-follow-btn:hover{border-color:var(--yellow);color:var(--text)}
+.fr-follow-btn--active{background:var(--navy);border-color:var(--navy);color:var(--yellow)}
+.fr-follow-btn svg{flex-shrink:0}
+.fr-follow-count{font-size:.7rem;color:var(--text-muted);margin-top:4px;text-align:center}
 .fr-detail-main{flex:1;min-width:0}
 .fr-detail-header{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .fr-detail-title{font-size:1.4rem;font-weight:800;margin:0;line-height:1.3}

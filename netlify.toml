@@ -32,18 +32,22 @@ schedule = "*/5 * * * *"
 
 # Keep internal dev docs off the production domain (they still live in the
 # repo/GitHub, just shouldn't be served from fanreactionsfc.com).
+# force = true so the rule beats the real file that exists in publish dir.
 [[redirects]]
   from = "/docs/*"
   to = "/index.html"
   status = 404
+  force = true
 [[redirects]]
   from = "/README.md"
   to = "/index.html"
   status = 404
+  force = true
 [[redirects]]
   from = "/CHANGES.md"
   to = "/index.html"
   status = 404
+  force = true
 
 # SPA fallback — Netlify serves real files first, then falls back to index.html
 [[redirects]]

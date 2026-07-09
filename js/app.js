@@ -465,6 +465,18 @@ document.addEventListener('click', e => {
   }
 });
 
+// Some interactive elements (the Discover league/club filter accordion) are
+// non-semantic <div role="button"> nodes for layout reasons. This makes
+// them keyboard-activatable the same way a real <button> would be —
+// Enter/Space triggers the same click the mouse would.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('[role="button"]');
+  if (!el) return;
+  e.preventDefault();
+  el.click();
+});
+
 // ── Auth ──────────────────────────────────────────────────────────────────
 async function refreshAuth() {
   try {
@@ -1318,7 +1330,7 @@ function battleCardHTML(c, idx) {
     </div>
     <div class="battle-name">${escHtml(c.name)}</div>
     <div class="battle-subs">${formatNum(c.subscriberCount)} subs</div>
-    <button class="battle-vote-btn" onclick="battleVote(${idx})">Vote</button>
+    <button class="battle-vote-btn" onclick="battleVote(${idx})" aria-label="Vote for ${escHtml(c.name)}">Vote</button>
     <div class="battle-result">
       <div class="battle-pct" id="bpct${idx}"></div>
       <div class="battle-toast" id="btoast${idx}"></div>
@@ -1561,7 +1573,7 @@ function renderDiscover() {
         <aside class="filter-sidebar" id="filterSidebar">
           <div class="league-accordion">
             <div class="league-acc-item">
-              <div class="league-acc-header ${!leagueFilter && !teamFilter ? 'active' : ''}" onclick="applyFilter('league','')">
+              <div class="league-acc-header ${!leagueFilter && !teamFilter ? 'active' : ''}" onclick="applyFilter('league','')" role="button" tabindex="0">
                 <span style="font-size:.9rem">⚽</span> All Leagues
                 <span class="acc-count">${creators.length}</span>
               </div>
@@ -1573,7 +1585,7 @@ function renderDiscover() {
               const isOpen = openLeague === l.name;
               return `
                 <div class="league-acc-item">
-                  <div class="league-acc-header ${leagueFilter === l.name && !teamFilter ? 'active' : ''} ${isOpen ? 'open' : ''}" onclick="toggleAccordion(this, '${escHtml(l.name)}')">
+                  <div class="league-acc-header ${leagueFilter === l.name && !teamFilter ? 'active' : ''} ${isOpen ? 'open' : ''}" onclick="toggleAccordion(this, '${escHtml(l.name)}')" role="button" tabindex="0" aria-expanded="${isOpen}">
                     <img src="${l.logo}" alt="" class="acc-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}
                     <span class="acc-count">${cnt}</span>
                     <span class="acc-arrow">&#9654;</span>
@@ -1581,7 +1593,7 @@ function renderDiscover() {
                   <div class="league-acc-body ${isOpen ? 'open' : ''}">
                     ${allLeagueTeams.map(t => {
                       const tCnt = creators.filter(c => c.team === t).length;
-                      return `<div class="acc-club ${teamFilter === t ? 'active' : ''}" onclick="applyFilter('team','${escHtml(t)}')">${crestImg(t, 'crest-sm')} ${escHtml(t)} <span class="count">${tCnt || ''}</span></div>`;
+                      return `<div class="acc-club ${teamFilter === t ? 'active' : ''}" onclick="applyFilter('team','${escHtml(t)}')" role="button" tabindex="0">${crestImg(t, 'crest-sm')} ${escHtml(t)} <span class="count">${tCnt || ''}</span></div>`;
                     }).join('')}
                   </div>
                 </div>`;
@@ -1680,7 +1692,7 @@ async function renderProfile(slug) {
             <div class="cp-hero-actions">
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-yellow cp-cta">▶ Watch on YouTube</a>` : ''}
               ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-ghost-white">📡 Live / Streams</a>` : ''}
-              <button class="btn btn-ghost-white${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
+              <button class="btn btn-ghost-white${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
               <button class="cp-report-link" onclick="openReportModal('${c.id}',${JSON.stringify(c.name)})">Report issue</button>
             </div>
           </div>
@@ -1873,6 +1885,7 @@ async function handleFavorite(id) {
   if (btn) {
     btn.innerHTML = (fav ? '&#9733; Favourited' : '&#9734; Favourite') + (count > 0 ? ' <span class="fav-count-badge" id="favCount">' + count + '</span>' : '');
     btn.classList.toggle('btn-favourited', fav);
+    btn.setAttribute('aria-pressed', fav);
   }
 }
 
@@ -2677,13 +2690,55 @@ async function renderAdmin() {
   }
 }
 
+// ── Modal accessibility (shared by the auth modal and the admin modal) ────
+// Adds dialog semantics, moves focus into the modal, traps Tab/Shift+Tab
+// inside it, closes on Escape, and restores focus to whatever triggered
+// the modal when it closes. Call activateModalA11y() right after showing
+// an overlay and deactivateModalA11y() right before hiding it.
+let _modalReturnFocus = null;
+let _modalKeydownHandler = null;
+
+function activateModalA11y(overlayEl, modalEl, onClose) {
+  if (!overlayEl || !modalEl) return;
+  modalEl.setAttribute('role', 'dialog');
+  modalEl.setAttribute('aria-modal', 'true');
+  if (!modalEl.hasAttribute('tabindex')) modalEl.setAttribute('tabindex', '-1');
+  _modalReturnFocus = document.activeElement;
+
+  const getFocusable = () => Array.from(modalEl.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  ));
+  const first = getFocusable()[0];
+  (first || modalEl).focus({ preventScroll: true });
+
+  if (_modalKeydownHandler) document.removeEventListener('keydown', _modalKeydownHandler);
+  _modalKeydownHandler = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); if (onClose) onClose(); return; }
+    if (e.key !== 'Tab') return;
+    const items = getFocusable();
+    if (!items.length) return;
+    const firstEl = items[0], lastEl = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+    else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
+  };
+  document.addEventListener('keydown', _modalKeydownHandler);
+}
+
+function deactivateModalA11y() {
+  if (_modalKeydownHandler) { document.removeEventListener('keydown', _modalKeydownHandler); _modalKeydownHandler = null; }
+  if (_modalReturnFocus && typeof _modalReturnFocus.focus === 'function') {
+    try { _modalReturnFocus.focus({ preventScroll: true }); } catch (e) {}
+  }
+  _modalReturnFocus = null;
+}
+
 // ── Auth Modal ────────────────────────────────────────────────────────────
 function openModal(type = 'signin') {
   const overlay = document.getElementById('authOverlay');
   const modal = document.getElementById('authModal');
   if (type === 'reset') {
     modal.innerHTML = `
-      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
       <h2>Reset your password</h2>
       <p class="modal-sub">Enter your email and we'll send you a link to reset your password.</p>
       <label>Email</label>
@@ -2694,11 +2749,12 @@ function openModal(type = 'signin') {
         <a href="#" onclick="event.preventDefault();openModal('signin')">Back to Sign In</a>
       </div>`;
     overlay.classList.add('open');
+    activateModalA11y(overlay, modal, closeModal);
     return;
   }
   const isSignIn = type === 'signin';
   modal.innerHTML = `
-    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
     <h2>${isSignIn ? 'Welcome back' : 'Create an account'}</h2>
     <p class="modal-sub">${isSignIn ? 'Sign in to follow and favourite creators.' : 'Join the community of football YouTube fans.'}</p>
     <button type="button" class="btn-google" onclick="signInWithGoogle()">
@@ -2718,9 +2774,11 @@ function openModal(type = 'signin') {
         "Already have an account? <a href=\"#\" onclick=\"event.preventDefault();openModal('signin')\">Sign in</a>"}
     </div>`;
   overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
 }
 
 function closeModal() {
+  deactivateModalA11y();
   document.getElementById('authOverlay')?.classList.remove('open');
 }
 
@@ -2731,7 +2789,7 @@ function openReportModal(creatorId, creatorName) {
   const modal = document.getElementById('authModal');
   if (!overlay || !modal) return;
   modal.innerHTML = `
-    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
     <h2>Report an issue</h2>
     <p class="modal-sub">Help keep <strong>${escHtml(creatorName)}</strong>'s info accurate.</p>
     <label>What's wrong?</label>
@@ -2747,6 +2805,7 @@ function openReportModal(creatorId, creatorName) {
     <button class="btn btn-primary" onclick="submitReport('${creatorId}')">Submit report</button>
     <div class="auth-msg" id="reportMsg"></div>`;
   overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
 }
 
 async function submitReport(creatorId) {
@@ -3276,8 +3335,8 @@ function filterFeatureRequests() {
     return `
       <div class="fr-card ${r.is_pinned ? 'fr-card--pinned' : ''}">
         <div class="fr-vote-col">
-          <button class="fr-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="event.stopPropagation();toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote'}">
-            <svg width="14" height="10" viewBox="0 0 14 10"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
+          <button class="fr-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="event.stopPropagation();toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote'}" aria-pressed="${voted}" aria-label="${voted ? 'Remove your vote for' : 'Upvote'} ${escHtml(r.title)}">
+            <svg width="14" height="10" viewBox="0 0 14 10" aria-hidden="true"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
           </button>
           <span class="fr-vote-count">${r.vote_count}</span>
         </div>
@@ -3324,7 +3383,12 @@ async function toggleFeatureVote(featureId) {
 function updateDetailVoteUI(featureId, voted, count) {
   const btn = document.querySelector('.fr-detail-vote-btn');
   const countEl = document.querySelector('.fr-detail-vote-count');
-  if (btn) { btn.classList.toggle('fr-vote-btn--active', voted); btn.title = voted ? 'Remove vote' : 'Upvote this idea'; }
+  if (btn) {
+    btn.classList.toggle('fr-vote-btn--active', voted);
+    btn.title = voted ? 'Remove vote' : 'Upvote this idea';
+    btn.setAttribute('aria-pressed', voted);
+    btn.setAttribute('aria-label', (voted ? 'Remove your vote' : 'Upvote this idea'));
+  }
   if (countEl && count !== undefined) countEl.textContent = count;
 }
 
@@ -3333,7 +3397,7 @@ function openFeatureSubmitModal() {
   const overlay = document.getElementById('authOverlay');
   const modal = document.getElementById('authModal');
   modal.innerHTML = `
-    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
     <h2>Suggest a Feature</h2>
     <p class="modal-sub">Describe your idea and the community will vote on it.</p>
     <label>Title</label>
@@ -3347,6 +3411,7 @@ function openFeatureSubmitModal() {
     <button class="btn btn-primary" style="width:100%" onclick="submitFeatureRequest()">Submit Idea</button>
     <div class="auth-msg" id="frMsg"></div>`;
   overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
 }
 
 async function submitFeatureRequest() {
@@ -3387,8 +3452,8 @@ async function renderFeatureDetail(featureId) {
       <a href="/community/features" class="fr-back-link">← All Feature Requests</a>
       <div class="fr-detail">
         <div class="fr-detail-sidebar">
-          <button class="fr-vote-btn fr-detail-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote this idea'}">
-            <svg width="18" height="12" viewBox="0 0 14 10"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
+          <button class="fr-vote-btn fr-detail-vote-btn ${voted ? 'fr-vote-btn--active' : ''}" onclick="toggleFeatureVote('${r.id}')" title="${voted ? 'Remove vote' : 'Upvote this idea'}" aria-pressed="${voted}" aria-label="${voted ? 'Remove your vote' : 'Upvote this idea'}">
+            <svg width="18" height="12" viewBox="0 0 14 10" aria-hidden="true"><path d="M7 0l7 10H0z" fill="currentColor"/></svg>
           </button>
           <span class="fr-detail-vote-count">${r.vote_count}</span>
           <span class="fr-detail-vote-label">votes</span>
@@ -3542,8 +3607,8 @@ async function loadFeatureComments(featureId) {
         </div>
         <div class="fr-comment-body">${escHtml(c.body).replace(/\n/g, '<br>')}</div>
         <div class="fr-comment-actions">
-          <button class="fr-like-btn ${liked ? 'fr-like-btn--active' : ''}" onclick="toggleCommentLike('${c.id}','${featureId}')">
-            ${liked ? '❤️' : '🤍'} ${c.like_count}
+          <button class="fr-like-btn ${liked ? 'fr-like-btn--active' : ''}" onclick="toggleCommentLike('${c.id}','${featureId}')" aria-pressed="${liked}" aria-label="${liked ? 'Unlike' : 'Like'} this comment">
+            <span aria-hidden="true">${liked ? '❤️' : '🤍'}</span> ${c.like_count}
           </button>
           ${!isReply && currentUser ? `<button class="fr-reply-btn" onclick="showReplyForm('${c.id}','${featureId}')">Reply</button>` : ''}
         </div>

@@ -139,10 +139,10 @@ function renderDashboard() {
   '</div>' +
 
   '<div class="admin-quick-actions">' +
-    '<div class="admin-quick-action" onclick="Admin.go(\'creators\')"><span class="qa-icon">&#9733;</span><span class="qa-label">Manage Creators</span><span class="qa-desc">Add, edit, delete</span></div>' +
-    '<div class="admin-quick-action" onclick="Admin.openAddCreator()"><span class="qa-icon">&#43;</span><span class="qa-label">Add Creator</span><span class="qa-desc">New YouTube channel</span></div>' +
-    '<div class="admin-quick-action" onclick="Admin.go(\'reviews\')"><span class="qa-icon">&#9998;</span><span class="qa-label">Reviews</span><span class="qa-desc">Moderate content</span></div>' +
-    '<div class="admin-quick-action" onclick="Admin.runSync()"><span class="qa-icon">&#8635;</span><span class="qa-label">YouTube Sync</span><span class="qa-desc">Refresh all data</span></div>' +
+    '<div class="admin-quick-action" onclick="Admin.go(\'creators\')" role="button" tabindex="0"><span class="qa-icon">&#9733;</span><span class="qa-label">Manage Creators</span><span class="qa-desc">Add, edit, delete</span></div>' +
+    '<div class="admin-quick-action" onclick="Admin.openAddCreator()" role="button" tabindex="0"><span class="qa-icon">&#43;</span><span class="qa-label">Add Creator</span><span class="qa-desc">New YouTube channel</span></div>' +
+    '<div class="admin-quick-action" onclick="Admin.go(\'reviews\')" role="button" tabindex="0"><span class="qa-icon">&#9998;</span><span class="qa-label">Reviews</span><span class="qa-desc">Moderate content</span></div>' +
+    '<div class="admin-quick-action" onclick="Admin.runSync()" role="button" tabindex="0"><span class="qa-icon">&#8635;</span><span class="qa-label">YouTube Sync</span><span class="qa-desc">Refresh all data</span></div>' +
   '</div>' +
 
   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
@@ -288,7 +288,7 @@ function openCreatorForm(c) {
   var isEdit = !!c;
   var modal = document.getElementById('adminModal');
   modal.innerHTML =
-    '<button class="admin-modal-close" onclick="Admin.closeModal()">&times;</button>' +
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
     '<div class="admin-modal-title">' + (isEdit ? 'Edit Creator' : 'Add Creator') + '</div>' +
     '<div class="admin-modal-sub">' + (isEdit ? 'Update ' + escHtml(c.name) : 'Add a new YouTube creator to the database') + '</div>' +
     formField('Channel Name', 'cf_name', c?.name || '') +
@@ -307,7 +307,9 @@ function openCreatorForm(c) {
       '<button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button>' +
       '<button class="btn-admin btn-admin-primary" onclick="Admin.saveCreator(\'' + (c?.id || '') + '\')">' + (isEdit ? 'Save Changes' : 'Add Creator') + '</button>' +
     '</div>';
-  document.getElementById('adminModalOverlay').classList.add('open');
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
 }
 
 async function saveCreator(id) {
@@ -695,6 +697,7 @@ function formCheck(label, id, checked) {
 }
 
 function closeModal() {
+  deactivateModalA11y();
   document.getElementById('adminModalOverlay')?.classList.remove('open');
 }
 

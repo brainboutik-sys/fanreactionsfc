@@ -465,6 +465,7 @@ img.review-avatar{background:var(--bg-hover)}
 .league-acc-body .acc-club{display:flex;align-items:center;gap:8px;padding:6px 14px 6px 32px;font-size:.82rem;color:var(--text-dim);cursor:pointer;transition:all .1s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .league-acc-body .acc-club:hover{background:var(--bg-hover);color:var(--text)}
 .league-acc-body .acc-club.active{color:var(--accent);font-weight:600;background:var(--accent-soft)}
+.league-acc-header:focus-visible,.acc-club:focus-visible{outline:2px solid var(--yellow);outline-offset:-2px}
 .league-acc-body .acc-club .count{margin-left:auto;font-size:.68rem;color:var(--text-muted);flex-shrink:0}
 
 /* Top filter bar */

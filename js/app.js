@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     handleRoute();
     window.addEventListener('popstate', handleRoute);
     initSearch();
+    if (window.Analytics) Analytics.init(); // consent-gated; no-op until a GA4 ID is set
     // Resolve the session in the background so first paint doesn't wait on
     // the auth round-trip. If a user turns out to be signed in, re-render
     // the current route once so auth-dependent UI (account/admin pages,
@@ -180,6 +181,7 @@ function handleRoute() {
   document.getElementById('navLinks')?.classList.remove('open'); // close mobile nav
   if (typeof Gen !== 'undefined' && Gen.cleanup) Gen.cleanup();
   window.scrollTo(0, 0);
+  if (window.Analytics) Analytics.trackPageview(path + location.search); // SPA pageview
 
   // Update nav active state
   updateNavActive(path);

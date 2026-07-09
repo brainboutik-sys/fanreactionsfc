@@ -1057,6 +1057,12 @@ img.review-avatar{background:var(--bg-hover)}
   .fr-admin-row label{min-width:auto}
 }
 
+/* ── Cookie consent bar ─────────────────────────────────────────────────── */
+.cookie-consent{position:fixed;left:16px;right:16px;bottom:16px;z-index:200;max-width:640px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:16px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.cookie-consent-text{flex:1;min-width:220px;font-size:.82rem;color:var(--text-dim);line-height:1.5;margin:0}
+.cookie-consent-actions{display:flex;gap:8px;flex-shrink:0}
+@media(max-width:520px){.cookie-consent{flex-direction:column;align-items:stretch}.cookie-consent-actions{justify-content:flex-end}}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}

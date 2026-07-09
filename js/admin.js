@@ -194,7 +194,7 @@ function renderCreators() {
         '<td>' + formatNum(c.total_view_count || 0) + '</td>' +
         '<td>' + escHtml(c.upload_frequency || '—') + '</td>' +
         '<td>' + (c.verified ? '<span class="admin-badge admin-badge-green">Verified</span>' : '') + (c.is_live ? ' <span class="admin-badge admin-badge-red">LIVE</span>' : '') + (c.featured ? ' <span class="admin-badge admin-badge-yellow">Featured</span>' : '') + (!c.verified && !c.is_live && !c.featured ? '<span class="admin-badge admin-badge-dim">Standard</span>' : '') + '</td>' +
-        '<td><div class="row-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.editCreator(\'' + c.id + '\')">Edit</button><button class="btn-admin btn-admin-danger" onclick="Admin.deleteCreator(\'' + c.id + '\',\'' + escHtml(c.name).replace(/'/g,"\\'") + '\')">Del</button></div></td>' +
+        '<td><div class="row-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.editCreator(\'' + c.id + '\')">Edit</button><button class="btn-admin btn-admin-danger" onclick="Admin.deleteCreator(\'' + c.id + '\',\'' + jsAttrStr(c.name) + '\')">Del</button></div></td>' +
       '</tr>';
     }).join('') +
     '</tbody></table>' +

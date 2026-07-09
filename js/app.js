@@ -992,7 +992,7 @@ function renderHome() {
           <div class="sc-head-right">
             <div class="club-filter-row" style="margin:0;gap:6px">
               <span class="chip club-filter active" style="font-size:.72rem;padding:4px 12px" onclick="filterClubs(this,'')">All</span>
-              ${LEAGUES.map(l => `<span class="chip club-filter" style="font-size:.72rem;padding:4px 10px" onclick="filterClubs(this,'${escHtml(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
+              ${LEAGUES.map(l => `<span class="chip club-filter" style="font-size:.72rem;padding:4px 10px" onclick="filterClubs(this,'${jsAttrStr(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
             </div>
             <a href="/discover" class="sc-head-link">View all &rarr;</a>
           </div>
@@ -1502,7 +1502,7 @@ function renderDiscover() {
               const isOpen = openLeague === l.name;
               return `
                 <div class="league-acc-item">
-                  <div class="league-acc-header ${leagueFilter === l.name && !teamFilter ? 'active' : ''} ${isOpen ? 'open' : ''}" onclick="toggleAccordion(this, '${escHtml(l.name)}')" role="button" tabindex="0" aria-expanded="${isOpen}">
+                  <div class="league-acc-header ${leagueFilter === l.name && !teamFilter ? 'active' : ''} ${isOpen ? 'open' : ''}" onclick="toggleAccordion(this, '${jsAttrStr(l.name)}')" role="button" tabindex="0" aria-expanded="${isOpen}">
                     <img src="${l.logo}" alt="" class="acc-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}
                     <span class="acc-count">${cnt}</span>
                     <span class="acc-arrow">&#9654;</span>
@@ -1510,7 +1510,7 @@ function renderDiscover() {
                   <div class="league-acc-body ${isOpen ? 'open' : ''}">
                     ${allLeagueTeams.map(t => {
                       const tCnt = creators.filter(c => c.team === t).length;
-                      return `<div class="acc-club ${teamFilter === t ? 'active' : ''}" onclick="applyFilter('team','${escHtml(t)}')" role="button" tabindex="0">${crestImg(t, 'crest-sm')} ${escHtml(t)} <span class="count">${tCnt || ''}</span></div>`;
+                      return `<div class="acc-club ${teamFilter === t ? 'active' : ''}" onclick="applyFilter('team','${jsAttrStr(t)}')" role="button" tabindex="0">${crestImg(t, 'crest-sm')} ${escHtml(t)} <span class="count">${tCnt || ''}</span></div>`;
                     }).join('')}
                   </div>
                 </div>`;
@@ -2975,7 +2975,7 @@ function renderStreamwall() {
         </div>
         <div class="sw-filter-row">
           <span class="chip active" onclick="swFilterLeague(this,'')">All</span>
-          ${LEAGUES.map(l => `<span class="chip" onclick="swFilterLeague(this,'${escHtml(l.name)}')">${leagueChipImg(l.name)} ${escHtml(l.name)}</span>`).join('')}
+          ${LEAGUES.map(l => `<span class="chip" onclick="swFilterLeague(this,'${jsAttrStr(l.name)}')">${leagueChipImg(l.name)} ${escHtml(l.name)}</span>`).join('')}
         </div>
         ${liveCreators.length ? `
         <div class="sw-controls">

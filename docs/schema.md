@@ -18,10 +18,10 @@ schema changes.
   admin JWT claim; admin-ness is checked either by a policy subquery against
   `frfc_admin_roles` or by the `frfc_is_admin()` helper.
 
-> ⚠️ Because the browser talks to Postgres directly, **UI-only gating is not security.**
-> Several tables (see [Known RLS gaps](#known-rls-gaps)) currently allow writes that the
-> UI never exposes but a crafted request could perform. The feature-requests tables were
-> hardened (2026-07-08); the older creator/submission tables were not.
+> ⚠️ Because the browser talks to Postgres directly, **UI-only gating is not security** —
+> every write must be enforced by RLS or a `SECURITY DEFINER` RPC, not just hidden in the
+> UI. See [Security posture](#security-posture) for the current state (the known gaps were
+> closed 2026-07-08).
 
 ---
 
@@ -43,16 +43,19 @@ YouTube-synced: `youtube_channel_id`, `subscriber_count`, `total_view_count`,
 | Op | Role | Rule |
 |----|------|------|
 | SELECT | anon, authenticated | `true` |
-| INSERT | authenticated | `true` — **any** logged-in user |
-| UPDATE | anon | `true` — ⚠️ **any anonymous visitor can edit any row** |
-| UPDATE | authenticated | `true` |
-| DELETE | authenticated | `true` — **any** logged-in user |
+| INSERT | authenticated | admin only (`frfc_admin_roles`) |
+| UPDATE | authenticated | admin only |
+| DELETE | authenticated | admin only |
 
+Writes are admin-only (hardened 2026-07-08; anon UPDATE was previously open).
+Server-side YouTube sync writes with the service-role key and bypasses these
+policies; the admin panel's manual sync runs as the admin user and passes.
 Trigger: `frfc_streamers_updated_at` (BEFORE UPDATE) bumps `updated_at`.
 
 #### `frfc_subscriber_history` — subscriber time series (~3,375 rows)
 One row per creator per sync (`creator_id`, `subscriber_count`, `recorded_at`). Powers
-the profile sparkline. RLS: anon+authenticated can SELECT and INSERT (`true`).
+the profile sparkline. RLS: public SELECT; INSERT admin-only (server sync uses the
+service-role key and bypasses this).
 
 ### Users & engagement
 
@@ -70,8 +73,8 @@ RLS: read public; insert/update/delete restricted to `auth.uid() = user_id`. Cle
 Note: the frontend no longer surfaces reviews, but the admin panel still reads this table.
 
 #### `frfc_creator_reports` — "report an issue" on a creator (0 rows)
-`creator_id`, `reason`, `details`, `resolved*`. RLS: anon+authenticated INSERT (`true`);
-authenticated SELECT/UPDATE all rows (`true`) — intended for admins but **not admin-gated**.
+`creator_id`, `reason`, `details`, `resolved*`. RLS: anon+authenticated INSERT (`true`,
+public report form); SELECT and UPDATE are admin-only (hardened 2026-07-08).
 
 ### Community Feature Requests (hardened 2026-07-08)
 
@@ -128,9 +131,9 @@ Trigger `trg_frfc_like_count` (AFTER INSERT/DELETE) maintains `frfc_feature_comm
 #### `frfc_battles` — Creator Battle vote log (~895 rows)
 `winner_id`, `loser_id` (→ streamers), `voter_fingerprint` (localStorage UUID),
 `voter_id` (→ auth.users, nullable). Powers the homepage head-to-head.
-RLS: SELECT public (`true`), INSERT public (`true`).
-The client votes through the `record_battle_vote` RPC (which validates + rate-limits),
-but the raw INSERT policy is also `true` — see [Known RLS gaps](#known-rls-gaps).
+RLS: SELECT public (`true`). There is **no direct INSERT policy** — the only way to add
+a row is the `record_battle_vote` RPC (SECURITY DEFINER, owned by postgres, bypasses RLS),
+which validates the pair and rate-limits. Direct client inserts are denied (hardened 2026-07-08).
 
 ### Admin & ops
 
@@ -147,8 +150,10 @@ admin-only.
 #### `frfc_submissions` — public "submit a creator" queue (~126 rows)
 `name`, `channel_url`, `team`, `league`, `status` (`pending|approved|rejected`),
 `reviewed_*`. Trigger `on_new_submission` (AFTER INSERT) → `notify_new_submission()`
-(email notification). RLS: anon+authenticated INSERT and SELECT (`true`); authenticated
-UPDATE/DELETE all rows (`true`) — approve/reject is **not admin-gated** at the DB level.
+(email notification). RLS: anon+authenticated INSERT (public submit form) and SELECT
+(`true`); UPDATE/DELETE (approve/reject) are admin-only (hardened 2026-07-08).
+Note: SELECT is still public — pending submissions (incl. channel URLs) are readable by
+anyone. Low-sensitivity, left open because the submit flow reads for duplicate detection.
 
 ---
 
@@ -179,29 +184,29 @@ hardening.
 
 ---
 
-## Known RLS gaps
+## Security posture
 
-These are live authorization weaknesses where the DB is more permissive than the UI. The
-feature-requests subsystem was hardened; these predate it and are **not** yet fixed.
-Listed worst-first:
+The legacy-table RLS gaps were closed on 2026-07-08 (verified with the anon key):
 
-1. **`frfc_streamers` UPDATE is open to `anon`** (`anon_update_streamers`, USING/CHECK
-   `true`). Any anonymous visitor can modify any creator row (name, team, avatar, live
-   status…). INSERT/DELETE are open to any authenticated user. Creator management is
-   effectively UI-gated only. **Highest priority to fix** — restrict writes to
-   `frfc_is_admin()`.
-2. **`frfc_submissions` UPDATE/DELETE open to any authenticated user** — approve/reject
-   isn't admin-checked at the DB. A logged-in non-admin could approve their own
-   submission via a direct call.
-3. **`frfc_creator_reports` SELECT/UPDATE open to any authenticated user** — report
-   triage isn't admin-gated.
-4. **`frfc_battles` and `frfc_subscriber_history` INSERT are public `true`** — a client
-   can bypass `record_battle_vote` and insert arbitrary battle/history rows directly,
-   sidestepping the RPC's validation and rate limits.
+- **`frfc_streamers`** — writes are admin-only; the anon UPDATE hole (any visitor could
+  edit any creator) is closed. Reads stay public.
+- **`frfc_submissions`** — approve/reject (UPDATE/DELETE) is admin-only; public submit
+  (INSERT) stays.
+- **`frfc_creator_reports`** — read/triage is admin-only; public report (INSERT) stays.
+- **`frfc_battles`** — no direct INSERT; votes only via the validated `record_battle_vote`
+  RPC.
+- **`frfc_subscriber_history`** — INSERT admin-only (server uses service role).
 
-Recommended fix pattern: replace the permissive policies with `frfc_is_admin()` (for
-moderation tables) or route writes exclusively through `SECURITY DEFINER` RPCs and set the
-table's direct INSERT/UPDATE policies to something restrictive.
+Remaining low-sensitivity notes:
+
+1. **`frfc_submissions` SELECT is public** — pending submissions (incl. channel URLs) are
+   readable by anyone. Left open for the submit form's duplicate check; tighten to
+   admin-only if that check is moved server-side.
+2. **`frfc_battles` SELECT is public** — the raw vote log is readable. Harmless (it's
+   aggregate battle data), but note it exposes `voter_id` where present.
+3. **Trust root:** everything hinges on `frfc_admin_roles` having no client-writable
+   policy. Never add an INSERT/UPDATE policy to that table — manage roles via the
+   dashboard/service role only.
 
 ---
 

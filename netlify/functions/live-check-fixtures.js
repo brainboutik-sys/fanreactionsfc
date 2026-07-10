@@ -18,6 +18,15 @@
 // IDs already in the DB, so a fresh stream was invisible until the next
 // twice-daily sync-background run.
 //
+// World Cup fixtures don't map to a specific club (frfc_streamers.team is
+// club-based, not nation-based), and in practice creators don't limit World
+// Cup watchalongs to just their club's nation anyway — so a WC kickoff
+// triggers a check across every tracked creator instead of a narrow
+// nation-matched subset. Group-stage days can have several kickoffs; each
+// distinct 5-minute run still only costs ~1 quota unit per creator (playlist
+// head) regardless of how many WC fixtures are due in that window, since the
+// creator set is de-duplicated.
+//
 // Required env vars:
 //   YOUTUBE_API_KEY             — server-side YouTube Data API key
 //   SUPABASE_URL                — optional, falls back to hardcoded
@@ -41,7 +50,7 @@ exports.handler = async () => {
 
   // 1. Fixtures kicking off in the next ~7 minutes that haven't fired yet.
   const fixRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_fixtures?select=id,home_team,away_team,kickoff_at&kickoff_at=gte.${encodeURIComponent(nowIso)}&kickoff_at=lte.${encodeURIComponent(windowEnd)}&trigger_sent_at=is.null`,
+    `${supabaseUrl}/rest/v1/frfc_fixtures?select=id,competition_code,home_team,away_team,kickoff_at&kickoff_at=gte.${encodeURIComponent(nowIso)}&kickoff_at=lte.${encodeURIComponent(windowEnd)}&trigger_sent_at=is.null`,
     { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
   );
   if (!fixRes.ok) return ok({ error: 'fixtures select failed', status: fixRes.status }, 502);
@@ -49,31 +58,38 @@ exports.handler = async () => {
 
   if (!fixtures.length) return ok({ fixtures_due: 0 });
 
+  // World Cup matches don't map to a specific club — but creators clearly
+  // don't limit World Cup watchalongs to just their club's nation (an
+  // Arsenal-focused creator will happily stream Argentina vs Switzerland).
+  // So for WC fixtures, check every tracked creator instead of trying to
+  // build a nation -> creator mapping that wouldn't reflect real behavior.
   const teams = new Set();
+  let broadCheck = false;
   for (const f of fixtures) {
     if (f.home_team) teams.add(f.home_team);
     if (f.away_team) teams.add(f.away_team);
+    if (f.competition_code === 'WC') broadCheck = true;
   }
-  if (!teams.size) {
-    // Fixtures matched no tracked club (e.g. World Cup nations) — still
-    // mark them as fired so we don't keep re-checking every 5 minutes.
+  if (!teams.size && !broadCheck) {
+    // Unmatched fixture in a non-WC competition (shouldn't normally happen
+    // given the team-name map, but fail safe) — mark fired, nothing to check.
     await markFired(supabaseUrl, sbKey, fixtures.map(f => f.id));
-    return ok({ fixtures_due: fixtures.length, matched_teams: 0 });
+    return ok({ fixtures_due: fixtures.length, matched_teams: 0, broad_check: false });
   }
 
-  // 2. Creators tied to those clubs, not already flagged live (skip —
-  // nothing to gain re-discovering someone we already know is live).
-  const teamFilter = [...teams].map(t => `"${t.replace(/"/g, '\\"')}"`).join(',');
-  const creatorsRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_streamers?select=id,team,youtube_channel_id,latest_video_id,live_video_id,is_live&team=in.(${teamFilter})&is_live=is.false&youtube_channel_id=not.is.null`,
-    { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-  );
+  // 2. Creators to check, not already flagged live (skip — nothing to gain
+  // re-discovering someone we already know is live). Broad check (World
+  // Cup) covers every creator; otherwise just the two clubs playing.
+  const creatorsUrl = broadCheck
+    ? `${supabaseUrl}/rest/v1/frfc_streamers?select=id,team,youtube_channel_id,latest_video_id,live_video_id,is_live&is_live=is.false&youtube_channel_id=not.is.null`
+    : `${supabaseUrl}/rest/v1/frfc_streamers?select=id,team,youtube_channel_id,latest_video_id,live_video_id,is_live&team=in.(${[...teams].map(t => `"${t.replace(/"/g, '\\"')}"`).join(',')})&is_live=is.false&youtube_channel_id=not.is.null`;
+  const creatorsRes = await fetch(creatorsUrl, { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } });
   if (!creatorsRes.ok) return ok({ error: 'creators select failed', status: creatorsRes.status }, 502);
   const creators = await creatorsRes.json();
 
   if (!creators.length) {
     await markFired(supabaseUrl, sbKey, fixtures.map(f => f.id));
-    return ok({ fixtures_due: fixtures.length, matched_teams: teams.size, creators_checked: 0 });
+    return ok({ fixtures_due: fixtures.length, matched_teams: teams.size, broad_check: broadCheck, creators_checked: 0 });
   }
 
   // 3. Refresh each creator's uploads-playlist head (1 quota unit each) so
@@ -145,6 +161,7 @@ exports.handler = async () => {
   return ok({
     fixtures_due: fixtures.length,
     matched_teams: teams.size,
+    broad_check: broadCheck,
     creators_checked: creators.length,
     now_live: nowLive,
   });

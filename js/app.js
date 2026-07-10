@@ -1033,7 +1033,7 @@ function renderHome() {
           <span class="home-promo-arrow">&rarr;</span>
         </a>
         <a href="/streamwall" class="home-promo-card">
-          <span class="home-promo-icon">📡</span>
+          <span class="home-promo-icon"><img src="/img/icons/live-now.png" alt=""></span>
           <div>
             <div class="home-promo-title">Watch live, all in one place</div>
             <p class="home-promo-sub">Streamwall lines up every live football creator side by side.</p>

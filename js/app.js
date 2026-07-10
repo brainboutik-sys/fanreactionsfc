@@ -1600,7 +1600,7 @@ async function renderProfile(slug) {
 
   updatePageMeta(
     `${c.name} — Football Creator on FanReactionsFC`,
-    (c.description ? c.description.slice(0, 160) : `${c.name} is a ${c.team} football YouTuber on FanReactionsFC.`) + (c.subscriberCount ? ` ${formatNum(c.subscriberCount)} subscribers.` : '')
+    (c.description ? c.description.slice(0, 160) : `${c.name} is ${aOrAn(c.team)} ${c.team} football YouTuber on FanReactionsFC.`) + (c.subscriberCount ? ` ${formatNum(c.subscriberCount)} subscribers.` : '')
   );
 
   document.getElementById('app').innerHTML = `
@@ -1620,7 +1620,7 @@ async function renderProfile(slug) {
               ${c.verified ? '<span class="badge badge-green" style="font-size:.7rem;vertical-align:middle">Verified</span>' : ''}
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>
-            ${c.description ? `<p class="cp-hero-desc">${escHtml(c.description)}</p>` : ''}
+            <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
             <div class="cp-hero-actions">
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-yellow cp-cta">▶ Watch on YouTube</a>` : ''}
               ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-ghost-white">📡 Live / Streams</a>` : ''}
@@ -1809,6 +1809,62 @@ function formatNum(n) {
   return n.toString();
 }
 
+// Small deterministic hash used to pick among a few phrasing variants,
+// so pages with similar underlying data don't read as one repeated
+// template (thin/duplicate-content smell) when a real description or
+// hand-written copy isn't available.
+function textVariant(seed, count) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return h % count;
+}
+
+function aOrAn(word) { return /^[aeiou]/i.test(word) ? 'an' : 'a'; }
+
+function joinWithAnd(arr) {
+  if (arr.length === 1) return arr[0];
+  if (arr.length === 2) return arr[0] + ' and ' + arr[1];
+  return arr.slice(0, -1).join(', ') + ', and ' + arr[arr.length - 1];
+}
+
+// Generated fallback intro paragraph for a creator profile — only used
+// when the channel has no real description synced from YouTube.
+function creatorIntroText(c) {
+  const subs = formatNum(c.subscriberCount || 0);
+  const videos = c.videoCount ? formatNum(c.videoCount) : '';
+  const styles = (c.contentTypes && c.contentTypes.length)
+    ? joinWithAnd(c.contentTypes.slice(0, 3).map(t => t.toLowerCase()))
+    : 'football reactions and match content';
+  const freq = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency.toLowerCase() : '';
+  const videosPart = videos ? ` across ${videos} videos` : '';
+  const freqPart = freq ? `, uploading ${freq}` : '';
+
+  const variants = [
+    `${c.name} is ${aOrAn(c.team)} ${c.team} YouTuber covering ${styles}. The channel has grown to ${subs} subscribers${videosPart}${freqPart}.`,
+    `Covering ${c.team} on YouTube, ${c.name} has built an audience of ${subs} subscribers${videosPart} with content focused on ${styles}${freqPart}.`,
+    `${c.name} is one of the ${c.team} creators tracked on FanReactionsFC — ${subs} subscribers${videosPart}, focused on ${styles}${freqPart}.`,
+  ];
+  return variants[textVariant(c.id || c.name, variants.length)];
+}
+
+// Generated intro paragraph for a club page — varies phrasing by club
+// name so 39 club pages don't read as one template with the name swapped.
+function clubIntroText(club, clubCreators, clubLeague) {
+  if (!clubCreators.length) return '';
+  const count = clubCreators.length;
+  const top = clubCreators.reduce((a, b) => (b.subscriberCount || 0) > (a.subscriberCount || 0) ? b : a, clubCreators[0]);
+  const leaguePart = clubLeague && clubLeague !== 'Other' ? ` in the ${clubLeague}` : '';
+  const liveCount = clubCreators.filter(c => c.isLive).length;
+  const livePart = liveCount ? ` ${liveCount === 1 ? 'One is' : liveCount + ' are'} live right now.` : '';
+
+  const variants = [
+    `FanReactionsFC tracks ${count} ${club} YouTube channel${count !== 1 ? 's' : ''}${leaguePart}, covering post-match reactions, watchalongs, and fan commentary. The most-followed is ${top.name}, with ${formatNum(top.subscriberCount || 0)} subscribers.${livePart}`,
+    `Looking for ${club} content on YouTube? There are ${count} creator${count !== 1 ? 's' : ''}${leaguePart} in this directory, led by ${top.name} at ${formatNum(top.subscriberCount || 0)} subscribers.${livePart}`,
+    `${count} ${club} YouTuber${count !== 1 ? 's' : ''}${leaguePart} are ranked here by subscriber count, from post-match reactions to full watchalongs. ${top.name} leads the pack with ${formatNum(top.subscriberCount || 0)} subscribers.${livePart}`,
+  ];
+  return variants[textVariant(club, variants.length)];
+}
+
 async function handleFavorite(id) {
   await toggleFavorite(id);
   const fav = favorites.has(id);
@@ -1853,6 +1909,7 @@ function renderClubPage(club) {
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">${leagueInfo ? escHtml(clubLeague) : 'Football Club'}</div>
             <h1 class="page-hero-title">${escHtml(club)}</h1>
+            ${clubCreators.length ? `<p class="page-hero-subtitle" style="max-width:640px">${escHtml(clubIntroText(club, clubCreators, clubLeague))}</p>` : ''}
             <div class="page-hero-meta">
               <span class="page-hero-tag">${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</span>
               ${clubCreators.filter(c => c.isLive).length ? `<span class="page-hero-tag" style="background:rgba(230,57,70,.2);border-color:rgba(230,57,70,.3);color:#ff8080">● ${clubCreators.filter(c => c.isLive).length} live</span>` : ''}

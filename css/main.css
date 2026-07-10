@@ -171,8 +171,8 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* ── Section card (shared across all pages) ─────────────────────────────── */
 .sc-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px}
 .sc-head{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--border)}
-.sc-head-title{font-size:.86rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);display:flex;align-items:center;gap:8px}
-.section-title-icon{width:22px;height:22px;object-fit:contain;flex-shrink:0}
+.sc-head-title{font-size:.94rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);display:flex;align-items:center;gap:8px}
+.section-title-icon{width:26px;height:26px;object-fit:contain;flex-shrink:0}
 .sc-head-right{display:flex;align-items:center;gap:12px}
 .sc-head-link{color:var(--accent);font-size:.82rem;font-weight:500;text-decoration:none;transition:color .15s}
 .sc-head-link:hover{color:var(--accent-hover)}
@@ -768,7 +768,7 @@ img.review-avatar{background:var(--bg-hover)}
 .battle-section{padding:28px 0 0}
 .battle-wrap{background:var(--bg-card);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
 .battle-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border)}
-.battle-title{font-size:.86rem;font-weight:800;color:var(--text);letter-spacing:.05em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.battle-title{font-size:.94rem;font-weight:800;color:var(--navy);letter-spacing:.05em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
 .battle-filters{display:flex;gap:8px;align-items:center}
 .battle-select{padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:var(--bg-input);font-size:.74rem;color:var(--text);cursor:pointer;font-family:inherit;transition:border-color .2s,background .2s}
 .battle-select:hover{border-color:var(--yellow);background:var(--bg-hover)}

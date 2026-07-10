@@ -4,7 +4,6 @@
    ARCHITECTURE (no build step — plain classic <script>s sharing one global
    scope; load order is set in index.html):
      js/data/teams.js  → LEAGUES, TEAM_CRESTS, TEAM_TO_LEAGUE, TEAM_COLORS, CONTENT_TYPES
-     js/analytics.js   → window.Analytics (consent-gated GA4)
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -110,7 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     handleRoute();
     window.addEventListener('popstate', handleRoute);
     initSearch();
-    if (window.Analytics) Analytics.init(); // consent-gated; no-op until a GA4 ID is set
     // Resolve the session in the background so first paint doesn't wait on
     // the auth round-trip. If a user turns out to be signed in, re-render
     // the current route once so auth-dependent UI (account/admin pages,
@@ -202,7 +200,6 @@ function handleRoute() {
   document.getElementById('navLinks')?.classList.remove('open'); // close mobile nav
   if (typeof Gen !== 'undefined' && Gen.cleanup) Gen.cleanup();
   window.scrollTo(0, 0);
-  if (window.Analytics) Analytics.trackPageview(path + location.search); // SPA pageview
 
   // Update nav active state
   updateNavActive(path);

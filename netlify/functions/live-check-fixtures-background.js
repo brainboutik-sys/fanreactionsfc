@@ -27,6 +27,15 @@
 // head) regardless of how many WC fixtures are due in that window, since the
 // creator set is de-duplicated.
 //
+// Named with the `-background` suffix (same convention as sync-background.js)
+// so Netlify gives it up to 15 minutes instead of the ~10-26s default —
+// a World Cup broad-check can touch all ~265 creators, and looping that
+// sequentially blew straight through the default timeout in testing (a real
+// run against 265 creators got no response at all after 30s). The
+// per-creator playlist-head fetch below is parallelized in bounded batches
+// so a normal (2-team) trigger still finishes in a couple of seconds and a
+// full broad-check finishes in well under a minute, not 15 minutes.
+//
 // Required env vars:
 //   YOUTUBE_API_KEY             — server-side YouTube Data API key
 //   SUPABASE_URL                — optional, falls back to hardcoded
@@ -35,6 +44,19 @@
 exports.config = { schedule: '*/5 * * * *' };
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
+const PLAYLIST_FETCH_CONCURRENCY = 20;
+
+// Runs `fn` over `items` with at most `limit` in flight at once.
+async function mapWithConcurrency(items, limit, fn) {
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
 
 exports.handler = async () => {
   const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
@@ -94,10 +116,12 @@ exports.handler = async () => {
 
   // 3. Refresh each creator's uploads-playlist head (1 quota unit each) so
   // a brand-new livestream shows up as latest_video_id even if it hasn't
-  // been through the twice-daily full sync yet.
+  // been through the twice-daily full sync yet. Parallelized (bounded) —
+  // sequential awaits over up to ~265 creators (broad/World-Cup check)
+  // would blow well past a normal function timeout.
   const freshIds = {}; // creator.id -> latest video id (fresh or existing)
-  for (const c of creators) {
-    freshIds[c.id] = c.latest_video_id || null;
+  for (const c of creators) freshIds[c.id] = c.latest_video_id || null;
+  await mapWithConcurrency(creators, PLAYLIST_FETCH_CONCURRENCY, async (c) => {
     const uploadsPlaylistId = 'UU' + c.youtube_channel_id.slice(2);
     try {
       const plData = await ytFetch(ytKey, 'playlistItems', {
@@ -109,7 +133,7 @@ exports.handler = async () => {
         plData.items[0].snippet.resourceId && plData.items[0].snippet.resourceId.videoId;
       if (vid) freshIds[c.id] = vid;
     } catch (e) { /* keep existing latest_video_id on failure */ }
-  }
+  });
 
   // 4. Batch-check liveStreamingDetails for every candidate ID (fresh
   // latest_video_id + any existing live_video_id), same as live-check.js.

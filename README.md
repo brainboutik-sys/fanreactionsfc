@@ -44,8 +44,9 @@ netlify/functions/
   sync-background.js    scheduled full creator metadata refresh (07:00 & 15:00 UTC)
   live-check.js         scheduled is_live refresh (every 30 min, blanket safety net)
   fixtures-sync.js      daily fixtures pull from football-data.org -> frfc_fixtures
-  live-check-fixtures.js  every 5 min; fires ~5 min before a real kickoff for
-                        creators tied to the two clubs playing
+  live-check-fixtures-background.js  every 5 min; fires ~5 min before a real
+                        kickoff for creators tied to the two clubs playing
+                        (World Cup fixtures check every creator instead)
   rank-snapshot-background.js  scheduled ranking snapshots
   sitemap.js            dynamic /sitemap.xml from the creator list
   creator-og.js         per-creator OG meta tags for social crawlers
@@ -93,8 +94,8 @@ Set in **Netlify → Project configuration → Environment variables** (never co
 
 | Variable | Used by | Notes |
 |---|---|---|
-| `YOUTUBE_API_KEY` | youtube-proxy, live-check, live-check-fixtures, sync-background, claim-creator | YouTube Data API v3 key, server-side only |
-| `SUPABASE_SERVICE_ROLE_KEY` | sitemap, creator-og, live-check, live-check-fixtures, fixtures-sync, sync-background, rank-snapshot, claim-creator | Supabase secret key — bypasses RLS for server writes. **Never expose client-side.** |
+| `YOUTUBE_API_KEY` | youtube-proxy, live-check, live-check-fixtures-background, sync-background, claim-creator | YouTube Data API v3 key, server-side only |
+| `SUPABASE_SERVICE_ROLE_KEY` | sitemap, creator-og, live-check, live-check-fixtures-background, fixtures-sync, sync-background, rank-snapshot, claim-creator | Supabase secret key — bypasses RLS for server writes. **Never expose client-side.** |
 | `FOOTBALL_DATA_API_KEY` | fixtures-sync | Free-tier key from football-data.org — pulls fixtures for every league/competition covered |
 | `SUPABASE_URL` | all functions | Optional; falls back to the hardcoded project URL |
 

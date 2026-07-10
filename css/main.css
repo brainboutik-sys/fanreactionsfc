@@ -160,8 +160,10 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* ── Platform stat bar (home + inner pages) ─────────────────────────────── */
 .platform-stat-bar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:0}
 .platform-stats{display:flex;gap:0}
-.platform-stat{flex:1;padding:28px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;border-right:1px solid var(--border);text-align:center}
+.platform-stat{flex:1;padding:28px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;border-right:1px solid var(--border);text-align:center;color:inherit;text-decoration:none}
 .platform-stat:last-child{border-right:none}
+.platform-stat--live{cursor:pointer;transition:background .15s}
+.platform-stat--live:hover{background:rgba(230,57,70,.06)}
 .platform-stat-icon{width:34px;height:34px;object-fit:contain;margin-bottom:2px}
 .platform-stat-num{font-size:2.6rem;font-weight:800;color:var(--navy);letter-spacing:-.04em;line-height:1}
 .platform-stat-num--live{color:var(--red)}

@@ -877,11 +877,17 @@ function renderHome() {
             <div class="platform-stat-num">${LEAGUES.length}</div>
             <div class="platform-stat-label">Leagues</div>
           </div>
+          ${totalLive ? `
+          <a href="/streamwall" class="platform-stat platform-stat--live" title="See who's live on Streamwall">
+            <img class="platform-stat-icon" src="/img/icons/live-now.png" alt="">
+            <div class="platform-stat-num platform-stat-num--live">${totalLive}</div>
+            <div class="platform-stat-label" style="color:var(--red)">● Live now</div>
+          </a>` : `
           <div class="platform-stat">
             <img class="platform-stat-icon" src="/img/icons/live-now.png" alt="">
-            <div class="platform-stat-num ${totalLive ? 'platform-stat-num--live' : ''}">${totalLive || 'Daily'}</div>
-            <div class="platform-stat-label" style="${totalLive ? 'color:var(--red)' : ''}">${totalLive ? '● Live now' : 'Rankings updated'}</div>
-          </div>
+            <div class="platform-stat-num">Daily</div>
+            <div class="platform-stat-label">Rankings updated</div>
+          </div>`}
         </div>
       </div>
     </div>
@@ -919,7 +925,7 @@ function renderHome() {
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/live-now.png" alt=""><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></div>
-          ${liveNow.length > 4 ? '<a href="/discover?live=1" class="sc-head-link">View all &rarr;</a>' : ''}
+          <a href="/streamwall" class="sc-head-link">View all &rarr;</a>
         </div>
         <div class="sc-body">
           <div class="live-strip">

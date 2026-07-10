@@ -825,6 +825,9 @@ function renderHome() {
   document.getElementById('app').innerHTML = `
     <!-- Hero -->
     <section class="hero">
+      <video class="hero-video" autoplay muted loop playsinline poster="/img/hero-bg.jpg">
+        <source src="/img/videos/header-video.mp4" type="video/mp4">
+      </video>
       <div class="container">
         <img src="/img/logo-wide.png" alt="FanReactionsFC" class="hero-logo">
         <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>

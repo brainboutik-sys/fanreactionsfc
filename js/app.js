@@ -1936,7 +1936,76 @@ function renderClubVideos(club) {
 }
 
 // ── Render: Rankings ──────────────────────────────────────────────────────
-function renderRankings() {
+// ── Rankings table: sortable columns ────────────────────────────────────────
+const RK_COLS = [
+  { key: 'subscribers', label: 'Subscribers',  get: c => c.subscriberCount || 0 },
+  { key: 'videos',      label: 'Videos',       get: c => c.videoCount || 0 },
+  { key: 'views',       label: 'Total Views',  get: c => c.totalViews || 0 },
+  { key: 'won',         label: 'Battles Won',  get: c => c.battleWins || 0 },
+  { key: 'lost',        label: 'Battles Lost', get: c => c.battleLosses || 0 },
+];
+let rkRanked = [];
+let rkSortField = 'subscribers';
+let rkSortDir = 'desc';
+let rkPrevRanks = {};
+
+function rkApplySort() {
+  const get = RK_COLS.find(c => c.key === rkSortField).get;
+  rkRanked.sort((a, b) => (get(b) - get(a)) * (rkSortDir === 'asc' ? -1 : 1));
+}
+
+function rkRowsHTML() {
+  return rkRanked.map((c, i) => {
+    const rankClass = i < 3 ? ' rk-row--top rk-row--top' + (i + 1) : '';
+    const currentRank = i + 1;
+    let move = '';
+    if (rkSortField === 'subscribers') {
+      const prev = rkPrevRanks[c.id];
+      if (prev == null) {
+        if (c.subscriberCountPrev <= 0) move = '<span class="rk-move rk-move--new">NEW</span>';
+      } else if (prev > currentRank) {
+        move = `<span class="rk-move rk-move--up">&uarr;${prev - currentRank}</span>`;
+      } else if (prev < currentRank) {
+        move = `<span class="rk-move rk-move--down">&darr;${currentRank - prev}</span>`;
+      }
+    }
+    return `
+    <a href="${creatorLink(c)}" class="rk-row${rankClass}${c.isLive ? ' rk-row--live' : ''}">
+      <div class="rk-rank">${currentRank}${move}</div>
+      <span class="av-wrap">${avatarImg(c, 'rk-avatar')}</span>
+      <div class="rk-info">
+        <div class="rk-name">${liveDot(c.isLive)}${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}</div>
+        <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
+      </div>
+      <div class="rk-col rk-col--subs">${formatNum(c.subscriberCount)}</div>
+      <div class="rk-col">${formatNum(c.videoCount || 0)}</div>
+      <div class="rk-col">${formatNum(c.totalViews || 0)}</div>
+      <div class="rk-col">${formatNum(c.battleWins || 0)}</div>
+      <div class="rk-col">${formatNum(c.battleLosses || 0)}</div>
+      <span class="rk-arrow">&rsaquo;</span>
+    </a>`;
+  }).join('');
+}
+
+function rkHeaderHTML() {
+  return RK_COLS.map(col => {
+    const active = rkSortField === col.key;
+    const arrow = active ? (rkSortDir === 'desc' ? '&#9660;' : '&#9650;') : '';
+    return `<button type="button" class="rk-sort-btn${active ? ' rk-sort-btn--active' : ''}" onclick="rkSort('${col.key}')">${col.label}${arrow ? ` <span class="rk-sort-arrow">${arrow}</span>` : ''}</button>`;
+  }).join('');
+}
+
+function rkSort(field) {
+  if (rkSortField === field) rkSortDir = rkSortDir === 'desc' ? 'asc' : 'desc';
+  else { rkSortField = field; rkSortDir = 'desc'; }
+  rkApplySort();
+  const rowsEl = document.getElementById('rkRows');
+  if (rowsEl) rowsEl.innerHTML = rkRowsHTML();
+  const headEl = document.getElementById('rkHeaderCols');
+  if (headEl) headEl.innerHTML = rkHeaderHTML();
+}
+
+async function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
   const teamFilter = params.get('team') || '';
@@ -1958,12 +2027,16 @@ function renderRankings() {
   stripTeams.sort();
 
   // Compute previous ranks from the same filtered set for week-over-week movement.
-  const prevRanks = {};
-  const prevField = 'subscriberCountPrev';
+  rkPrevRanks = {};
   [...ranked]
-    .filter(c => c[prevField] > 0)
-    .sort((a, b) => b[prevField] - a[prevField])
-    .forEach((c, i) => { prevRanks[c.id] = i + 1; });
+    .filter(c => c.subscriberCountPrev > 0)
+    .sort((a, b) => b.subscriberCountPrev - a.subscriberCountPrev)
+    .forEach((c, i) => { rkPrevRanks[c.id] = i + 1; });
+
+  // Reset sort to the default (subscribers, desc) each time the page/filter loads.
+  rkSortField = 'subscribers';
+  rkSortDir = 'desc';
+  rkRanked = ranked;
 
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
@@ -2012,42 +2085,36 @@ function renderRankings() {
           <div style="font-size:.82rem;color:var(--text-dim)">${ranked.length} creator${ranked.length !== 1 ? 's' : ''} &middot; ${formatNum(ranked.reduce((a, c) => a + (c.subscriberCount || 0), 0))} combined subscribers</div>
         </div>
         <div class="sc-body--tight">
-      <div class="rankings-card" style="border:none;border-radius:0;box-shadow:none">${ranked.map((c, i) => {
-        const rankClass = i < 3 ? ' rk-row--top rk-row--top' + (i + 1) : '';
-        const freq = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
-        const videos = c.videoCount ? formatNum(c.videoCount) + ' videos' : '';
-        const metaParts = [freq, videos].filter(Boolean);
-        const currentRank = i + 1;
-        const prev = prevRanks[c.id];
-        let move = '';
-        if (prev == null) {
-          if (c[prevField] <= 0) move = '<span class="rk-move rk-move--new">NEW</span>';
-        } else if (prev > currentRank) {
-          move = `<span class="rk-move rk-move--up">&uarr;${prev - currentRank}</span>`;
-        } else if (prev < currentRank) {
-          move = `<span class="rk-move rk-move--down">&darr;${currentRank - prev}</span>`;
-        }
-        return `
-        <a href="${creatorLink(c)}" class="rk-row${rankClass}${c.isLive ? ' rk-row--live' : ''}">
-          <div class="rk-rank">${currentRank}${move}</div>
-          <span class="av-wrap">${avatarImg(c, 'rk-avatar')}</span>
-          <div class="rk-info">
-            <div class="rk-name">${liveDot(c.isLive)}${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}</div>
-            <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
-          </div>
-          <div class="rk-meta">${metaParts.join(' &middot; ')}</div>
-          <div class="rk-score">
-            <div class="rk-score-num">${formatNum(c.subscriberCount)}</div><div class="rk-score-label">subscribers</div>
-          </div>
-          <span class="rk-arrow">&rsaquo;</span>
-        </a>
-      `;}).join('')}</div>
+      <div class="rankings-card rk-table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <div class="rk-row rk-header-row">
+          <div></div><div></div><div>Creator</div>
+          <div id="rkHeaderCols" class="rk-header-cols">${rkHeaderHTML()}</div>
+          <div></div>
+        </div>
+        <div id="rkRows">${rkRowsHTML()}</div>
+      </div>
         </div>
       </div>` :
         `<div class="empty-state"><div class="es-icon">&#127942;</div><div class="es-title">No rankings yet</div><p style="color:var(--text-dim)">No subscriber data available.</p></div>`}
     </div>
     ${renderFooter()}
   `;
+
+  // Battle wins/losses come from a separate RPC — fetch after first paint and
+  // patch the already-rendered rows in place (avoids blocking initial render).
+  if (ranked.length) {
+    const { data: battleStats } = await sb.rpc('get_battle_all_stats');
+    const bMap = {};
+    (battleStats || []).forEach(r => { bMap[r.creator_id] = r; });
+    ranked.forEach(c => {
+      const b = bMap[c.id];
+      c.battleWins = b ? Number(b.wins) : 0;
+      c.battleLosses = b ? Number(b.losses) : 0;
+    });
+    rkApplySort();
+    const rowsEl = document.getElementById('rkRows');
+    if (rowsEl) rowsEl.innerHTML = rkRowsHTML();
+  }
 }
 
 // ── Render: Voter Leaderboard ─────────────────────────────────────────────

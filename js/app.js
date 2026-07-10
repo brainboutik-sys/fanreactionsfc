@@ -241,6 +241,10 @@ function handleRoute() {
       currentRoute = { page: 'submit' };
       updatePageMeta('Submit a Creator | FanReactionsFC', 'Know a great football YouTuber? Suggest them for the FanReactionsFC database — submissions are reviewed within 24 hours.');
       renderSubmit();
+    } else if (path === '/contact') {
+      currentRoute = { page: 'contact' };
+      updatePageMeta('Contact Us | FanReactionsFC', 'Get in touch with the FanReactionsFC team — questions, feedback, or partnership inquiries.');
+      renderContact();
     } else if (path === '/streamwall') {
       currentRoute = { page: 'streamwall' };
       updatePageMeta('Streamwall — Watch Live Football Creators | FanReactionsFC', 'Watch multiple football creators streaming live on YouTube, all at once. Live watchalongs, reactions, and match day content.');
@@ -2498,6 +2502,97 @@ async function submitCreator() {
   document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
 }
 
+// ── Render: Contact Us ───────────────────────────────────────────────────
+function renderContact() {
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">Get in touch</div>
+            <h1 class="page-hero-title">Contact Us</h1>
+            <p class="page-hero-subtitle">Questions, feedback, partnership inquiries — we read every message.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container" style="max-width:560px;padding-top:28px;padding-bottom:60px">
+      <div id="contactForm">
+        <div class="sc-card" style="margin-bottom:0">
+          <div class="sc-head"><div class="sc-head-title">Send a message</div></div>
+          <div class="sc-body">
+            <div style="margin-bottom:14px">
+              <label class="field-label">Your Name</label>
+              <input type="text" id="ct_name" class="admin-form-input" placeholder="Jane Smith">
+            </div>
+            <div style="margin-bottom:14px">
+              <label class="field-label">Your Email</label>
+              <input type="email" id="ct_email" class="admin-form-input" placeholder="jane@example.com">
+            </div>
+            <div style="margin-bottom:14px">
+              <label class="field-label">Subject</label>
+              <input type="text" id="ct_subject" class="admin-form-input" placeholder="What's this about?">
+            </div>
+            <div style="margin-bottom:14px">
+              <label class="field-label">Message</label>
+              <textarea id="ct_message" class="admin-form-input" rows="6" placeholder="Tell us more..." style="resize:vertical"></textarea>
+            </div>
+            <button class="btn-generate" onclick="submitContact()">Send Message</button>
+            <div id="contactMsg" style="text-align:center;margin-top:12px;font-size:.85rem"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+async function submitContact() {
+  const name = document.getElementById('ct_name').value.trim();
+  const email = document.getElementById('ct_email').value.trim();
+  const subject = document.getElementById('ct_subject').value.trim();
+  const message = document.getElementById('ct_message').value.trim();
+  const msg = document.getElementById('contactMsg');
+  const err = text => { msg.innerHTML = `<span style="color:var(--red)">${escHtml(text)}</span>`; };
+  const info = text => { msg.innerHTML = `<span style="color:var(--text-dim)">${escHtml(text)}</span>`; };
+
+  if (!name) return err('Please enter your name.');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Please enter a valid email address.');
+  if (!subject) return err('Please enter a subject.');
+  if (!message) return err('Please enter a message.');
+
+  info('Sending…');
+
+  const payload = { name, email, subject, message };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/frfc_contact_messages', {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      return err(`Send failed (${res.status}): ${errText.slice(0, 200) || res.statusText}`);
+    }
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') return err('Request timed out — please try again.');
+    return err('Send failed: ' + (e.message || 'unknown error'));
+  }
+
+  document.getElementById('contactForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Message sent!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Thanks for reaching out — we\'ll get back to you soon.</p><a href="/" class="btn btn-primary">Back to Home</a></div>';
+}
+
 // ── Render: Account settings ──────────────────────────────────────────────
 
 // Fetches the user's profile row (or returns an empty template so the form
@@ -3469,6 +3564,7 @@ function renderFooter() {
             <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube Channel</a>
             <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener">X (Twitter)</a>
             <a href="/streamwall">Streamwall</a>
+            <a href="/contact">Contact Us</a>
           </div>
         </div>
         <div class="footer-bottom">

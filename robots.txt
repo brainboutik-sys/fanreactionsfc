@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /docs/
+
+Sitemap: https://fanreactionsfc.com/sitemap.xml

@@ -181,6 +181,8 @@ function updatePageMeta(title, description) {
   document.title = title;
   let meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute('content', description);
+  const canonical = document.getElementById('canonicalLink');
+  if (canonical) canonical.setAttribute('href', 'https://fanreactionsfc.com' + location.pathname);
 }
 
 // Populate the header "N live now" chip whenever creator data is (re)loaded.
@@ -207,9 +209,11 @@ function handleRoute() {
   try {
     if (path === '/' || path === '/index.html') {
       currentRoute = { page: 'home' };
+      updatePageMeta('FanReactionsFC — Discover the Best Football YouTubers', 'The definitive database of football YouTubers. Rated by fans. Ranked weekly. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.');
       renderHome();
     } else if (path === '/discover' || path.startsWith('/discover')) {
       currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
+      updatePageMeta('Discover Football Creators | FanReactionsFC', 'Browse every football YouTuber by league, club, or content type. Filter and search the full FanReactionsFC directory.');
       renderDiscover();
     } else if (path.startsWith('/creators/')) {
       const slug = path.split('/creators/')[1].replace(/\/$/, '');
@@ -229,12 +233,15 @@ function handleRoute() {
       }
     } else if (path === '/rankings') {
       currentRoute = { page: 'rankings' };
+      updatePageMeta('Creator Rankings | FanReactionsFC', 'Football YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.');
       renderRankings();
     } else if (path === '/tools/generator') {
       currentRoute = { page: 'generator' };
+      updatePageMeta('Description Generator | FanReactionsFC', 'Generate a polished YouTube channel description for your football content in seconds.');
       renderGenerator();
     } else if (path === '/submit') {
       currentRoute = { page: 'submit' };
+      updatePageMeta('Submit a Creator | FanReactionsFC', 'Know a great football YouTuber? Suggest them for the FanReactionsFC database — submissions are reviewed within 24 hours.');
       renderSubmit();
     } else if (path === '/streamwall') {
       currentRoute = { page: 'streamwall' };
@@ -254,14 +261,17 @@ function handleRoute() {
       renderFeatureDetail(featureId);
     } else if (path === '/account') {
       currentRoute = { page: 'account' };
+      updatePageMeta('Account | FanReactionsFC', 'Manage your FanReactionsFC account.');
       renderAccount();
     } else if (path.startsWith('/admin')) {
       currentRoute = { page: 'admin' };
+      updatePageMeta('Admin | FanReactionsFC', 'FanReactionsFC admin panel.');
       renderAdmin();
     } else {
       // Unknown route — show a 404 rather than falling back to Home
       // silently, which used to make broken links feel invisible.
       currentRoute = { page: 'notfound' };
+      updatePageMeta('Page Not Found | FanReactionsFC', 'The page you were looking for doesn\'t exist.');
       app.innerHTML = `
         <div class="container" style="padding:60px 20px;text-align:center">
           <div class="empty-state">
@@ -1588,6 +1598,11 @@ async function renderProfile(slug) {
   const isFav = favorites.has(c.id);
   const similar = creators.filter(s => s.team === c.team && s.id !== c.id).slice(0, 4);
 
+  updatePageMeta(
+    `${c.name} — Football Creator on FanReactionsFC`,
+    (c.description ? c.description.slice(0, 160) : `${c.name} is a ${c.team} football YouTuber on FanReactionsFC.`) + (c.subscriberCount ? ` ${formatNum(c.subscriberCount)} subscribers.` : '')
+  );
+
   document.getElementById('app').innerHTML = `
     <!-- ── Hero Header ─────────────────────────────────────────────────────── -->
     <div class="cp-hero">
@@ -1824,6 +1839,11 @@ function renderClubPage(club) {
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
   const clubUrl = '/clubs/' + encodeURIComponent(club);
 
+  updatePageMeta(
+    `${club} Football YouTubers | FanReactionsFC`,
+    `${clubCreators.length} ${club} content creator${clubCreators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary, ranked by subscribers.`
+  );
+
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
       <div class="container">
@@ -1889,6 +1909,11 @@ function renderClubVideos(club) {
 
   const clubLeague = getLeague(club);
   const clubUrl = '/clubs/' + encodeURIComponent(club);
+
+  updatePageMeta(
+    `Latest ${club} Videos | FanReactionsFC`,
+    `The newest ${club} reaction and watchalong videos from every creator FanReactionsFC tracks, newest first.`
+  );
 
   document.getElementById('app').innerHTML = `
     <div class="page-hero">

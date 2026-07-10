@@ -2,9 +2,12 @@
 // for all creators by batch-checking their known latest and live video IDs
 // against YouTube's liveStreamingDetails.
 //
-// Off-peak baseline: every 30 minutes.
-// During peak match hours a companion function (live-check-peak.js) adds
-// 5-minute checks: weekdays 18–22 UTC, weekends 11–21 UTC.
+// Runs every 30 minutes as a blanket safety net (catches unlisted streams,
+// postponed/rescheduled matches not yet in frfc_fixtures, etc). The precise
+// detection now happens in live-check-fixtures.js, which fires ~5 minutes
+// before a real kickoff for the specific clubs playing — see that file for
+// why blanket time-window polling (the old live-check-peak.js) couldn't
+// actually detect a brand-new livestream.
 //
 // Required env vars:
 //   YOUTUBE_API_KEY             — server-side YouTube Data API key

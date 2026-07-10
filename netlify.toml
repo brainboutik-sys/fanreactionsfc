@@ -8,12 +8,21 @@
   included_files = ["index.html"]
 
 # ── Scheduled functions ──────────────────────────────────────────────────
-# Baseline live-check: every 30 minutes
+# Baseline live-check: every 30 minutes — safety net for anything the
+# fixture-aware trigger below doesn't cover (postponed/unlisted streams).
 [functions."live-check"]
 schedule = "*/30 * * * *"
 
-# Peak-hours live-check: every 5 minutes during match windows
-[functions."live-check-peak"]
+# Daily fixtures sync from football-data.org — populates frfc_fixtures for
+# every league/competition FanReactionsFC covers.
+[functions."fixtures-sync"]
+schedule = "30 4 * * *"
+
+# Fixture-aware live-check: every 5 minutes, fires ~5 minutes before kickoff
+# for creators tied to the two clubs playing (see live-check-fixtures.js for
+# why it does a real playlist-head refresh instead of just re-checking a
+# stale ID — this replaces the old blanket-hours live-check-peak.js).
+[functions."live-check-fixtures"]
 schedule = "*/5 * * * *"
 
 # Dynamic sitemap generated from the Supabase creator list.

@@ -2088,7 +2088,14 @@ const RK_COLS = [
   { key: 'views',       label: 'Total Views',  get: c => c.totalViews || 0 },
   { key: 'won',         label: 'Battles Won',  get: c => c.battleWins || 0 },
   { key: 'lost',        label: 'Battles Lost', get: c => c.battleLosses || 0 },
+  { key: 'winpct',      label: 'Win %',        get: c => rkWinPct(c) },
 ];
+
+function rkWinPct(c) {
+  const w = c.battleWins || 0, l = c.battleLosses || 0;
+  const total = w + l;
+  return total ? Math.round((w / total) * 100) : 0;
+}
 let rkRanked = [];
 let rkSortField = 'subscribers';
 let rkSortDir = 'desc';
@@ -2127,6 +2134,7 @@ function rkRowsHTML() {
       <div class="rk-col">${formatNum(c.totalViews || 0)}</div>
       <div class="rk-col">${formatNum(c.battleWins || 0)}</div>
       <div class="rk-col">${formatNum(c.battleLosses || 0)}</div>
+      <div class="rk-col">${(c.battleWins || c.battleLosses) ? rkWinPct(c) + '%' : '—'}</div>
       <span class="rk-arrow">&rsaquo;</span>
     </a>`;
   }).join('');

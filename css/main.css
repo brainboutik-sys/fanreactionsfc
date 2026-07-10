@@ -687,7 +687,7 @@ img.review-avatar{background:var(--bg-hover)}
 
 .rankings-card{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
 .rk-table-wrap{overflow-x:auto}
-.rk-row{display:grid;grid-template-columns:56px 48px minmax(160px,1fr) repeat(5,92px) 16px;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border-soft);text-decoration:none;color:var(--text);transition:background .15s;min-width:900px}
+.rk-row{display:grid;grid-template-columns:56px 48px minmax(160px,1fr) repeat(6,92px) 16px;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border-soft);text-decoration:none;color:var(--text);transition:background .15s;min-width:1000px}
 .rk-row:last-child{border-bottom:none}
 .rk-row:hover{background:var(--bg-hover)}
 .rk-rank{display:flex;align-items:center;justify-content:center;gap:4px;height:36px;border-radius:var(--radius-sm);font-size:1.05rem;font-weight:800;color:var(--text-muted);background:var(--bg-hover);letter-spacing:-.02em;padding:0 6px;font-variant-numeric:tabular-nums}
@@ -717,7 +717,7 @@ img.review-avatar{background:var(--bg-hover)}
 .rk-col--subs{font-size:.98rem;font-weight:800;color:var(--navy)}
 .rk-header-row{cursor:default;padding-top:10px;padding-bottom:10px;position:sticky;top:0;background:var(--bg-card);z-index:1;border-bottom:2px solid var(--border)}
 .rk-header-row:hover{background:var(--bg-card)}
-.rk-header-cols{grid-column:span 5;display:grid;grid-template-columns:repeat(5,92px);gap:14px}
+.rk-header-cols{grid-column:span 6;display:grid;grid-template-columns:repeat(6,92px);gap:14px}
 .rk-sort-btn{background:none;border:none;padding:0;margin:0;font:inherit;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);text-align:right;cursor:pointer;transition:color .15s;white-space:normal;line-height:1.2}
 .rk-sort-btn:hover{color:var(--text)}
 .rk-sort-btn--active{color:var(--navy)}

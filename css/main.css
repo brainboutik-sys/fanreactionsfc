@@ -501,8 +501,11 @@ img.review-avatar{background:var(--bg-hover)}
 .frfc-stat{font-size:.78rem;color:#b0b8d0;white-space:nowrap}
 .frfc-stat b{display:block;color:#fff;font-size:1rem;font-weight:800;margin-bottom:1px}
 .frfc-banner-cta{display:flex;flex-direction:column;gap:8px;flex-shrink:0;align-items:stretch}
-.btn-banner-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;color:var(--yellow);font-weight:600;padding:9px 22px;border-radius:var(--radius-sm);border:1px solid rgba(246,190,6,.4);font-size:.82rem;font-family:inherit;cursor:pointer;text-decoration:none;transition:background .15s}
-.btn-banner-secondary:hover{background:rgba(246,190,6,.08);color:var(--yellow)}
+.btn-youtube,.btn-x{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:700;padding:9px 22px;border-radius:var(--radius-sm);font-size:.82rem;font-family:inherit;cursor:pointer;text-decoration:none;transition:filter .15s,background .15s;border:1px solid transparent}
+.btn-youtube{background:var(--red);color:#fff}
+.btn-youtube:hover{filter:brightness(1.08)}
+.btn-x{background:#000;color:#fff;border-color:rgba(255,255,255,.25)}
+.btn-x:hover{background:#1a1a1a}
 @media(max-width:600px){
   .frfc-banner{padding:20px;gap:16px}
   .frfc-banner-logo-wrap{width:72px;height:72px}

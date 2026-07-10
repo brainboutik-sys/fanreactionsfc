@@ -946,8 +946,8 @@ function renderHome() {
           <div class="frfc-video-placeholder">Loading latest videos…</div>
         </div>
         <div class="frfc-banner-cta">
-          <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn btn-yellow">&#9654; Subscribe on YouTube</a>
-          <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener" class="btn-banner-secondary">Follow on X</a>
+          <a href="https://www.youtube.com/@fanreactionsfc?sub_confirmation=1" target="_blank" rel="noopener" class="btn-youtube">&#9654; Subscribe on YouTube</a>
+          <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener" class="btn-x">Follow on X</a>
         </div>
       </div>
     </div>

@@ -848,22 +848,22 @@ function renderHome() {
       <div class="container">
         <div class="platform-stats">
           <div class="platform-stat">
-            <div class="platform-stat-icon">🎬</div>
+            <img class="platform-stat-icon" src="/img/icons/creators.png" alt="">
             <div class="platform-stat-num">${creators.length}</div>
             <div class="platform-stat-label">Creators indexed</div>
           </div>
           <div class="platform-stat">
-            <div class="platform-stat-icon">⚽</div>
+            <img class="platform-stat-icon" src="/img/icons/clubs.png" alt="">
             <div class="platform-stat-num">${totalClubs}</div>
             <div class="platform-stat-label">Clubs covered</div>
           </div>
           <div class="platform-stat">
-            <div class="platform-stat-icon">🏆</div>
+            <img class="platform-stat-icon" src="/img/icons/leagues.png" alt="">
             <div class="platform-stat-num">${LEAGUES.length}</div>
             <div class="platform-stat-label">Leagues</div>
           </div>
           <div class="platform-stat">
-            <div class="platform-stat-icon">${totalLive ? '📡' : '🔄'}</div>
+            <img class="platform-stat-icon" src="/img/icons/live-now.png" alt="">
             <div class="platform-stat-num ${totalLive ? 'platform-stat-num--live' : ''}">${totalLive || 'Weekly'}</div>
             <div class="platform-stat-label" style="${totalLive ? 'color:var(--red)' : ''}">${totalLive ? '● Live now' : 'Rankings updated'}</div>
           </div>
@@ -875,7 +875,7 @@ function renderHome() {
     <div class="container battle-section">
       <div class="battle-wrap">
         <div class="battle-top">
-          <div class="battle-title">Creator Battle</div>
+          <div class="battle-title"><img class="section-title-icon" src="/img/icons/creator-battle.png" alt="">Creator Battle</div>
           <div class="battle-filters">
             <span class="battle-social-item" id="battleTotalVotes"></span>
             <select class="battle-select" id="battleLeague" onchange="battleLeagueChange()">
@@ -903,7 +903,7 @@ function renderHome() {
     <div class="container" style="padding-top:28px">
       <div class="sc-card">
         <div class="sc-head">
-          <div class="sc-head-title"><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></div>
+          <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/live-now.png" alt=""><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></div>
           ${liveNow.length > 4 ? '<a href="/discover?live=1" class="sc-head-link">View all &rarr;</a>' : ''}
         </div>
         <div class="sc-body">
@@ -985,7 +985,7 @@ function renderHome() {
     <div class="container" style="padding-top:24px">
       <div class="sc-card">
         <div class="sc-head">
-          <div class="sc-head-title">Top Clubs</div>
+          <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/top-clubs.png" alt="">Top Clubs</div>
           <div class="sc-head-right">
             <div class="club-filter-row" style="margin:0;gap:6px">
               <span class="chip club-filter active" style="font-size:.72rem;padding:4px 12px" onclick="filterClubs(this,'')">All</span>
@@ -1025,7 +1025,7 @@ function renderHome() {
     <div class="container" style="padding-top:24px">
       <div class="home-promo-row">
         <a href="/community/features" class="home-promo-card">
-          <span class="home-promo-icon">💡</span>
+          <span class="home-promo-icon"><img src="/img/icons/feature-request.png" alt=""></span>
           <div>
             <div class="home-promo-title">Shape what we build next</div>
             <p class="home-promo-sub">Suggest a feature and vote on what the community wants most.</p>
@@ -1047,7 +1047,7 @@ function renderHome() {
     <div class="container" style="padding-top:24px">
       <div class="sc-card">
         <div class="sc-head">
-          <div class="sc-head-title">Become a Creator</div>
+          <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/become-a-creator.png" alt="">Become a Creator</div>
         </div>
         <div class="sc-body">
           <div class="become-section">
@@ -1068,7 +1068,7 @@ function renderHome() {
     <div class="container" style="padding-top:24px;padding-bottom:60px">
       <div class="sc-card">
         <div class="sc-head">
-          <div class="sc-head-title">Top Creators</div>
+          <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/top-creators.png" alt="">Top Creators</div>
           <div class="sc-head-right">
             <a href="/discover" class="sc-head-link">Browse all &rarr;</a>
           </div>
@@ -1214,7 +1214,7 @@ function battleRender(a, b) {
   arena.style.opacity = '0';
   arena.innerHTML = `
     ${battleCardHTML(a, 0)}
-    <div class="battle-vs"><div class="battle-vs-text">VS</div></div>
+    <div class="battle-vs"><img class="battle-vs-text" src="/img/icons/vs.png" alt="VS"></div>
     ${battleCardHTML(b, 1)}
   `;
   requestAnimationFrame(() => { arena.style.transition = 'opacity .3s'; arena.style.opacity = '1'; });

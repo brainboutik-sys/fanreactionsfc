@@ -213,7 +213,6 @@ function handleRoute() {
       renderHome();
     } else if (path === '/discover' || path.startsWith('/discover')) {
       currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
-      updatePageMeta('Discover Football Creators | FanReactionsFC', 'Browse every football YouTuber by league, club, or content type. Filter and search the full FanReactionsFC directory.');
       renderDiscover();
     } else if (path.startsWith('/creators/')) {
       const slug = path.split('/creators/')[1].replace(/\/$/, '');
@@ -233,7 +232,6 @@ function handleRoute() {
       }
     } else if (path === '/rankings') {
       currentRoute = { page: 'rankings' };
-      updatePageMeta('Creator Rankings | FanReactionsFC', 'Football YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.');
       renderRankings();
     } else if (path === '/tools/generator') {
       currentRoute = { page: 'generator' };
@@ -1480,6 +1478,12 @@ function renderDiscover() {
   // Build accordion: which league should be open?
   const openLeague = leagueFilter || (teamFilter ? getLeague(teamFilter) : '');
 
+  const discoverIntro = discoverIntroText(filtered, leagueFilter, teamFilter, q, activeLeagues, teams);
+  updatePageMeta(
+    (teamFilter ? `${teamFilter} Creators` : leagueFilter ? `${leagueFilter} Creators` : 'Discover Football Creators') + ' | FanReactionsFC',
+    discoverIntro
+  );
+
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
       <div class="container">
@@ -1487,7 +1491,7 @@ function renderDiscover() {
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">Database</div>
             <h1 class="page-hero-title">Discover Creators</h1>
-            <p class="page-hero-subtitle">${creators.length} creators across ${activeLeagues.length} leagues and ${teams.length} clubs</p>
+            <p class="page-hero-subtitle" style="max-width:640px">${escHtml(discoverIntro)}</p>
           </div>
           <a href="/submit" class="btn-cta-band btn-cta-band--yellow" style="flex-shrink:0">+ Suggest a Creator</a>
         </div>
@@ -1849,6 +1853,58 @@ function creatorIntroText(c) {
 
 // Generated intro paragraph for a club page — varies phrasing by club
 // name so 39 club pages don't read as one template with the name swapped.
+// Generated intro paragraph for the Discover page — varies by the
+// active league/team/search filter so filtered views read as distinct
+// copy rather than one static line regardless of context.
+function discoverIntroText(filtered, leagueFilter, teamFilter, q, activeLeagues, teams) {
+  const seed = leagueFilter || teamFilter || q || 'all';
+  const n = filtered.length;
+  if (q) {
+    const variants = [
+      `Searching "${q}" turns up ${n} matching creator${n !== 1 ? 's' : ''} on FanReactionsFC.`,
+      `${n} creator${n !== 1 ? 's' : ''} match "${q}" across every league in the directory.`,
+    ];
+    return variants[textVariant(seed, variants.length)];
+  }
+  if (teamFilter) {
+    const variants = [
+      `${n} ${teamFilter} creator${n !== 1 ? 's' : ''} are listed here, filterable by content type and sortable by subscribers.`,
+      `Browsing ${teamFilter}: ${n} YouTube creator${n !== 1 ? 's' : ''} covering the club.`,
+    ];
+    return variants[textVariant(seed, variants.length)];
+  }
+  if (leagueFilter) {
+    const variants = [
+      `${n} ${leagueFilter} creators are tracked here, covering every club in the competition — filter by team or content type to narrow it down.`,
+      `Browse ${n} football YouTubers covering ${leagueFilter} clubs, ranked by subscribers or sorted A–Z.`,
+      `From title challengers to relegation battles, ${n} creators cover ${leagueFilter} on this page.`,
+    ];
+    return variants[textVariant(seed, variants.length)];
+  }
+  const variants = [
+    `Browse all ${creators.length} football YouTubers in the FanReactionsFC directory, spanning ${activeLeagues.length} leagues and ${teams.length} clubs. Filter by league, club, content type, or search by name.`,
+    `The full FanReactionsFC directory: ${creators.length} creators across ${activeLeagues.length} leagues and ${teams.length} clubs, from Premier League regulars to Championship watchalongs.`,
+    `${creators.length} football content creators, filterable by league, club, and content type — ${activeLeagues.length} leagues and ${teams.length} clubs covered.`,
+  ];
+  return variants[textVariant(seed, variants.length)];
+}
+
+// Generated intro paragraph for the Rankings page — varies by the
+// active league/team filter and names the current #1 by subscribers.
+function rankingsIntroText(ranked, leagueFilter, teamFilter) {
+  if (!ranked.length) return '';
+  const top = ranked[0];
+  const scope = teamFilter || leagueFilter || '';
+  const scopePart = scope ? scope + ' ' : '';
+  const n = ranked.length;
+  const variants = [
+    `${n} ${scopePart}creators are ranked here by subscribers, videos, total views, and Creator Battle record. ${top.name} leads with ${formatNum(top.subscriberCount)} subscribers.`,
+    `See how ${n} ${scopePart}creators compare — click any column to re-sort by subscribers, videos, views, or battle wins. ${top.name} currently tops the list.`,
+    `Daily-updated rankings for ${n} ${scopePart}creator${n !== 1 ? 's' : ''}. Sort by any stat — ${top.name} is currently #1 by subscribers.`,
+  ];
+  return variants[textVariant(scope || 'all', variants.length)];
+}
+
 function clubIntroText(club, clubCreators, clubLeague) {
   if (!clubCreators.length) return '';
   const count = clubCreators.length;
@@ -2123,14 +2179,20 @@ async function renderRankings() {
   rkSortDir = 'desc';
   rkRanked = ranked;
 
+  const rankingsIntro = rankingsIntroText(ranked, leagueFilter, teamFilter);
+  updatePageMeta(
+    (teamFilter ? `${teamFilter} Rankings` : leagueFilter ? `${leagueFilter} Rankings` : 'Creator Rankings') + ' | FanReactionsFC',
+    rankingsIntro || 'Football YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.'
+  );
+
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
       <div class="container">
         <div class="page-hero-inner">
           <div class="page-hero-text">
-            <div class="page-hero-eyebrow">&#127942; Weekly Rankings</div>
+            <div class="page-hero-eyebrow">&#127942; Daily Rankings</div>
             <h1 class="page-hero-title">Creator Rankings</h1>
-            <p class="page-hero-subtitle">Ranked by YouTube subscriber count — updated weekly.</p>
+            <p class="page-hero-subtitle" style="max-width:640px">${escHtml(rankingsIntro)}</p>
             <div class="rk-tabs-row">
               <div class="rk-tabs">
                 <button class="rk-tab rk-tab--active" onclick="navigate('/rankings')">Creators</button>

@@ -864,7 +864,7 @@ function renderHome() {
           </div>
           <div class="platform-stat">
             <img class="platform-stat-icon" src="/img/icons/live-now.png" alt="">
-            <div class="platform-stat-num ${totalLive ? 'platform-stat-num--live' : ''}">${totalLive || 'Weekly'}</div>
+            <div class="platform-stat-num ${totalLive ? 'platform-stat-num--live' : ''}">${totalLive || 'Daily'}</div>
             <div class="platform-stat-label" style="${totalLive ? 'color:var(--red)' : ''}">${totalLive ? '● Live now' : 'Rankings updated'}</div>
           </div>
         </div>

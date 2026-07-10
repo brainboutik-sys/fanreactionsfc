@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  const GA_MEASUREMENT_ID = 'G-XXXXXXXXXX';  // ← replace with your real GA4 ID
+  const GA_MEASUREMENT_ID = 'G-5HNGEQLJR2';
   const CONSENT_KEY = 'frfc_analytics_consent';
   const PLACEHOLDER = 'G-XXXXXXXXXX';
 

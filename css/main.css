@@ -773,7 +773,7 @@ img.review-avatar{background:var(--bg-hover)}
 }
 
 /* ── Creator Battle ──────────────────────────────────────────────────── */
-.battle-section{padding:28px 0 0}
+.battle-section{padding-top:28px}
 .battle-wrap{background:var(--bg-card);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
 .battle-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border)}
 .battle-title{font-size:.94rem;font-weight:800;color:var(--navy);letter-spacing:.05em;text-transform:uppercase;display:flex;align-items:center;gap:8px}

@@ -25,7 +25,7 @@
   --border:   #D0D5E0;
   --text:     #111827;
   --text-dim: #4B5563;
-  --text-muted:#9CA3AF;
+  --text-muted:#6B7280;
   --accent:   #061A5D;
   --accent-hover:#0A2478;
   --accent-soft:rgba(6,26,93,.07);
@@ -688,7 +688,10 @@ img.review-avatar{background:var(--bg-hover)}
 .rankings-summary strong{color:var(--text);font-weight:700}
 
 .rankings-card{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+.rk-table-outer{position:relative}
 .rk-table-wrap{overflow-x:auto}
+.rk-scroll-fade{position:absolute;top:0;right:0;bottom:0;width:36px;pointer-events:none;background:linear-gradient(to right,transparent,var(--bg-card));opacity:0;transition:opacity .15s}
+.rk-scroll-fade.visible{opacity:1}
 .rk-row{display:grid;grid-template-columns:56px 48px minmax(160px,1fr) repeat(6,92px) 16px;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border-soft);text-decoration:none;color:var(--text);transition:background .15s;min-width:1000px}
 .rk-row:last-child{border-bottom:none}
 .rk-row:hover{background:var(--bg-hover)}

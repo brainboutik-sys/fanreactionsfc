@@ -209,7 +209,7 @@ function handleRoute() {
   try {
     if (path === '/' || path === '/index.html') {
       currentRoute = { page: 'home' };
-      updatePageMeta('FanReactionsFC — Discover the Best Football YouTubers', 'The definitive database of football YouTubers. Rated by fans. Ranked weekly. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.');
+      updatePageMeta('FanReactionsFC — Discover the Best Football YouTubers', 'The definitive database of football YouTubers. Rated by fans. Ranked daily. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.');
       renderHome();
     } else if (path === '/discover' || path.startsWith('/discover')) {
       currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
@@ -843,7 +843,7 @@ function renderHome() {
       <div class="container">
         <img src="/img/logo-wide.png" alt="FanReactionsFC" class="hero-logo">
         <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
-        <p class="subtitle">The definitive database of football YouTubers. Ranked weekly.</p>
+        <p class="subtitle">The definitive database of football YouTubers. Ranked daily.</p>
         <div class="search-wrap">
           <span class="search-icon">&#128269;</span>
           <input class="search-input" type="text" placeholder="Search a creator, club, or content style...">
@@ -892,34 +892,8 @@ function renderHome() {
       </div>
     </div>
 
-    <!-- Creator Battle -->
-    <div class="container battle-section">
-      <div class="battle-wrap">
-        <div class="battle-top">
-          <div class="battle-title"><img class="section-title-icon" src="/img/icons/creator-battle.png" alt="">Creator Battle</div>
-          <div class="battle-filters">
-            <span class="battle-social-item" id="battleTotalVotes"></span>
-            <select class="battle-select" id="battleLeague" onchange="battleLeagueChange()">
-              <option value="">All Leagues</option>
-              ${LEAGUES.map(l => `<option value="${escHtml(l.name)}"${l.name === 'Premier League' ? ' selected' : ''}>${escHtml(l.name)}</option>`).join('')}
-            </select>
-            <select class="battle-select" id="battleClub" onchange="battleClubChange()">
-              <option value="">All Clubs</option>
-            </select>
-          </div>
-        </div>
-        <div class="battle-arena" id="battleArena">
-          <div class="battle-loading">Loading matchup...</div>
-        </div>
-        <button class="battle-skip-btn" id="battleSkip" style="display:none" onclick="battleSkipDelay()">Next matchup &rarr;</button>
-        <div class="battle-hot" id="battleHot" style="display:none">
-          <div class="battle-hot-title">&#128293; Hot Creators</div>
-          <div class="battle-hot-strip" id="battleHotStrip"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Live Now -->
+    <!-- Live Now — leads right under the stat bar since seeing who's live
+         is the site's core value proposition, ahead of Creator Battle. -->
     ${liveNow.length ? `
     <div class="container" style="padding-top:28px">
       <div class="sc-card">
@@ -949,8 +923,35 @@ function renderHome() {
       </div>
     </div>` : ''}
 
+    <!-- Creator Battle -->
+    <div class="container battle-section">
+      <div class="battle-wrap">
+        <div class="battle-top">
+          <div class="battle-title"><img class="section-title-icon" src="/img/icons/creator-battle.png" alt="">Creator Battle</div>
+          <div class="battle-filters">
+            <span class="battle-social-item" id="battleTotalVotes"></span>
+            <select class="battle-select" id="battleLeague" onchange="battleLeagueChange()">
+              <option value="">All Leagues</option>
+              ${LEAGUES.map(l => `<option value="${escHtml(l.name)}"${l.name === 'Premier League' ? ' selected' : ''}>${escHtml(l.name)}</option>`).join('')}
+            </select>
+            <select class="battle-select" id="battleClub" onchange="battleClubChange()">
+              <option value="">All Clubs</option>
+            </select>
+          </div>
+        </div>
+        <div class="battle-arena" id="battleArena">
+          <div class="battle-loading">Loading matchup...</div>
+        </div>
+        <button class="battle-skip-btn" id="battleSkip" style="display:none" onclick="battleSkipDelay()">Next matchup &rarr;</button>
+        <div class="battle-hot" id="battleHot" style="display:none">
+          <div class="battle-hot-title">&#128293; Hot Creators</div>
+          <div class="battle-hot-strip" id="battleHotStrip"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- FRFC Channel banner -->
-    <div class="container" style="${liveNow.length ? '' : 'padding-top:28px'}">
+    <div class="container" style="padding-top:28px">
       <div class="frfc-banner">
         <div class="frfc-banner-logo-wrap">
           <img src="/img/logo-round.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
@@ -2164,6 +2165,26 @@ function rkSort(field) {
   if (headEl) headEl.innerHTML = rkHeaderHTML();
 }
 
+// Shows a right-edge fade over the rankings table while there's more to
+// scroll horizontally, hides it once scrolled to the end — otherwise the
+// Win % column (often the most interesting one) can sit hidden off-screen
+// with no visual hint that it exists.
+function rkUpdateScrollFade() {
+  const wrap = document.getElementById('rkTableWrap');
+  const fade = document.getElementById('rkScrollFade');
+  if (!wrap || !fade) return;
+  const canScrollMore = wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 4;
+  fade.classList.toggle('visible', canScrollMore);
+}
+
+function rkInitScrollFade() {
+  const wrap = document.getElementById('rkTableWrap');
+  if (!wrap) return;
+  wrap.addEventListener('scroll', rkUpdateScrollFade);
+  window.addEventListener('resize', rkUpdateScrollFade);
+  rkUpdateScrollFade();
+}
+
 async function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
@@ -2250,13 +2271,16 @@ async function renderRankings() {
           <div style="font-size:.82rem;color:var(--text-dim)">${ranked.length} creator${ranked.length !== 1 ? 's' : ''} &middot; ${formatNum(ranked.reduce((a, c) => a + (c.subscriberCount || 0), 0))} combined subscribers</div>
         </div>
         <div class="sc-body--tight">
-      <div class="rankings-card rk-table-wrap" style="border:none;border-radius:0;box-shadow:none">
-        <div class="rk-row rk-header-row">
-          <div></div><div></div><div>Creator</div>
-          <div id="rkHeaderCols" class="rk-header-cols">${rkHeaderHTML()}</div>
-          <div></div>
+      <div class="rk-table-outer">
+        <div class="rankings-card rk-table-wrap" id="rkTableWrap" style="border:none;border-radius:0;box-shadow:none">
+          <div class="rk-row rk-header-row">
+            <div></div><div></div><div>Creator</div>
+            <div id="rkHeaderCols" class="rk-header-cols">${rkHeaderHTML()}</div>
+            <div></div>
+          </div>
+          <div id="rkRows">${rkRowsHTML()}</div>
         </div>
-        <div id="rkRows">${rkRowsHTML()}</div>
+        <div class="rk-scroll-fade" id="rkScrollFade"></div>
       </div>
         </div>
       </div>` :
@@ -2264,6 +2288,8 @@ async function renderRankings() {
     </div>
     ${renderFooter()}
   `;
+
+  rkInitScrollFade();
 
   // Battle wins/losses come from a separate RPC — fetch after first paint and
   // patch the already-rendered rows in place (avoids blocking initial render).
@@ -2289,7 +2315,7 @@ async function renderVoterLeaderboard() {
       <div class="container">
         <div class="page-hero-inner">
           <div class="page-hero-text">
-            <div class="page-hero-eyebrow">&#127942; Weekly Rankings</div>
+            <div class="page-hero-eyebrow">&#127942; Daily Rankings</div>
             <h1 class="page-hero-title">Top Voters</h1>
             <p class="page-hero-subtitle">The most active voters in Creator Battles.</p>
             <div class="rk-tabs-row">

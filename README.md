@@ -17,10 +17,17 @@ Live: <https://fanreactionsfc.com>
   `dsxijgrpxsfywxuffbmt`. Accessed in the browser via the official `supabase-js` CDN
   client (`const sb = window.supabase.createClient(...)`) using the **publishable** key.
 - **Serverless:** Netlify Functions (`netlify/functions/`) for anything needing a secret
-  or a schedule (YouTube API, sitemap, OG cards, live checks, background sync).
+  or a schedule (YouTube API, sitemap, OG cards, live checks, background sync), plus a
+  handful of **Supabase Edge Functions** (deployed straight to Supabase, not in this
+  repo's tree) fired by Postgres triggers for transactional email — see below.
 - **Hosting:** Netlify, site ID `a845b6ad-3669-4634-b5df-f757ac227b71`.
 - **External data:** YouTube Data API v3 (server-side only), club crests from
-  crests.football-data.org / ESPN, league logos self-hosted in `img/leagues/`.
+  crests.football-data.org / ESPN, league logos self-hosted in `img/leagues/`, match
+  fixtures from football-data.org (free tier — covers all 6 leagues + Champions League
+  + World Cup).
+- **Email:** [Resend](https://resend.com), sending domain `updates.fanreactionsfc.com`.
+- **Analytics:** Google Tag Manager (`GTM-NSWNRXKH`) with GA4 configured as a tag inside
+  it — see SEO & Analytics below.
 
 ## Project layout
 
@@ -52,8 +59,45 @@ netlify/functions/
   creator-og.js         per-creator OG meta tags for social crawlers
   claim-creator.js      creator profile claim via YouTube description code
 netlify.toml            redirects (sitemap, /creators/*, SPA fallback) + fn schedules
+img/icons/              custom PNG icon set for homepage sections (replaced emoji)
+img/videos/             homepage hero background video
+robots.txt              points crawlers at /sitemap.xml, disallows /admin, /account
 scripts/                one-off DB/data utilities (gitignored, not deployed)
 ```
+
+### Supabase Edge Functions
+
+Deployed directly to the Supabase project (not part of this repo's file tree — managed
+via the Supabase MCP/dashboard, not git). Each is invoked fire-and-forget by a Postgres
+trigger via `net.http_post` (the `pg_net` extension) whenever the relevant row changes;
+the trigger only passes IDs, and the function re-fetches any content it needs from the
+DB with the service-role key rather than trusting the trigger payload.
+
+| Function | Fired by | Purpose |
+|---|---|---|
+| `notify-submission` | INSERT on `frfc_submissions` | Emails admin a new creator suggestion |
+| `notify-feature-status` | UPDATE on `frfc_feature_requests` (status change) | Emails followers of a feature request when its status changes |
+| `notify-contact` | INSERT on `frfc_contact_messages` | Emails admin a Contact Us submission (reply-to = sender) |
+| `notify-report` | INSERT on `frfc_creator_reports` | Emails admin a "report an issue" submission |
+| `notify-claim` | UPDATE on `frfc_streamers` (`claimed_by` null → set) | FYI-only email when a channel is claimed — claims are self-verified via a YouTube description code and already in effect by the time this fires |
+| `resolve-yt-avatar` | (pre-existing, called from client/admin) | Resolves a creator's current YouTube avatar URL |
+
+All the `notify-*` functions send via [Resend](https://resend.com) and need
+`RESEND_API_KEY` set as a **Supabase Edge Function secret** (Project Settings → Edge
+Functions → Secrets in the Supabase dashboard — not a Netlify env var). Missing it
+degrades gracefully: the function still returns `200 {"ok":true,"sent":false}` instead
+of erroring, so a working deploy doesn't guarantee email is actually configured.
+
+> ⚠️ Postgres trigger gotcha hit twice this week: this project only has the `pg_net`
+> extension installed, not the synchronous `http` extension. A trigger function that
+> calls `extensions.http_post(...)` (the 3-arg form) fails with "function does not
+> exist" on *every* invocation, silently swallowed by an `EXCEPTION WHEN OTHERS`
+> handler — so it looks deployed and correct but never actually fires. Always use
+> `net.http_post(url := ..., body := ..., headers := ...)` (the named-argument pg_net
+> form). Verify a new trigger actually works by checking `net._http_response` for a
+> `200` after a real test insert/update, not just by reading the function definition.
+> Both `notify_new_submission` and `notify_feature_status_change` were found silently
+> broken this way and had to be fixed after already being "done."
 
 ## Deploying
 
@@ -104,10 +148,19 @@ design — it is safe to expose and is governed by Row Level Security).
 
 ## Database notes
 
-- ~14 `frfc_*` tables. Core: `frfc_streamers` (creators), `frfc_reviews`,
-  `frfc_submissions`, `frfc_battles`, `frfc_user_profiles`, `frfc_admin_roles`.
-- Community Feature Requests: `frfc_feature_requests`, `frfc_feature_votes`,
-  `frfc_feature_comments`, `frfc_feature_comment_likes`, `frfc_feature_status_log`.
+18 `frfc_*` tables (public schema). Core: `frfc_streamers` (creators),
+`frfc_streamer_favorites`, `frfc_subscriber_history`, `frfc_reviews`,
+`frfc_submissions`, `frfc_creator_reports`, `frfc_contact_messages`, `frfc_battles`,
+`frfc_user_profiles`, `frfc_admin_roles`, `frfc_admin_log`.
+
+Community Feature Requests: `frfc_feature_requests`, `frfc_feature_votes`,
+`frfc_feature_comments`, `frfc_feature_comment_likes`, `frfc_feature_follows`,
+`frfc_feature_status_log`.
+
+Fixtures: `frfc_fixtures` — synced daily from football-data.org by `fixtures-sync.js`;
+`trigger_sent_at` marks which fixtures `live-check-fixtures-background.js` has already
+fired a live-check for, so each kickoff only triggers once.
+
 - **Counts are trigger-owned.** `vote_count`, `comment_count`, and `like_count` are
   maintained by row triggers on the votes/comments/likes tables — never write them from
   the client. `is_official` on comments is derived server-side from `frfc_admin_roles`.
@@ -115,6 +168,34 @@ design — it is safe to expose and is governed by Row Level Security).
   `frfc_admin_roles` membership, enforced in RLS/triggers, not just the UI.
 - Battle votes go through the `record_battle_vote` RPC, which validates the pair,
   takes the voter id from the session, and rate-limits per fingerprint.
+- Win % on `/rankings` is computed client-side from `frfc_battles` win/loss counts
+  (via the `get_battle_all_stats` RPC), not stored.
+- `frfc_contact_messages` and `frfc_creator_reports` allow public INSERT only — no
+  public SELECT policy, so submissions are only readable via the Supabase dashboard,
+  the `/admin` panel, or the email a trigger sends (see Edge Functions above).
+
+## SEO & Analytics
+
+- **Google Tag Manager** (`GTM-NSWNRXKH`) is installed in `index.html` (head script +
+  body noscript fallback). GA4 (`G-5HNGEQLJR2`) is configured as a tag *inside* GTM, not
+  loaded directly by the site — don't add a second direct `gtag.js` include, it'll
+  double-count pageviews.
+- `<link rel="canonical">` (`index.html`, id `canonicalLink`) is kept in sync on every
+  client-side route change by `updatePageMeta()` in `app.js` — every route calls it with
+  a page-specific title + description, including filtered views (`/discover?league=...`,
+  `/rankings?league=...`) and dynamic pages (creator profiles, club pages).
+- Club pages, creator profiles, `/discover`, and `/rankings` render a **generated intro
+  paragraph** (see `discoverIntroText`, `rankingsIntroText`, `clubIntroText`,
+  `creatorIntroText` in `app.js`) — 2-3 phrasing variants picked deterministically per
+  page so near-identical pages (e.g. 39 club pages) don't read as one repeated template.
+  Real creator descriptions (currently none are populated — `frfc_streamers.description`
+  is empty for all rows) take priority over the generated fallback when present.
+- `robots.txt` (static file, repo root) points at `sitemap.js`'s dynamic
+  `/sitemap.xml`, which is generated from live creator/club data — not itself in the
+  repo as a static file.
+- `favicon.ico` (repo root) is a real file, not the SPA catch-all — Google's favicon
+  crawler checks `/favicon.ico` directly regardless of the `<link rel="icon">` tag, and
+  Netlify's `/* -> /index.html` redirect only applies when no real file matches.
 
 ## Admin
 

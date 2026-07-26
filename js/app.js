@@ -158,6 +158,16 @@ function openConsentSettings() {
   showConsentBanner();
 }
 
+// CCPA/CPRA "Do Not Sell or Share My Personal Information" — a one-click,
+// no-friction opt-out (not routed through the full consent banner, per the
+// CCPA requirement that this control take no more than the accept flow).
+// Analytics is the only "sharing" this site does, so opting out is
+// equivalent to rejecting analytics.
+function doNotSellOptOut() {
+  setConsent(false);
+  swShowToast("You're opted out — we won't share your data with analytics providers.");
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -2804,7 +2814,7 @@ function renderPrivacyPolicy() {
     <p>Some of the providers above (Google, Resend, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. You can request earlier deletion at any time — see Section 9.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. You can request earlier deletion at any time — see Section 10.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>
@@ -2813,14 +2823,17 @@ function renderPrivacyPolicy() {
     <p>Depending on your location (including under the EU/UK GDPR), you have the right to access, correct, export, or delete your personal data, and to object to or restrict certain processing. You can:</p>
     <ul>
       <li>Update your profile directly from your <a href="/account">Account</a> page</li>
-      <li>Request a copy or deletion of your data by contacting us (Section 9)</li>
+      <li>Request a copy or deletion of your data by contacting us (Section 10)</li>
       <li>Withdraw analytics consent at any time via the cookie banner</li>
     </ul>
 
-    <h2>8. Children</h2>
+    <h2>8. California residents (CCPA/CPRA)</h2>
+    <p>The only "sharing" of personal information we do, as CCPA/CPRA defines it, is through analytics cookies (Google Analytics) — and only if you've consented to them. You can opt out at any time, with no account required, via the <strong>"Do Not Sell or Share My Info"</strong> link in the site footer; this immediately withdraws analytics consent. California residents also have the rights described in Section 7 (access, deletion, correction) regardless of this section.</p>
+
+    <h2>9. Children</h2>
     <p>FanReactionsFC is not directed at children under 16, and we do not knowingly collect their data.</p>
 
-    <h2>9. Contact</h2>
+    <h2>10. Contact</h2>
     <p>Questions or data requests: <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a> or via our <a href="/contact">Contact form</a>.</p>
 
     <p class="legal-disclaimer">This page is provided for transparency and is not a substitute for legal advice.</p>
@@ -4410,6 +4423,7 @@ function renderFooter() {
           <a href="/cookies">Cookie Policy</a>
           <a href="/terms">Terms of Service</a>
           <a href="#" onclick="event.preventDefault();openConsentSettings()">Cookie Preferences</a>
+          <a href="#" onclick="event.preventDefault();doNotSellOptOut()">Do Not Sell or Share My Info</a>
         </div>
         <div style="text-align:center;margin-top:12px;font-size:.68rem;color:var(--text-muted)">Club crests and trademarks are the property of their respective owners and are used here for identification purposes only.</div>
       </div>

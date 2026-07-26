@@ -94,11 +94,62 @@ function getTeamsByLeague() {
   return result;
 }
 
+// ── Cookie consent ───────────────────────────────────────────────────────
+// Gates Google Tag Manager/GA4 behind opt-in, per GDPR/ePrivacy. Consent
+// choice is a plain yes/no stored locally; only 'true' triggers loadGTM().
+const CONSENT_KEY = 'frfc_consent_analytics';
+const GTM_ID = 'GTM-NSWNRXKH';
+
+function getConsent() {
+  const v = localStorage.getItem(CONSENT_KEY);
+  return v === null ? null : v === 'true';
+}
+
+function setConsent(analytics) {
+  try { localStorage.setItem(CONSENT_KEY, String(analytics)); } catch (e) {}
+  hideConsentBanner();
+  if (analytics) loadGTMIfConsented();
+}
+
+function initConsentBanner() {
+  const consent = getConsent();
+  if (consent === true) { loadGTMIfConsented(); return; }
+  if (consent === null) showConsentBanner();
+}
+
+function showConsentBanner() {
+  const el = document.getElementById('consentBanner');
+  if (el) el.style.display = 'block';
+}
+
+function hideConsentBanner() {
+  const el = document.getElementById('consentBanner');
+  if (el) el.style.display = 'none';
+}
+
+function loadGTMIfConsented() {
+  if (window.__gtmLoaded) return;
+  window.__gtmLoaded = true;
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+  const j = document.createElement('script');
+  j.async = true;
+  j.src = 'https://www.googletagmanager.com/gtm.js?id=' + GTM_ID;
+  document.head.appendChild(j);
+}
+
+// Reopen the banner from a "Cookie preferences" footer link so users can
+// change their mind after the initial choice.
+function openConsentSettings() {
+  showConsentBanner();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     if (!sb && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     if (!sb) throw new Error('Supabase library failed to load. Please reload the page.');
+    initConsentBanner();
     // Skip the loading skeleton when we can render instantly from a cached
     // creators list — loadCreators() still revalidates in the background.
     const hadCreatorsCache = loadCreatorsFromCache();
@@ -249,6 +300,18 @@ function handleRoute() {
       currentRoute = { page: 'contact' };
       updatePageMeta('Contact Us | FanReactionsFC', 'Get in touch with the FanReactionsFC team — questions, feedback, or partnership inquiries.');
       renderContact();
+    } else if (path === '/privacy') {
+      currentRoute = { page: 'privacy' };
+      updatePageMeta('Privacy Policy | FanReactionsFC', 'How FanReactionsFC collects, uses, and protects your personal data.');
+      renderPrivacyPolicy();
+    } else if (path === '/cookies') {
+      currentRoute = { page: 'cookies' };
+      updatePageMeta('Cookie Policy | FanReactionsFC', 'The cookies and trackers FanReactionsFC uses, and how to control them.');
+      renderCookiePolicy();
+    } else if (path === '/terms') {
+      currentRoute = { page: 'terms' };
+      updatePageMeta('Terms of Service | FanReactionsFC', 'The terms that govern your use of FanReactionsFC.');
+      renderTermsOfService();
     } else if (path === '/streamwall') {
       currentRoute = { page: 'streamwall' };
       updatePageMeta('Streamwall — Watch Live Football Creators | FanReactionsFC', 'Watch multiple football creators streaming live on YouTube, all at once. Live watchalongs, reactions, and match day content.');
@@ -1078,7 +1141,7 @@ function renderHome() {
         <div class="sc-body">
           <div class="become-section">
             <div class="become-video">
-              <iframe src="https://www.youtube.com/embed/RA7-Wtsk8Pg" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+              <iframe src="https://www.youtube-nocookie.com/embed/RA7-Wtsk8Pg" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
             </div>
             <div class="become-text">
               <h3>Start Your Watchalong Journey</h3>
@@ -2583,6 +2646,7 @@ function renderContact() {
               <textarea id="ct_message" class="admin-form-input" rows="6" placeholder="Tell us more..." style="resize:vertical"></textarea>
             </div>
             <button class="btn-generate" onclick="submitContact()">Send Message</button>
+            <div style="text-align:center;margin-top:10px;font-size:.76rem;color:var(--text-muted)">We'll only use this to reply to you — see our <a href="/privacy">Privacy Policy</a>.</div>
             <div id="contactMsg" style="text-align:center;margin-top:12px;font-size:.85rem"></div>
           </div>
         </div>
@@ -2635,6 +2699,150 @@ async function submitContact() {
   }
 
   document.getElementById('contactForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Message sent!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Thanks for reaching out — we\'ll get back to you soon.</p><a href="/" class="btn btn-primary">Back to Home</a></div>';
+}
+
+// ── Render: Legal pages (Privacy / Cookies / Terms) ────────────────────────
+// Drafted from the actual data-collection audit in this codebase (Supabase
+// tables, localStorage keys, GTM/GA4, YouTube embeds) — not boilerplate.
+// These are informational drafts; have counsel review before relying on them
+// as your sole compliance basis.
+const LEGAL_LAST_UPDATED = 'July 26, 2026';
+
+function legalPageShell(eyebrow, title, bodyHtml) {
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">${eyebrow}</div>
+            <h1 class="page-hero-title">${title}</h1>
+            <p class="page-hero-subtitle">Last updated ${LEGAL_LAST_UPDATED}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container" style="padding-top:28px;padding-bottom:60px">
+      <div class="legal-content">${bodyHtml}</div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+function renderPrivacyPolicy() {
+  legalPageShell('Legal', 'Privacy Policy', `
+    <p>FanReactionsFC ("we", "us") operates fanreactionsfc.com, a directory and community site for football YouTube creators. This policy explains what personal data we collect, why, and the choices you have.</p>
+
+    <h2>1. Data we collect</h2>
+    <table class="legal-table">
+      <tr><th>What</th><th>When</th><th>Why</th></tr>
+      <tr><td>Email address, name, Google profile info</td><td>Signing in with Google</td><td>To create and secure your account</td></tr>
+      <tr><td>Display name, avatar, favourite team</td><td>You edit your account profile</td><td>To personalise your experience</td></tr>
+      <tr><td>Favourited creators</td><td>You tap the heart icon on a creator</td><td>To show your favourites across sessions</td></tr>
+      <tr><td>Name, email, message subject/body</td><td>You submit the Contact form or report/claim a creator profile</td><td>To respond to your request</td></tr>
+      <tr><td>Anonymous device identifier (random UUID, no personal info)</td><td>Automatically, stored in your browser</td><td>To prevent repeat voting abuse in Creator Battle</td></tr>
+      <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
+    </table>
+    <p>We do not collect payment information, government IDs, or sensitive categories of data (health, religion, etc.).</p>
+
+    <h2>2. Legal basis for processing</h2>
+    <p>We process account and profile data under <strong>contract</strong> (to provide the service you signed up for), contact/report data under <strong>legitimate interest</strong> (responding to inquiries), and analytics cookies under your <strong>consent</strong>, which you can withdraw at any time via the cookie banner or the "Cookie preferences" link in the footer.</p>
+
+    <h2>3. Who we share data with (subprocessors)</h2>
+    <table class="legal-table">
+      <tr><th>Provider</th><th>Purpose</th></tr>
+      <tr><td>Supabase</td><td>Database, authentication, file storage</td></tr>
+      <tr><td>Netlify</td><td>Website hosting, serverless functions</td></tr>
+      <tr><td>Resend</td><td>Transactional email (notifications you trigger, e.g. contact replies)</td></tr>
+      <tr><td>Google (Sign-In, YouTube, Fonts, Tag Manager/Analytics)</td><td>Authentication, video embeds, site fonts, analytics (analytics only with consent)</td></tr>
+      <tr><td>football-data.org</td><td>Match fixture data used to detect live streams</td></tr>
+    </table>
+    <p>We do not sell your personal data.</p>
+
+    <h2>4. International transfers</h2>
+    <p>Some of the providers above (Google, Resend, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
+
+    <h2>5. Retention</h2>
+    <p>Account data is retained while your account is active. Contact messages and creator reports are retained for as long as needed to resolve the inquiry, then periodically deleted. You can request earlier deletion — see Section 7.</p>
+
+    <h2>6. Cookies</h2>
+    <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>
+
+    <h2>7. Your rights</h2>
+    <p>Depending on your location (including under the EU/UK GDPR), you have the right to access, correct, export, or delete your personal data, and to object to or restrict certain processing. You can:</p>
+    <ul>
+      <li>Update your profile directly from your <a href="/account">Account</a> page</li>
+      <li>Request a copy or deletion of your data by contacting us (Section 9)</li>
+      <li>Withdraw analytics consent at any time via the cookie banner</li>
+    </ul>
+
+    <h2>8. Children</h2>
+    <p>FanReactionsFC is not directed at children under 16, and we do not knowingly collect their data.</p>
+
+    <h2>9. Contact</h2>
+    <p>Questions or data requests: <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a> or via our <a href="/contact">Contact form</a>.</p>
+
+    <p class="legal-disclaimer">This page is provided for transparency and is not a substitute for legal advice.</p>
+  `);
+}
+
+function renderCookiePolicy() {
+  legalPageShell('Legal', 'Cookie Policy', `
+    <p>This page lists the cookies and similar technologies (like localStorage) that FanReactionsFC uses.</p>
+
+    <h2>Strictly necessary (always on)</h2>
+    <table class="legal-table">
+      <tr><th>Name</th><th>Purpose</th><th>Duration</th></tr>
+      <tr><td>Supabase auth session</td><td>Keeps you signed in</td><td>Until you sign out / session expiry</td></tr>
+      <tr><td><code>frfc_consent_analytics</code></td><td>Remembers your cookie choice</td><td>Persistent (until cleared)</td></tr>
+      <tr><td><code>frfc_fp</code></td><td>Random anonymous ID to prevent repeat-vote abuse in Creator Battle — not linked to your identity</td><td>Persistent (until cleared)</td></tr>
+      <tr><td><code>frfc_streamwall_streams</code> / <code>frfc_streamwall_goal_ids</code></td><td>Remembers which streams you added to your Streamwall</td><td>Persistent (until cleared)</td></tr>
+    </table>
+    <p>These are required for the site to function and are not subject to consent.</p>
+
+    <h2>Optional — only set if you accept</h2>
+    <table class="legal-table">
+      <tr><th>Provider</th><th>Purpose</th><th>Control</th></tr>
+      <tr><td>Google Tag Manager / Google Analytics (GA4)</td><td>Aggregate traffic and usage analytics</td><td>Only loads after you click "Accept analytics"; reject or withdraw anytime via the "Cookie preferences" link in the footer</td></tr>
+    </table>
+
+    <h2>Third-party embeds</h2>
+    <p>Creator videos and live streams are embedded from YouTube using its privacy-enhanced <code>youtube-nocookie.com</code> domain, which limits cookie use until you actually interact with (play) a video. Playing an embedded video may still set YouTube/Google cookies under Google's own policy.</p>
+
+    <h2>Managing cookies</h2>
+    <p>You can change your analytics choice anytime via the "Cookie preferences" link in the site footer, or clear cookies/localStorage in your browser settings.</p>
+  `);
+}
+
+function renderTermsOfService() {
+  legalPageShell('Legal', 'Terms of Service', `
+    <p>These terms govern your use of fanreactionsfc.com. By using the site, you agree to them.</p>
+
+    <h2>1. What FanReactionsFC is</h2>
+    <p>FanReactionsFC is a community-curated directory of football YouTube creators. We aggregate publicly available information (channel names, subscriber counts, video links) and let users rate, favourite, and discover creators. We are not affiliated with YouTube, Google, or the clubs/leagues referenced on the site.</p>
+
+    <h2>2. Accounts</h2>
+    <p>You may sign in with Google to unlock features like favourites, Streamwall, and Creator Battle voting. You're responsible for keeping your account secure and for activity under it.</p>
+
+    <h2>3. Acceptable use</h2>
+    <p>You agree not to: submit false or defamatory creator reports/claims; attempt to manipulate rankings, votes, or battle results; scrape or bulk-extract site data; upload unlawful, infringing, or abusive content via forms; or interfere with the site's operation.</p>
+
+    <h2>4. Creator claims and content</h2>
+    <p>Creators may claim their own profile. We may verify claims and remove or edit listings at our discretion, including in response to a valid report. Video content embedded on the site remains the property of its original creator/YouTube and is not hosted by us.</p>
+
+    <h2>5. Disclaimers</h2>
+    <p>The site is provided "as is". Live status, rankings, and fixture-based alerts are best-effort and may be inaccurate or delayed (e.g. due to third-party API or YouTube API limits). We don't guarantee uninterrupted availability.</p>
+
+    <h2>6. Limitation of liability</h2>
+    <p>To the extent permitted by law, FanReactionsFC is not liable for indirect or consequential damages arising from your use of the site.</p>
+
+    <h2>7. Changes</h2>
+    <p>We may update these terms as the site evolves; the "Last updated" date above reflects the current version.</p>
+
+    <h2>8. Contact</h2>
+    <p><a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a></p>
+
+    <p class="legal-disclaimer">This page is provided for transparency and is not a substitute for legal advice.</p>
+  `);
 }
 
 // ── Render: Account settings ──────────────────────────────────────────────
@@ -2807,6 +3015,18 @@ async function renderAccount() {
       </div>
     </div>
 
+    <div class="sc-card" style="margin-bottom:16px">
+      <div class="sc-head"><div class="sc-head-title">Privacy &amp; Data</div></div>
+      <div class="sc-body">
+        <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:14px">Download a copy of your data, or permanently delete your account. See our <a href="/privacy">Privacy Policy</a> for details.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="exportMyData()">Export my data</button>
+          <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="confirmDeleteAccount()">Delete my account</button>
+        </div>
+        <div id="acctPrivacyMsg" style="font-size:.82rem;margin-top:10px"></div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="saveAccount()">Save changes</button>
       <button class="btn btn-ghost" onclick="signOut()">Sign out</button>
@@ -2817,6 +3037,67 @@ async function renderAccount() {
   // Wire up file input
   const fileInput = document.getElementById('acctAvatarFile');
   if (fileInput) fileInput.addEventListener('change', handleAvatarUpload);
+}
+
+async function exportMyData() {
+  const msg = document.getElementById('acctPrivacyMsg');
+  if (msg) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Preparing your export…'; }
+  try {
+    const uid = currentUser.id;
+    const [profileRes, favRes, votesRes, requestsRes, commentsRes] = await Promise.all([
+      sb.from('frfc_user_profiles').select('*').eq('user_id', uid).maybeSingle(),
+      sb.from('frfc_streamer_favorites').select('streamer_id, created_at').eq('user_id', uid),
+      sb.from('frfc_feature_votes').select('feature_id, created_at').eq('user_id', uid),
+      sb.from('frfc_feature_requests').select('id, title, description, category, status, created_at').eq('user_id', uid),
+      sb.from('frfc_feature_comments').select('id, feature_id, body, created_at').eq('user_id', uid),
+    ]);
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      account: { id: uid, email: currentUser.email, created_at: currentUser.created_at },
+      profile: profileRes.data || null,
+      favourites: favRes.data || [],
+      feature_votes: votesRes.data || [],
+      feature_requests_authored: requestsRes.data || [],
+      feature_comments_authored: commentsRes.data || [],
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'frfc-my-data.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    if (msg) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Download started.'; }
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Export failed: ' + (e.message || 'unknown error'); }
+  }
+}
+
+function confirmDeleteAccount() {
+  confirmDialog('This permanently deletes your account, profile, favourites, and community activity. This cannot be undone. Continue?', deleteMyAccount, { confirmLabel: 'Delete account', danger: true });
+}
+
+async function deleteMyAccount() {
+  const msg = document.getElementById('acctPrivacyMsg');
+  if (msg) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Deleting your account…'; }
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_KEY },
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || `Delete failed (${res.status})`);
+    await sb.auth.signOut();
+    currentUser = null;
+    currentProfile = null;
+    navigate('/');
+    swShowToast('Your account has been deleted.');
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Delete failed: ' + (e.message || 'unknown error'); }
+  }
 }
 
 async function handleAvatarUpload(e) {
@@ -3114,6 +3395,7 @@ function openReportModal(creatorId, creatorName) {
     <label>Details (optional)</label>
     <textarea id="reportDetails" placeholder="Anything that would help us verify..." style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical;margin-bottom:14px"></textarea>
     <button class="btn btn-primary" onclick="submitReport('${creatorId}')">Submit report</button>
+    <div style="font-size:.74rem;color:var(--text-muted);margin-top:10px">See our <a href="/privacy">Privacy Policy</a> for how report data is used.</div>
     <div class="auth-msg" id="reportMsg"></div>`;
   overlay.classList.add('open');
   activateModalA11y(overlay, modal, closeModal);
@@ -3452,7 +3734,7 @@ function swPickCardHTML(c) {
     <label class="sw-pick-card" for="swpick-${c.id}">
       <input type="checkbox" id="swpick-${c.id}"${checked} onchange="swToggleSelect('${c.id}', this)">
       <div class="sw-pick-video">
-        <iframe src="https://www.youtube.com/embed/${safeId(c.liveVideoId)}?autoplay=0&mute=1&enablejsapi=1" loading="lazy" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <iframe src="https://www.youtube-nocookie.com/embed/${safeId(c.liveVideoId)}?autoplay=0&mute=1&enablejsapi=1" loading="lazy" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         <span class="sw-pick-live-badge">LIVE</span>
       </div>
       <div class="sw-pick-bar">
@@ -3503,7 +3785,7 @@ function swExtractVideoId(url) {
 }
 
 function swEmbedUrl(videoId) {
-  return `https://www.youtube.com/embed/${safeId(videoId)}?autoplay=1&enablejsapi=1`;
+  return `https://www.youtube-nocookie.com/embed/${safeId(videoId)}?autoplay=1&enablejsapi=1`;
 }
 
 function swPostCmd(index, func, args) {
@@ -3866,7 +4148,7 @@ function renderBecomeCreator() {
       <div class="sc-card" style="margin-bottom:24px">
         <div class="sc-body" style="padding:0;overflow:hidden">
           <div style="aspect-ratio:16/9;width:100%;background:#000">
-            <iframe src="https://www.youtube.com/embed/RA7-Wtsk8Pg" style="width:100%;height:100%;border:0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <iframe src="https://www.youtube-nocookie.com/embed/RA7-Wtsk8Pg" style="width:100%;height:100%;border:0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
           </div>
         </div>
       </div>
@@ -4080,6 +4362,12 @@ function renderFooter() {
         <div class="footer-bottom">
           <span>&copy; ${new Date().getFullYear()} FanReactionsFC.com</span>
           <span>${creators.length} creators &bull; Community-powered</span>
+        </div>
+        <div class="footer-legal">
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/cookies">Cookie Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="#" onclick="event.preventDefault();openConsentSettings()">Cookie Preferences</a>
         </div>
         <div style="text-align:center;margin-top:12px;font-size:.68rem;color:var(--text-muted)">Club crests and trademarks are the property of their respective owners and are used here for identification purposes only.</div>
       </div>

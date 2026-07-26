@@ -1,13 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google Tag Manager -->
-  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-  })(window,document,'script','dataLayer','GTM-NSWNRXKH');</script>
-  <!-- End Google Tag Manager -->
+  <!-- Google Tag Manager: NOT loaded here. It only loads after the visitor
+       accepts analytics cookies via the consent banner (see loadGTMIfConsented()
+       in js/app.js) — required so GA4 cookies aren't set before consent. -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FanReactionsFC — Discover the Best Football YouTubers</title>
@@ -44,10 +40,6 @@
   <link rel="stylesheet" href="/css/admin.css">
 </head>
 <body>
-  <!-- Google Tag Manager (noscript) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NSWNRXKH"
-  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-  <!-- End Google Tag Manager (noscript) -->
   <!-- Header -->
   <header class="site-header">
     <div class="container nav-inner">
@@ -82,6 +74,17 @@
   <!-- Auth Modal -->
   <div class="modal-overlay" id="authOverlay" onclick="if(event.target===this)closeModal()">
     <div class="modal" id="authModal" style="position:relative"></div>
+  </div>
+
+  <!-- Cookie consent banner — see initConsentBanner() in js/app.js -->
+  <div id="consentBanner" class="consent-banner" style="display:none">
+    <div class="consent-banner-inner">
+      <p class="consent-banner-text">We use essential cookies to run this site, and optional analytics cookies (Google Analytics) to understand traffic. You can accept or reject analytics at any time — see our <a href="/cookies">Cookie Policy</a> and <a href="/privacy">Privacy Policy</a>.</p>
+      <div class="consent-banner-actions">
+        <button class="btn btn-secondary" onclick="setConsent(false)">Reject analytics</button>
+        <button class="btn btn-primary" onclick="setConsent(true)">Accept analytics</button>
+      </div>
+    </div>
   </div>
 
   <!-- Supabase -->

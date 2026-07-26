@@ -3285,6 +3285,8 @@ const SW_ICONS = {
 };
 
 let swPickerSelected = new Set();
+let swPickLeague = '';
+let swPickTeam = '';
 let swStreams = [];
 let swAllPaused = false;
 let swAllMuted = false;
@@ -3347,6 +3349,8 @@ function swShowToast(msg) {
 function renderStreamwallPicker() {
   const liveCreators = creators.filter(c => c.isLive && c.liveVideoId);
   swPickerSelected = new Set();
+  swPickLeague = '';
+  swPickTeam = '';
 
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
@@ -3369,9 +3373,12 @@ function renderStreamwallPicker() {
           <div id="swPickCount" style="font-size:.82rem;color:var(--text-dim)">0 / ${SW_PICKER_MAX} selected</div>
         </div>
         <div class="sc-body">
-          <div class="sw-pick-grid" id="swPickGrid">
-            ${liveCreators.map(c => swPickCardHTML(c)).join('')}
+          <div class="sw-pick-filter-row" id="swPickLeagueRow">
+            <span class="chip active" onclick="swFilterPickLeague('', this)">All</span>
+            ${LEAGUES.filter(l => liveCreators.some(c => (c.league || getLeague(c.team)) === l.name)).map(l => `<span class="chip" onclick="swFilterPickLeague('${jsAttrStr(l.name)}', this)">${leagueChipImg(l.name)} ${escHtml(l.name)}</span>`).join('')}
           </div>
+          <div class="sw-pick-filter-row" id="swPickTeamRow" style="display:none"></div>
+          <div class="sw-pick-grid" id="swPickGrid"></div>
         </div>
       </div>
       <div class="sw-launch-bar">
@@ -3388,12 +3395,62 @@ function renderStreamwallPicker() {
     </div>
     ${renderFooter()}
   `;
+
+  if (liveCreators.length) swRenderPickGrid();
+}
+
+// League -> team narrows which live creators appear in the picker grid.
+// Selections (swPickerSelected) persist across filter changes — only the
+// visible set changes, matching how the Discover page's filters behave.
+function swGetFilteredLiveCreators() {
+  let list = creators.filter(c => c.isLive && c.liveVideoId);
+  if (swPickLeague) list = list.filter(c => (c.league || getLeague(c.team)) === swPickLeague);
+  if (swPickTeam) list = list.filter(c => c.team === swPickTeam);
+  return list;
+}
+
+function swFilterPickLeague(league, el) {
+  swPickLeague = league;
+  swPickTeam = '';
+  el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  swRenderPickTeamRow();
+  swRenderPickGrid();
+}
+
+function swRenderPickTeamRow() {
+  const row = document.getElementById('swPickTeamRow');
+  if (!row) return;
+  if (!swPickLeague) { row.style.display = 'none'; row.innerHTML = ''; return; }
+  const inLeague = creators.filter(c => c.isLive && c.liveVideoId && (c.league || getLeague(c.team)) === swPickLeague);
+  const teams = [...new Set(inLeague.map(c => c.team))].sort();
+  if (teams.length < 2) { row.style.display = 'none'; row.innerHTML = ''; return; }
+  row.style.display = 'flex';
+  row.innerHTML = `<span class="chip active" onclick="swFilterPickTeam('', this)">All ${escHtml(swPickLeague)}</span>` +
+    teams.map(t => `<span class="chip" onclick="swFilterPickTeam('${jsAttrStr(t)}', this)">${crestImg(t, 'crest-sm')} ${escHtml(t)}</span>`).join('');
+}
+
+function swFilterPickTeam(team, el) {
+  swPickTeam = team;
+  el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  swRenderPickGrid();
+}
+
+function swRenderPickGrid() {
+  const grid = document.getElementById('swPickGrid');
+  if (!grid) return;
+  const list = swGetFilteredLiveCreators();
+  grid.innerHTML = list.length
+    ? list.map(c => swPickCardHTML(c)).join('')
+    : `<div class="sw-empty" style="grid-column:1/-1"><div class="sw-empty-icon">&#128269;</div><div class="sw-empty-title">No live creators match this filter</div><div class="sw-empty-desc">Try a different league or team.</div></div>`;
 }
 
 function swPickCardHTML(c) {
+  const checked = swPickerSelected.has(c.id) ? ' checked' : '';
   return `
     <label class="sw-pick-card" for="swpick-${c.id}">
-      <input type="checkbox" id="swpick-${c.id}" onchange="swToggleSelect('${c.id}', this)">
+      <input type="checkbox" id="swpick-${c.id}"${checked} onchange="swToggleSelect('${c.id}', this)">
       <div class="sw-pick-video">
         <iframe src="https://www.youtube.com/embed/${safeId(c.liveVideoId)}?autoplay=0&mute=1&enablejsapi=1" loading="lazy" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         <span class="sw-pick-live-badge">LIVE</span>

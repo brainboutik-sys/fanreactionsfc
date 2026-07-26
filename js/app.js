@@ -1768,6 +1768,7 @@ async function renderProfile(slug) {
             <div class="cp-hero-eyebrow">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.league ? '&middot; ' + escHtml(c.league) : ''}</div>
             <h1 class="cp-hero-name">
               ${escHtml(c.name)}
+              ${c.claimedBy ? '<img src="/img/icons/claimed-verified.png" alt="Claimed by the creator" title="Claimed by the creator" class="cp-claimed-icon">' : ''}
               ${c.verified ? '<span class="badge badge-green" style="font-size:var(--fs-xs);vertical-align:middle">Verified</span>' : ''}
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>

@@ -977,6 +977,7 @@ function renderHome() {
         <source src="/img/videos/header-video.mp4" type="video/mp4">
       </video>`}
       <div class="container">
+        <img src="/img/logo-wide.png" alt="FanReactionsFC" class="hero-logo">
         <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
         <p class="subtitle">The definitive database of football YouTubers. Ranked daily.</p>
         <div class="search-wrap">

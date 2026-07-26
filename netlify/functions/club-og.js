@@ -1,10 +1,12 @@
-// Server-renders /creators/:slug with per-creator OG / Twitter meta tags
-// so social share previews show the creator's avatar + name + team
-// instead of the generic site card.
+// Server-renders /clubs/:team with per-club OG / Twitter meta tags so social
+// share previews show the club name + creator count instead of the generic
+// site card. Same strategy as creator-og.js: intercept via netlify.toml
+// redirect, read index.html, replace the meta tags, return modified HTML —
+// the SPA still hydrates normally on the client.
 //
-// Strategy: intercept /creators/* via netlify.toml redirect, read index.html,
-// replace the meta tags, and return the modified HTML. The SPA then hydrates
-// as usual on the client.
+// og:image is always the site logo, not the club crest: ~76% of crests are
+// SVG (img/crests/*.svg), which most social platforms (Facebook, Twitter,
+// Discord, LinkedIn) don't reliably render as link-preview images.
 
 const fs = require('fs');
 const path = require('path');
@@ -15,8 +17,6 @@ const SITE_URL = 'https://fanreactionsfc.com';
 let indexHtmlCache = null;
 function readIndexHtml() {
   if (indexHtmlCache) return indexHtmlCache;
-  // In Netlify Functions, the publish directory is bundled as a sibling asset.
-  // Try a few probable locations and fall back to a minimal template.
   const candidates = [
     path.join(process.cwd(), 'index.html'),
     path.join(__dirname, '..', '..', 'index.html'),
@@ -40,46 +40,39 @@ exports.handler = async (event) => {
   const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   const rawPath = event.path || '';
-  const match = rawPath.match(/\/creators\/([^\/\?]+)/);
-  const slug = match ? decodeURIComponent(match[1]) : '';
+  // /clubs/:team or /clubs/:team/videos — only rewrite meta for the club
+  // page itself, not the videos sub-page (falls through to default HTML).
+  const match = rawPath.match(/^\/clubs\/([^\/\?]+)\/?$/);
+  const team = match ? decodeURIComponent(match[1]) : '';
 
   const html = readIndexHtml();
   if (!html) {
     return { statusCode: 500, headers: { 'Content-Type': 'text/plain' }, body: 'index.html not available' };
   }
 
-  // If we can't resolve a creator, just return the default index.html — the
-  // SPA will handle the 404 UX gracefully.
-  if (!slug || !sbKey) {
+  if (!team || !sbKey) {
     return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: html };
   }
 
-  let creator = null;
+  let creators = [];
   try {
     const res = await fetch(
-      `${supabaseUrl}/rest/v1/frfc_streamers?select=name,team,description,avatar_url,subscriber_count,slug&slug=eq.${encodeURIComponent(slug)}&limit=1`,
+      `${supabaseUrl}/rest/v1/frfc_streamers?select=name,subscriber_count&team=eq.${encodeURIComponent(team)}&order=subscriber_count.desc`,
       { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
     );
-    if (res.ok) {
-      const rows = await res.json();
-      creator = rows[0] || null;
-    }
+    if (res.ok) creators = await res.json();
   } catch { /* fall through to default */ }
 
-  if (!creator) {
+  if (!creators.length) {
     return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: html };
   }
 
-  const title = `${creator.name} — Football creator on FanReactionsFC`;
-  const subCount = creator.subscriber_count ? ` · ${formatNum(creator.subscriber_count)} subscribers` : '';
-  const description = creator.description
-    ? creator.description.slice(0, 200)
-    : `Discover ${creator.name}, a ${creator.team} YouTube creator on FanReactionsFC${subCount}.`;
-  const image = creator.avatar_url || `${SITE_URL}/img/logo.png`;
-  const url = `${SITE_URL}/creators/${creator.slug || slug}`;
+  const top = creators[0];
+  const title = `${team} Football YouTubers | FanReactionsFC`;
+  const description = `${creators.length} ${team} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary. The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.`;
+  const image = `${SITE_URL}/img/logo-wide.png`;
+  const url = `${SITE_URL}/clubs/${encodeURIComponent(team)}`;
 
-  // Replace head meta tags. We rewrite <title> and replace the OG/Twitter
-  // blocks; the original tags remain fine fallbacks if substitution fails.
   let out = html;
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);

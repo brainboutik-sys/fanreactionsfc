@@ -57,6 +57,7 @@ netlify/functions/
   rank-snapshot-background.js  scheduled ranking snapshots
   sitemap.js            dynamic /sitemap.xml from the creator list
   creator-og.js         per-creator OG meta tags for social crawlers
+  club-og.js            per-club OG meta tags for social crawlers
   claim-creator.js      creator profile claim via YouTube description code
 netlify.toml            redirects (sitemap, /creators/*, SPA fallback) + fn schedules
 img/icons/              custom PNG icon set for homepage sections (replaced emoji)

@@ -2,9 +2,11 @@
   publish = "."
   functions = "netlify/functions"
 
-# Bundle index.html with the creator-og function so it can read and
-# rewrite the meta tags per creator.
+# Bundle index.html with the creator-og / club-og functions so they can
+# read and rewrite the meta tags per creator / club.
 [functions."creator-og"]
+  included_files = ["index.html"]
+[functions."club-og"]
   included_files = ["index.html"]
 
 # ── Scheduled functions ──────────────────────────────────────────────────
@@ -40,6 +42,13 @@ schedule = "*/5 * * * *"
 [[redirects]]
   from = "/creators/*"
   to = "/.netlify/functions/creator-og"
+  status = 200
+
+# Per-club OG cards — same idea as creators, for /clubs/:team. The function
+# itself no-ops (returns unmodified index.html) for /clubs/:team/videos.
+[[redirects]]
+  from = "/clubs/*"
+  to = "/.netlify/functions/club-og"
   status = 200
 
 # Keep internal dev docs off the production domain (they still live in the

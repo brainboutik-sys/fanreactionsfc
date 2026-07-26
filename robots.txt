@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /account
+Disallow: /streamwall
 Disallow: /docs/
 
 Sitemap: https://fanreactionsfc.com/sitemap.xml

@@ -201,6 +201,10 @@ function handleRoute() {
   closeModal();
   document.getElementById('navLinks')?.classList.remove('open'); // close mobile nav
   if (typeof Gen !== 'undefined' && Gen.cleanup) Gen.cleanup();
+  // Streamwall's wall view hides the site header for a full-screen
+  // experience — renderStreamwall() owns re-entering it, but any OTHER
+  // route must restore chrome, or navigating away would leave it hidden.
+  if (path !== '/streamwall' && typeof swExitFullscreen === 'function') swExitFullscreen();
   window.scrollTo(0, 0);
 
   // Update nav active state
@@ -3254,50 +3258,95 @@ async function handleAuth(type) {
 }
 
 // ── Render: Streamwall ───────────────────────────────────────────────────
-let _swLeague = '';
-let _swMuted = false;
+// Two states on the same route (account required for both — see
+// renderAuthRequired below):
+//   1. Picker (default, normal site chrome) — check up to SW_PICKER_MAX
+//      live creators, then launch the wall with them pre-loaded.
+//   2. Wall (?wall=1, full-screen/no chrome) — the control room: drag to
+//      reorder, per-tile pause/mute/fullscreen/remove, add more streams by
+//      pasting any YouTube URL, global pause/mute/go-live, a "Goal!" button
+//      that opens a synced clone tab (?goal=<ts>) jumped to the live edge,
+//      keyboard shortcuts, localStorage persistence.
+const SW_STORAGE_KEY = 'frfc_streamwall_streams';
+const SW_GOAL_KEY = 'frfc_streamwall_goal_ids';
+const SW_PICKER_MAX = 12;
+const SW_WALL_MAX = 16;
+const SW_COLS = 4;
 
-function swFilterLeague(el, league) {
-  _swLeague = league;
-  el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  filterStreamwall();
-}
+const SW_ICONS = {
+  pause:  '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
+  play:   '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>',
+  mute:   '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>',
+  unmute: '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77 0-4.28-2.99-7.86-7-8.77z"/></svg>',
+  fs:     '<svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>',
+  newtab: '<svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>',
+  close:  '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>',
+  drag:   '<svg viewBox="0 0 24 24"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="10" r="1.5"/><circle cx="15" cy="10" r="1.5"/><circle cx="9" cy="15" r="1.5"/><circle cx="15" cy="15" r="1.5"/><circle cx="9" cy="20" r="1.5"/><circle cx="15" cy="20" r="1.5"/></svg>',
+};
 
-function filterStreamwall() {
-  const q = (document.getElementById('swSearch') || {}).value || '';
-  const ql = q.toLowerCase();
-  const grid = document.getElementById('swCardGrid');
-  if (!grid) return;
-  let filtered = creators.slice();
-  if (_swLeague) filtered = filtered.filter(c => (c.league || getLeague(c.team)) === _swLeague);
-  if (ql) filtered = filtered.filter(c => c.name.toLowerCase().includes(ql) || c.team.toLowerCase().includes(ql) || (c.league || '').toLowerCase().includes(ql));
-  filtered.sort((a, b) => (b.isLive ? 1 : 0) - (a.isLive ? 1 : 0) || b.subscriberCount - a.subscriberCount);
-  grid.innerHTML = filtered.length
-    ? filtered.map(c => creatorCard(c)).join('')
-    : '<div class="sw-empty"><div class="sw-empty-icon">&#128269;</div><div class="sw-empty-title">No creators found</div><div class="sw-empty-desc">Try a different search or filter.</div></div>';
-}
-
-function swMuteAll() {
-  _swMuted = !_swMuted;
-  document.querySelectorAll('.sw-tile-video iframe').forEach(iframe => {
-    try { iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: _swMuted ? 'mute' : 'unMute', args: [] }), '*'); } catch (e) {}
-  });
-  const btn = document.getElementById('swMuteBtn');
-  if (btn) btn.innerHTML = _swMuted ? '&#128266; Unmute All' : '&#128263; Mute All';
-}
-
-function swSeekLive() {
-  document.querySelectorAll('.sw-tile-video iframe').forEach(iframe => {
-    try { iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [99999, true] }), '*'); } catch (e) {}
-  });
-}
+let swPickerSelected = new Set();
+let swStreams = [];
+let swAllPaused = false;
+let swAllMuted = false;
+let swDragSrcIndex = null;
+let swKeydownHandler = null;
 
 function renderStreamwall() {
+  if (!currentUser) { swExitFullscreen(); renderAuthRequired('use Streamwall'); return; }
+  const params = new URLSearchParams(location.search);
+  if (params.has('goal')) { swEnterFullscreen(); renderStreamwallWall(true); return; }
+  if (params.get('wall') === '1') { swEnterFullscreen(); renderStreamwallWall(false); return; }
+  swExitFullscreen();
+  renderStreamwallPicker();
+}
+
+// ── Full-screen chrome toggle ────────────────────────────────────────────
+function swEnterFullscreen() {
+  const header = document.querySelector('.site-header');
+  if (header) header.style.display = 'none';
+  document.body.classList.add('sww-active');
+  if (!swKeydownHandler) {
+    swKeydownHandler = e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      switch (e.key.toLowerCase()) {
+        case ' ': e.preventDefault(); swToggleAll(); break;
+        case 'm': swToggleMuteAll(); break;
+        case 'l': swGoLiveAll(); break;
+        case 'g': swOnGoal(); break;
+      }
+    };
+    document.addEventListener('keydown', swKeydownHandler);
+  }
+}
+
+function swExitFullscreen() {
+  const header = document.querySelector('.site-header');
+  if (header) header.style.display = '';
+  document.body.classList.remove('sww-active');
+  if (swKeydownHandler) {
+    document.removeEventListener('keydown', swKeydownHandler);
+    swKeydownHandler = null;
+  }
+}
+
+function swShowToast(msg) {
+  let t = document.getElementById('sww-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'sww-toast';
+    t.className = 'sww-toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('visible');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('visible'), 2000);
+}
+
+// ── Picker ───────────────────────────────────────────────────────────────
+function renderStreamwallPicker() {
   const liveCreators = creators.filter(c => c.isLive && c.liveVideoId);
-  const sorted = [...creators].sort((a, b) => (b.isLive ? 1 : 0) - (a.isLive ? 1 : 0) || b.subscriberCount - a.subscriberCount);
-  _swLeague = '';
-  _swMuted = false;
+  swPickerSelected = new Set();
 
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
@@ -3306,75 +3355,433 @@ function renderStreamwall() {
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">Live</div>
             <h1 class="page-hero-title">Streamwall</h1>
-            <p class="page-hero-subtitle">Watch multiple football creators streaming live, all at once. Filter by league, search by name, or browse all ${creators.length} creators.</p>
+            <p class="page-hero-subtitle">Check up to ${SW_PICKER_MAX} live creators and watch them all at once in a full-screen multi-view wall. Add more streams by URL once it's open.</p>
           </div>
         </div>
       </div>
     </div>
 
     <div class="container" style="padding-top:28px;padding-bottom:60px">
-      <!-- Toolbar -->
-      <div class="sw-toolbar">
-        <div class="sw-search-wrap">
-          <span class="sw-search-icon">&#128269;</span>
-          <input class="sw-search-input" type="text" placeholder="Search creators by name or club..." id="swSearch" oninput="filterStreamwall()">
-        </div>
-        <div class="sw-filter-row">
-          <span class="chip active" onclick="swFilterLeague(this,'')">All</span>
-          ${LEAGUES.map(l => `<span class="chip" onclick="swFilterLeague(this,'${jsAttrStr(l.name)}')">${leagueChipImg(l.name)} ${escHtml(l.name)}</span>`).join('')}
-        </div>
-        ${liveCreators.length ? `
-        <div class="sw-controls">
-          <button class="sw-ctrl-btn" onclick="swMuteAll()" id="swMuteBtn">&#128263; Mute All</button>
-          <button class="sw-ctrl-btn" onclick="swSeekLive()">&#128308; Go Live</button>
-        </div>` : ''}
-        <div class="sw-stats"><strong>${creators.length}</strong> creators${liveCreators.length ? ` &middot; <strong style="color:var(--red,#e53935)">${liveCreators.length}</strong> live now` : ''}</div>
-      </div>
-
       ${liveCreators.length ? `
-      <!-- Live Section -->
-      <div class="sw-section">
-        <div class="sw-section-head">
-          <div class="sw-section-title"><span class="live-dot-sm"></span> Live Now <span class="sw-live-count">${liveCreators.length}</span></div>
+      <div class="sc-card" style="margin-bottom:0">
+        <div class="sc-head">
+          <div class="sc-head-title"><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveCreators.length}</span></div>
+          <div id="swPickCount" style="font-size:.82rem;color:var(--text-dim)">0 / ${SW_PICKER_MAX} selected</div>
         </div>
-        <div class="sw-live-grid">
-          ${liveCreators.slice(0, 8).map(c => `
-            <div class="sw-tile">
-              <div class="sw-tile-video">
-                <iframe src="https://www.youtube.com/embed/${safeId(c.liveVideoId)}?autoplay=0&enablejsapi=1" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-              </div>
-              <div class="sw-tile-bar">
-                ${avatarImg(c, 'sw-tile-avatar')}
-                <div class="sw-tile-info">
-                  <div class="sw-tile-name"><a href="${creatorLink(c)}">${escHtml(c.name)}</a></div>
-                  <div class="sw-tile-meta">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.subscriberCount ? '&middot; ' + formatNum(c.subscriberCount) + ' subs' : ''}</div>
-                </div>
-                <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red,#e53935);color:#fff;flex-shrink:0;font-size:.72rem">Watch &rarr;</a>
-              </div>
-            </div>
-          `).join('')}
+        <div class="sc-body">
+          <div class="sw-pick-grid" id="swPickGrid">
+            ${liveCreators.map(c => swPickCardHTML(c)).join('')}
+          </div>
         </div>
+      </div>
+      <div class="sw-launch-bar">
+        <button class="btn btn-primary" id="swLaunchBtn" onclick="swLaunchWall()">Open Streamwall</button>
       </div>` : `
-      <div class="sc-card" style="margin-bottom:24px">
+      <div class="sc-card">
         <div class="sc-body sw-empty">
           <div class="sw-empty-icon">&#128225;</div>
           <div class="sw-empty-title">No one is live right now</div>
-          <div class="sw-empty-desc">When football creators go live, their streams will appear here in a multi-view grid. Browse all creators below.</div>
+          <div class="sw-empty-desc">Check back during matchday, or open an empty wall and paste stream URLs directly.</div>
+          <button class="btn btn-primary" onclick="swLaunchWall()">Open Empty Streamwall</button>
         </div>
       </div>`}
-
-      <!-- Browse All Creators -->
-      <div class="sw-section">
-        <div class="sw-section-head">
-          <div class="sw-section-title">All Creators</div>
-        </div>
-        <div class="sw-card-grid" id="swCardGrid">
-          ${sorted.map(c => creatorCard(c)).join('')}
-        </div>
-      </div>
     </div>
     ${renderFooter()}
   `;
+}
+
+function swPickCardHTML(c) {
+  return `
+    <label class="sw-pick-card" for="swpick-${c.id}">
+      <input type="checkbox" id="swpick-${c.id}" onchange="swToggleSelect('${c.id}', this)">
+      <span class="sw-pick-check"></span>
+      ${avatarImg(c, 'sw-pick-avatar')}
+      <span class="sw-pick-info">
+        <span class="sw-pick-name">${escHtml(c.name)}</span>
+        <span class="sw-pick-meta">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}${c.subscriberCount ? ' &middot; ' + formatNum(c.subscriberCount) : ''}</span>
+      </span>
+    </label>`;
+}
+
+function swToggleSelect(id, input) {
+  if (input.checked) {
+    if (swPickerSelected.size >= SW_PICKER_MAX) {
+      input.checked = false;
+      swShowToast(`You can select up to ${SW_PICKER_MAX} streams`);
+      return;
+    }
+    swPickerSelected.add(id);
+  } else {
+    swPickerSelected.delete(id);
+  }
+  const counter = document.getElementById('swPickCount');
+  if (counter) counter.textContent = `${swPickerSelected.size} / ${SW_PICKER_MAX} selected`;
+}
+
+function swLaunchWall() {
+  const ids = [...swPickerSelected]
+    .map(id => creators.find(c => c.id === id))
+    .filter(Boolean)
+    .map(c => c.liveVideoId);
+  try { localStorage.setItem(SW_STORAGE_KEY, JSON.stringify(ids)); } catch (e) {}
+  navigate('/streamwall?wall=1');
+}
+
+// ── Wall ─────────────────────────────────────────────────────────────────
+function swExtractVideoId(url) {
+  url = (url || '').trim();
+  let m;
+  m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/); if (m) return m[1];
+  m = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/); if (m) return m[1];
+  m = url.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/); if (m) return m[1];
+  m = url.match(/youtube\.com\/live\/([a-zA-Z0-9_-]{11})/); if (m) return m[1];
+  m = url.match(/^([a-zA-Z0-9_-]{11})$/); if (m) return m[1];
+  return null;
+}
+
+function swEmbedUrl(videoId) {
+  return `https://www.youtube.com/embed/${safeId(videoId)}?autoplay=1&enablejsapi=1`;
+}
+
+function swPostCmd(index, func, args) {
+  const f = document.getElementById('sww-iframe-' + index);
+  if (f && f.contentWindow) {
+    try { f.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), '*'); } catch (e) {}
+  }
+}
+
+function swSaveStreams(isClone) {
+  if (isClone) return;
+  try { localStorage.setItem(SW_STORAGE_KEY, JSON.stringify(swStreams.map(s => s.videoId))); } catch (e) {}
+}
+
+function renderStreamwallWall(isClone) {
+  swStreams = [];
+  swAllPaused = false;
+  swAllMuted = false;
+
+  try {
+    const raw = localStorage.getItem(isClone ? SW_GOAL_KEY : SW_STORAGE_KEY);
+    if (raw) {
+      const ids = JSON.parse(raw);
+      ids.forEach(id => {
+        if (swStreams.length < SW_WALL_MAX) swStreams.push({ videoId: id, paused: false, muted: false });
+      });
+    }
+  } catch (e) {}
+
+  document.getElementById('app').innerHTML = `
+    <div id="sww-topbar">
+      <a href="/streamwall" class="sww-back" onclick="event.preventDefault();navigate('/streamwall')" title="Back to Streamwall">&larr;</a>
+      <h1>Streamwall</h1>
+      ${isClone ? '<div class="sww-clone-badge"><span class="sww-live-dot"></span> LIVE CLONE</div>' : ''}
+      <input id="sww-url-input" type="text" placeholder="Paste a YouTube URL and press Enter…">
+      <button class="sww-btn" id="sww-toggle-all-btn">
+        <span id="sww-toggle-icon">${SW_ICONS.pause}</span>
+        <span id="sww-toggle-label">Pause All</span>
+      </button>
+      <button class="sww-btn" id="sww-live-all-btn"><span class="sww-live-dot" id="sww-live-dot"></span><span id="sww-live-label">Go Live</span></button>
+      <button class="sww-btn" id="sww-mute-all-btn">
+        <span id="sww-mute-all-icon">${SW_ICONS.mute}</span>
+        <span id="sww-mute-all-label">Mute All</span>
+      </button>
+      <button class="sww-btn sww-btn-goal" id="sww-goal-btn">&#9917; Goal!</button>
+      <button class="sww-btn sww-btn-clear" id="sww-clear-btn">Clear</button>
+      <span class="sww-counter" id="sww-counter">${swStreams.length} / ${SW_WALL_MAX}</span>
+    </div>
+    <div id="sww-scroll-area">
+      <div id="sww-grid"></div>
+    </div>
+  `;
+
+  document.getElementById('sww-goal-btn').addEventListener('click', swOnGoal);
+  document.getElementById('sww-live-all-btn').addEventListener('click', swGoLiveAll);
+  document.getElementById('sww-url-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') swAddStream(e.target.value, isClone);
+  });
+  document.getElementById('sww-toggle-all-btn').addEventListener('click', () => swToggleAll(isClone));
+  document.getElementById('sww-mute-all-btn').addEventListener('click', () => swToggleMuteAll(isClone));
+  document.getElementById('sww-clear-btn').addEventListener('click', () => {
+    if (!swStreams.length) return;
+    confirmDialog(`Remove all ${swStreams.length} stream(s)?`, () => {
+      swStreams = [];
+      swAllPaused = false;
+      swAllMuted = false;
+      swUpdateToggleAllBtn();
+      swUpdateMuteAllBtn();
+      swRenderGrid(isClone);
+      swSaveStreams(isClone);
+    }, { title: 'Clear Streamwall', confirmLabel: 'Clear' });
+  });
+
+  swUpdateToggleAllBtn();
+  swUpdateMuteAllBtn();
+  swRenderGrid(isClone);
+
+  // Clone tabs: seek everyone to the live edge shortly after the iframes load.
+  if (isClone && swStreams.length) {
+    setTimeout(() => {
+      swStreams.forEach((s, i) => { swPostCmd(i, 'seekTo', [99999, true]); swPostCmd(i, 'playVideo'); });
+    }, 2500);
+
+    try {
+      const bc = new BroadcastChannel('frfc-streamwall-goal');
+      bc.onmessage = e => {
+        if (swStreams.length > 0) return;
+        try {
+          const ids = JSON.parse(e.data);
+          ids.forEach(id => { if (swStreams.length < SW_WALL_MAX) swStreams.push({ videoId: id, paused: false, muted: false }); });
+          swRenderGrid(true);
+          setTimeout(() => {
+            swStreams.forEach((s, i) => { swPostCmd(i, 'seekTo', [99999, true]); swPostCmd(i, 'playVideo'); });
+          }, 2000);
+        } catch (e) {}
+      };
+    } catch (e) {}
+  }
+}
+
+function swUpdateToggleAllBtn() {
+  const btn = document.getElementById('sww-toggle-all-btn');
+  const icon = document.getElementById('sww-toggle-icon');
+  const label = document.getElementById('sww-toggle-label');
+  if (!btn) return;
+  if (swAllPaused) {
+    icon.innerHTML = SW_ICONS.play; label.textContent = 'Play All'; btn.classList.remove('playing');
+  } else {
+    icon.innerHTML = SW_ICONS.pause; label.textContent = 'Pause All'; btn.classList.add('playing');
+  }
+}
+
+function swToggleAll(isClone) {
+  if (!swStreams.length) return;
+  swAllPaused = !swAllPaused;
+  swStreams.forEach((s, i) => { s.paused = swAllPaused; swPostCmd(i, swAllPaused ? 'pauseVideo' : 'playVideo'); });
+  document.querySelectorAll('.sww-tile').forEach(tile => {
+    const pb = tile.querySelector('.sww-t-btn[data-role="pause"]');
+    if (pb) { pb.innerHTML = SW_ICONS[swAllPaused ? 'play' : 'pause']; pb.title = swAllPaused ? 'Play' : 'Pause'; }
+  });
+  swUpdateToggleAllBtn();
+}
+
+function swUpdateMuteAllBtn() {
+  const btn = document.getElementById('sww-mute-all-btn');
+  const icon = document.getElementById('sww-mute-all-icon');
+  const label = document.getElementById('sww-mute-all-label');
+  if (!btn) return;
+  if (swAllMuted) {
+    icon.innerHTML = SW_ICONS.unmute; label.textContent = 'Unmute All'; btn.classList.add('muted');
+  } else {
+    icon.innerHTML = SW_ICONS.mute; label.textContent = 'Mute All'; btn.classList.remove('muted');
+  }
+}
+
+function swToggleMuteAll(isClone) {
+  if (!swStreams.length) return;
+  swAllMuted = !swAllMuted;
+  swStreams.forEach((s, i) => { s.muted = swAllMuted; swPostCmd(i, swAllMuted ? 'mute' : 'unMute'); });
+  document.querySelectorAll('.sww-tile').forEach(tile => {
+    const mb = tile.querySelector('.sww-t-btn[data-role="mute"]');
+    if (mb) { mb.innerHTML = SW_ICONS[swAllMuted ? 'unmute' : 'mute']; mb.title = swAllMuted ? 'Unmute' : 'Mute'; }
+  });
+  swUpdateMuteAllBtn();
+}
+
+function swMakeTBtn(iconKey, title, onClick, extraClass, role) {
+  const b = document.createElement('button');
+  b.className = 'sww-t-btn' + (extraClass ? ' ' + extraClass : '');
+  b.title = title;
+  b.innerHTML = SW_ICONS[iconKey];
+  if (role) b.dataset.role = role;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function swRenderGrid(isClone) {
+  const grid = document.getElementById('sww-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  if (swStreams.length === 0) {
+    const es = document.createElement('div');
+    es.id = 'sww-empty-state';
+    es.innerHTML = `<p class="sww-empty-main">Paste a YouTube URL above to add a stream</p><p class="sww-empty-sub">youtube.com/watch?v=&hellip; &middot; youtu.be/&hellip; &middot; Keys: Space=pause&nbsp; M=mute&nbsp; L=live&nbsp; G=goal</p>`;
+    grid.appendChild(es);
+    const counter = document.getElementById('sww-counter');
+    if (counter) counter.textContent = `0 / ${SW_WALL_MAX}`;
+    return;
+  }
+
+  swStreams.forEach((s, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'sww-tile';
+    tile.draggable = true;
+    tile.dataset.index = i;
+
+    tile.addEventListener('dragstart', e => {
+      swDragSrcIndex = i;
+      tile.classList.add('dragging');
+      document.body.classList.add('sww-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i));
+    });
+    tile.addEventListener('dragend', () => {
+      tile.classList.remove('dragging');
+      document.body.classList.remove('sww-dragging');
+      document.querySelectorAll('.sww-tile.drag-over').forEach(t => t.classList.remove('drag-over'));
+      swDragSrcIndex = null;
+    });
+    tile.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (swDragSrcIndex !== null && swDragSrcIndex !== i) tile.classList.add('drag-over');
+    });
+    tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+    tile.addEventListener('drop', e => {
+      e.preventDefault();
+      tile.classList.remove('drag-over');
+      if (swDragSrcIndex === null || swDragSrcIndex === i) return;
+      const moved = swStreams.splice(swDragSrcIndex, 1)[0];
+      swStreams.splice(i, 0, moved);
+      swDragSrcIndex = null;
+      document.body.classList.remove('sww-dragging');
+      swRenderGrid(isClone);
+      swSaveStreams(isClone);
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'sww-iframe-overlay';
+    tile.appendChild(overlay);
+
+    const tb = document.createElement('div');
+    tb.className = 'sww-tile-toolbar';
+
+    const handle = document.createElement('span');
+    handle.className = 'sww-drag-handle';
+    handle.innerHTML = SW_ICONS.drag;
+    handle.title = 'Drag to reorder';
+    tb.appendChild(handle);
+
+    const num = document.createElement('span');
+    num.className = 'sww-tile-num';
+    num.textContent = i + 1;
+    tb.appendChild(num);
+
+    const pauseBtn = swMakeTBtn(s.paused ? 'play' : 'pause', s.paused ? 'Play' : 'Pause', () => {
+      s.paused = !s.paused;
+      swPostCmd(i, s.paused ? 'pauseVideo' : 'playVideo');
+      pauseBtn.innerHTML = SW_ICONS[s.paused ? 'play' : 'pause'];
+      pauseBtn.title = s.paused ? 'Play' : 'Pause';
+    }, '', 'pause');
+    tb.appendChild(pauseBtn);
+
+    const muteBtn = swMakeTBtn(s.muted ? 'unmute' : 'mute', s.muted ? 'Unmute' : 'Mute', () => {
+      s.muted = !s.muted;
+      swPostCmd(i, s.muted ? 'mute' : 'unMute');
+      muteBtn.innerHTML = SW_ICONS[s.muted ? 'unmute' : 'mute'];
+      muteBtn.title = s.muted ? 'Unmute' : 'Mute';
+    }, '', 'mute');
+    tb.appendChild(muteBtn);
+
+    const sp = document.createElement('span');
+    sp.style.flex = '1';
+    tb.appendChild(sp);
+
+    tb.appendChild(swMakeTBtn('newtab', 'Open in new tab', () => {
+      window.open(`https://www.youtube.com/watch?v=${safeId(s.videoId)}`, '_blank');
+    }));
+
+    tb.appendChild(swMakeTBtn('fs', 'Fullscreen', () => {
+      const iframe = document.getElementById('sww-iframe-' + i);
+      if (iframe) {
+        const req = iframe.requestFullscreen || iframe.webkitRequestFullscreen || iframe.mozRequestFullScreen;
+        if (req) req.call(iframe);
+      }
+    }));
+
+    tb.appendChild(swMakeTBtn('close', 'Remove', () => {
+      swStreams.splice(i, 1);
+      swRenderGrid(isClone);
+      swSaveStreams(isClone);
+    }, 'danger'));
+
+    tile.appendChild(tb);
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'sww-iframe-' + i;
+    iframe.src = swEmbedUrl(s.videoId);
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    iframe.allowFullscreen = true;
+    tile.appendChild(iframe);
+    grid.appendChild(tile);
+  });
+
+  const counter = document.getElementById('sww-counter');
+  if (counter) counter.textContent = `${swStreams.length} / ${SW_WALL_MAX}`;
+}
+
+function swAddStream(url, isClone) {
+  const input = document.getElementById('sww-url-input');
+  if (!url || !url.trim()) return;
+  if (swStreams.length >= SW_WALL_MAX) { swShowToast(`Maximum ${SW_WALL_MAX} streams reached`); return; }
+  const videoId = swExtractVideoId(url);
+  if (!videoId) {
+    if (input) { input.classList.add('error'); setTimeout(() => input.classList.remove('error'), 900); }
+    swShowToast('Invalid YouTube URL');
+    return;
+  }
+  if (swStreams.some(s => s.videoId === videoId)) {
+    swShowToast('Stream already added');
+    return;
+  }
+  swStreams.push({ videoId, paused: false, muted: false });
+  swAllPaused = false;
+  swUpdateToggleAllBtn();
+  swRenderGrid(isClone);
+  swSaveStreams(isClone);
+  if (input) { input.value = ''; input.focus(); }
+}
+
+function swGoLiveAll() {
+  if (!swStreams.length) return;
+  swStreams.forEach((s, i) => { swPostCmd(i, 'seekTo', [99999, true]); swPostCmd(i, 'playVideo'); s.paused = false; });
+  swAllPaused = false;
+  swUpdateToggleAllBtn();
+  document.querySelectorAll('.sww-tile').forEach(tile => {
+    const pb = tile.querySelector('.sww-t-btn[data-role="pause"]');
+    if (pb) { pb.innerHTML = SW_ICONS.pause; pb.title = 'Pause'; }
+  });
+  const btn = document.getElementById('sww-live-all-btn');
+  btn.classList.add('active');
+  document.getElementById('sww-live-label').textContent = 'Live';
+  swShowToast('All streams jumped to live edge');
+  setTimeout(() => { btn.classList.remove('active'); document.getElementById('sww-live-label').textContent = 'Go Live'; }, 3000);
+}
+
+function swOnGoal() {
+  if (!swStreams.length) return;
+
+  swStreams.forEach((s, i) => { s.paused = true; swPostCmd(i, 'pauseVideo'); });
+  swAllPaused = true;
+  swUpdateToggleAllBtn();
+  document.querySelectorAll('.sww-tile').forEach(tile => {
+    const pb = tile.querySelector('.sww-t-btn[data-role="pause"]');
+    if (pb) { pb.innerHTML = SW_ICONS.play; pb.title = 'Play'; }
+  });
+
+  const videoIds = swStreams.map(s => s.videoId);
+  const payload = JSON.stringify(videoIds);
+  try {
+    const bc = new BroadcastChannel('frfc-streamwall-goal');
+    localStorage.setItem(SW_GOAL_KEY, payload);
+    bc.close();
+  } catch (e) {
+    try { localStorage.setItem(SW_GOAL_KEY, payload); } catch (e2) {}
+  }
+
+  const base = window.location.origin + '/streamwall';
+  window.open(base + '?goal=' + Date.now(), '_blank');
+  swShowToast('Streams paused — new live wall opened');
 }
 
 // ── Render: Become a Creator ─────────────────────────────────────────────

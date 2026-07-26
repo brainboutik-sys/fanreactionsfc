@@ -589,6 +589,7 @@ async function fetchCreatorsFromNetwork() {
     socialTwitch: r.social_twitch || '',
     socialDiscord: r.social_discord || '',
     socialTiktok: r.social_tiktok || '',
+    socialInstagram: r.social_instagram || '',
     youtubeChannelId: r.youtube_channel_id || ''
   }));
   updateLiveCountChip();
@@ -1750,6 +1751,23 @@ function toggleAccordion(el, leagueName) {
   applyFilter('league', wasOpen ? '' : leagueName);
 }
 
+// ── Social link icons ────────────────────────────────────────────────────
+// Simplified, hand-drawn glyphs rather than exact brand marks — small and
+// safe to render at 18px, no dependency on an external icon font/library.
+// currentColor so each inherits the button's text color.
+const SOCIAL_ICONS = {
+  x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  twitch: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 3h16v11l-4 4h-4l-3 3v-3H4z"/><line x1="10" y1="7" x2="10" y2="12"/><line x1="14" y1="7" x2="14" y2="12"/></svg>',
+  discord: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 5.5c1-1 2.5-1.5 4-1.5s3 .5 4 1.5" stroke-linecap="round"/><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="8.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.5" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>',
+  tiktok: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="17" r="3" fill="currentColor" stroke="none"/><path d="M12 17V4h1.5a4 4 0 0 0 4 4v2a6 6 0 0 1-4-1.5V17" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+function socialLinkHTML(url, key, label) {
+  if (!url) return '';
+  return `<a href="${safeUrl(url)}" target="_blank" rel="noopener" class="btn btn-icon btn-on-dark" title="${escHtml(label)}" aria-label="${escHtml(label)}">${SOCIAL_ICONS[key]}</a>`;
+}
+
 // ── Render: Creator Profile ───────────────────────────────────────────────
 async function renderProfile(slug) {
   const c = creators.find(cr => (cr.slug || slugify(cr.name)) === slug);
@@ -1785,12 +1803,13 @@ async function renderProfile(slug) {
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>
             <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
-            ${(c.socialX || c.socialTwitch || c.socialDiscord || c.socialTiktok) ? `
+            ${(c.socialX || c.socialInstagram || c.socialTwitch || c.socialDiscord || c.socialTiktok) ? `
             <div class="cp-social-links">
-              ${c.socialX ? `<a href="${safeUrl(c.socialX)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">X</a>` : ''}
-              ${c.socialTwitch ? `<a href="${safeUrl(c.socialTwitch)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">Twitch</a>` : ''}
-              ${c.socialDiscord ? `<a href="${safeUrl(c.socialDiscord)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">Discord</a>` : ''}
-              ${c.socialTiktok ? `<a href="${safeUrl(c.socialTiktok)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">TikTok</a>` : ''}
+              ${socialLinkHTML(c.socialX, 'x', 'X (Twitter)')}
+              ${socialLinkHTML(c.socialInstagram, 'instagram', 'Instagram')}
+              ${socialLinkHTML(c.socialTwitch, 'twitch', 'Twitch')}
+              ${socialLinkHTML(c.socialDiscord, 'discord', 'Discord')}
+              ${socialLinkHTML(c.socialTiktok, 'tiktok', 'TikTok')}
             </div>` : ''}
             <div class="cp-hero-actions">
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-accent cp-cta">▶ Watch on YouTube</a>` : ''}
@@ -1798,7 +1817,7 @@ async function renderProfile(slug) {
               <button class="btn btn-on-dark${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
               <button class="cp-report-link" onclick="openReportModal('${c.id}','${jsAttrStr(c.name)}')">Report issue</button>
               ${c.claimedBy && currentUser && c.claimedBy === currentUser.id
-                ? `<a href="/manage/${c.id}" class="cp-claimed-badge" onclick="event.preventDefault();navigate('/manage/${c.id}')" title="Edit your channel's profile" style="cursor:pointer;text-decoration:underline">✓ You manage this channel — Manage Channel</a>`
+                ? `<a href="/manage/${c.id}" class="btn btn-sm btn-accent" onclick="event.preventDefault();navigate('/manage/${c.id}')" title="Edit your channel's profile">Manage Channel</a>`
                 : !c.claimedBy ? `<button class="cp-report-link" onclick="openClaimModal('${c.id}','${jsAttrStr(c.name)}')">Claim this channel</button>` : ''}
             </div>
           </div>
@@ -3620,6 +3639,7 @@ function renderManageChannel(creatorId) {
     social_twitch: c.socialTwitch || '',
     social_discord: c.socialDiscord || '',
     social_tiktok: c.socialTiktok || '',
+    social_instagram: c.socialInstagram || '',
   };
   mcFeaturedPick = c.featuredVideoId || null;
 
@@ -3680,6 +3700,7 @@ function renderManageChannel(creatorId) {
         <div class="sc-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div><label class="field-label">X (Twitter)</label><input id="mcSocialX" class="admin-form-input" placeholder="https://x.com/..." value="${escHtml(c.socialX || '')}"></div>
+            <div><label class="field-label">Instagram</label><input id="mcSocialInstagram" class="admin-form-input" placeholder="https://instagram.com/..." value="${escHtml(c.socialInstagram || '')}"></div>
             <div><label class="field-label">Twitch</label><input id="mcSocialTwitch" class="admin-form-input" placeholder="https://twitch.tv/..." value="${escHtml(c.socialTwitch || '')}"></div>
             <div><label class="field-label">Discord</label><input id="mcSocialDiscord" class="admin-form-input" placeholder="https://discord.gg/..." value="${escHtml(c.socialDiscord || '')}"></div>
             <div><label class="field-label">TikTok</label><input id="mcSocialTiktok" class="admin-form-input" placeholder="https://tiktok.com/@..." value="${escHtml(c.socialTiktok || '')}"></div>
@@ -3835,6 +3856,7 @@ async function saveManageChannel(creatorId) {
     social_twitch: document.getElementById('mcSocialTwitch').value.trim(),
     social_discord: document.getElementById('mcSocialDiscord').value.trim(),
     social_tiktok: document.getElementById('mcSocialTiktok').value.trim(),
+    social_instagram: document.getElementById('mcSocialInstagram').value.trim(),
   };
 
   const patch = {};
@@ -3858,6 +3880,7 @@ async function saveManageChannel(creatorId) {
     if ('social_twitch' in patch) c.socialTwitch = patch.social_twitch;
     if ('social_discord' in patch) c.socialDiscord = patch.social_discord;
     if ('social_tiktok' in patch) c.socialTiktok = patch.social_tiktok;
+    if ('social_instagram' in patch) c.socialInstagram = patch.social_instagram;
     if ('featured_video_id' in patch) c.featuredVideoId = patch.featured_video_id || '';
   }
   msg.style.color = 'var(--green)';

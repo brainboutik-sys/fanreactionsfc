@@ -196,11 +196,11 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* Light-on-dark surfaces (creator hero, navy sections) */
 .btn-on-dark{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
 .btn-on-dark:hover{background:rgba(255,255,255,.18);color:#fff}
-.cp-claimed-badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-sm);color:var(--green);font-weight:600;padding:6px 4px}
 /* Public badge next to the name — shown to every visitor when the profile
-   has been claimed by its creator. Distinct from .cp-claimed-badge (the
-   private "you manage this channel" text only the claimer sees) and from
-   the admin-granted "Verified" badge, which is a separate signal. */
+   has been claimed by its creator. Distinct from the "Manage Channel"
+   button the owner alone sees (a .btn-accent, not a text link — a green
+   link on this navy background barely contrasted on hover) and from the
+   admin-granted "Verified" badge, which is a separate signal. */
 .cp-claimed-icon{width:22px;height:22px;object-fit:contain;flex-shrink:0}
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */

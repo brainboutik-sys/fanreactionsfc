@@ -23,7 +23,7 @@ const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const FIELD_VALIDATORS = {
   description: v => (typeof v === 'string' && v.length <= 1000) ? null : 'must be a string up to 1000 characters',
   content_types: v => (Array.isArray(v) && v.length <= 8 && v.every(t => typeof t === 'string' && t.length <= 40)) ? null : 'must be an array of up to 8 short strings',
-  social_x: urlOrEmpty, social_twitch: urlOrEmpty, social_discord: urlOrEmpty, social_tiktok: urlOrEmpty,
+  social_x: urlOrEmpty, social_twitch: urlOrEmpty, social_discord: urlOrEmpty, social_tiktok: urlOrEmpty, social_instagram: urlOrEmpty,
   featured_video_id: v => (v === null || v === '' || /^[A-Za-z0-9_-]{11}$/.test(v)) ? null : 'must be a valid 11-character YouTube video ID, or empty to clear',
   avatar_url: v => (v === null || v === '' || /^https:\/\/[^\s"]+$/.test(v)) ? null : 'must be a valid https URL',
 };
@@ -59,7 +59,7 @@ exports.handler = async (event) => {
 
   const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
   const creatorRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_streamers?id=eq.${encodeURIComponent(creatorId)}&select=id,claimed_by,description,content_types,social_x,social_twitch,social_discord,social_tiktok,featured_video_id,avatar_url,avatar_custom`,
+    `${supabaseUrl}/rest/v1/frfc_streamers?id=eq.${encodeURIComponent(creatorId)}&select=id,claimed_by,description,content_types,social_x,social_twitch,social_discord,social_tiktok,social_instagram,featured_video_id,avatar_url,avatar_custom`,
     { headers: sbHeaders }
   );
   const rows = await creatorRes.json();

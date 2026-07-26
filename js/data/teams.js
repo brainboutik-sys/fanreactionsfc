@@ -34,11 +34,13 @@ const TEAM_CRESTS = {
   'Bournemouth': '/img/crests/bournemouth.svg',
   'Brentford': '/img/crests/brentford.png',
   'Brighton': '/img/crests/brighton.svg',
-  'Burnley': '/img/crests/burnley.svg',
   'Chelsea': '/img/crests/chelsea.svg',
+  'Coventry': '/img/crests/coventry.png',
   'Crystal Palace': '/img/crests/crystal-palace.svg',
   'Everton': '/img/crests/everton.svg',
   'Fulham': '/img/crests/fulham.svg',
+  'Hull': '/img/crests/hull.png',
+  'Ipswich': '/img/crests/ipswich.svg',
   'Leeds United': '/img/crests/leeds-united.svg',
   'Liverpool': '/img/crests/liverpool.svg',
   'Man City': '/img/crests/man-city.svg',
@@ -47,17 +49,13 @@ const TEAM_CRESTS = {
   'Nottm Forest': '/img/crests/nottm-forest.svg',
   'Sunderland': '/img/crests/sunderland.png',
   'Tottenham': '/img/crests/tottenham.svg',
-  'West Ham': '/img/crests/west-ham.svg',
-  'Wolves': '/img/crests/wolves.svg',
   // ── Championship (EFL) ──
   'Birmingham': '/img/crests/birmingham.png',
   'Blackburn': '/img/crests/blackburn.png',
   'Bristol City': '/img/crests/bristol-city.png',
+  'Burnley': '/img/crests/burnley.svg',
   'Charlton': '/img/crests/charlton.png',
-  'Coventry': '/img/crests/coventry.png',
   'Derby': '/img/crests/derby.png',
-  'Hull': '/img/crests/hull.png',
-  'Ipswich': '/img/crests/ipswich.svg',
   'Leicester': '/img/crests/leicester.svg',
   'Middlesbrough': '/img/crests/middlesbrough.png',
   'Millwall': '/img/crests/millwall.png',
@@ -73,6 +71,8 @@ const TEAM_CRESTS = {
   'Swansea': '/img/crests/swansea.png',
   'Watford': '/img/crests/watford.png',
   'West Brom': '/img/crests/west-brom.png',
+  'West Ham': '/img/crests/west-ham.svg',
+  'Wolves': '/img/crests/wolves.svg',
   'Wrexham': '/img/crests/wrexham.png',
   // Luton Town — recently relegated; crest kept so legacy creator rows
   // still render a logo even though Luton isn't in either league list.
@@ -163,8 +163,8 @@ const TEAM_CRESTS = {
 const TEAM_TO_LEAGUE = {};
 (function buildLeagueMap() {
   const map = {
-    'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brentford','Brighton','Burnley','Chelsea','Crystal Palace','Everton','Fulham','Leeds United','Liverpool','Man City','Man United','Newcastle','Nottm Forest','Sunderland','Tottenham','West Ham','Wolves'],
-    'Championship': ['Birmingham','Blackburn','Bristol City','Charlton','Coventry','Derby','Hull','Ipswich','Leicester','Middlesbrough','Millwall','Norwich','Oxford Utd','Portsmouth','Preston','QPR','Sheffield Utd','Sheffield Wed','Southampton','Stoke','Swansea','Watford','West Brom','Wrexham'],
+    'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brentford','Brighton','Chelsea','Coventry','Crystal Palace','Everton','Fulham','Hull','Ipswich','Leeds United','Liverpool','Man City','Man United','Newcastle','Nottm Forest','Sunderland','Tottenham'],
+    'Championship': ['Birmingham','Blackburn','Bristol City','Burnley','Charlton','Derby','Leicester','Middlesbrough','Millwall','Norwich','Oxford Utd','Portsmouth','Preston','QPR','Sheffield Utd','Sheffield Wed','Southampton','Stoke','Swansea','Watford','West Brom','West Ham','Wolves','Wrexham'],
     'La Liga': ['Barcelona','Real Madrid','Atletico Madrid','Sevilla','Real Betis','Real Sociedad','Villarreal','Athletic Bilbao','Valencia','Celta Vigo','Espanyol','Getafe','Osasuna','Mallorca','Rayo Vallecano','Girona','Las Palmas','Alaves','Valladolid','Leganes'],
     'Serie A': ['Juventus','AC Milan','Inter Milan','Napoli','Roma','Lazio','Atalanta','Fiorentina','Bologna','Torino','Udinese','Monza','Empoli','Genoa','Cagliari','Lecce','Hellas Verona','Parma','Venezia','Como'],
     'Bundesliga': ['Bayern Munich','Borussia Dortmund','RB Leipzig','Bayer Leverkusen','Union Berlin','Freiburg','Eintracht Frankfurt','Wolfsburg','Mainz','Borussia Monchengladbach','Hoffenheim','Werder Bremen','Augsburg','Bochum','Heidenheim','Stuttgart','Holstein Kiel','St. Pauli'],

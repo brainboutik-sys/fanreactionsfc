@@ -336,6 +336,11 @@ function handleRoute() {
       currentRoute = { page: 'terms' };
       updatePageMeta('Terms of Service | FanReactionsFC', 'The terms that govern your use of FanReactionsFC.');
       renderTermsOfService();
+    } else if (path.startsWith('/manage/')) {
+      const creatorId = path.split('/manage/')[1].replace(/\/$/, '');
+      currentRoute = { page: 'manageChannel', creatorId };
+      updatePageMeta('Manage Channel | FanReactionsFC', 'Manage your claimed channel profile.');
+      renderManageChannel(creatorId);
     } else if (path === '/streamwall') {
       currentRoute = { page: 'streamwall' };
       updatePageMeta('Streamwall — Watch Live Football Creators | FanReactionsFC', 'Watch multiple football creators streaming live on YouTube, all at once. Live watchalongs, reactions, and match day content.');
@@ -577,7 +582,14 @@ async function fetchCreatorsFromNetwork() {
     upcomingVideoThumbnail: r.upcoming_video_thumbnail || '',
     upcomingVideoScheduledAt: r.upcoming_video_scheduled_at || null,
     subscriberCountPrev: r.subscriber_count_prev || 0,
-    claimedBy: r.claimed_by || null
+    claimedBy: r.claimed_by || null,
+    avatarCustom: r.avatar_custom || false,
+    featuredVideoId: r.featured_video_id || '',
+    socialX: r.social_x || '',
+    socialTwitch: r.social_twitch || '',
+    socialDiscord: r.social_discord || '',
+    socialTiktok: r.social_tiktok || '',
+    youtubeChannelId: r.youtube_channel_id || ''
   }));
   updateLiveCountChip();
   saveCreatorsToCache();
@@ -1773,13 +1785,20 @@ async function renderProfile(slug) {
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>
             <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
+            ${(c.socialX || c.socialTwitch || c.socialDiscord || c.socialTiktok) ? `
+            <div class="cp-social-links">
+              ${c.socialX ? `<a href="${safeUrl(c.socialX)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">X</a>` : ''}
+              ${c.socialTwitch ? `<a href="${safeUrl(c.socialTwitch)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">Twitch</a>` : ''}
+              ${c.socialDiscord ? `<a href="${safeUrl(c.socialDiscord)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">Discord</a>` : ''}
+              ${c.socialTiktok ? `<a href="${safeUrl(c.socialTiktok)}" target="_blank" rel="noopener" class="btn btn-sm btn-on-dark">TikTok</a>` : ''}
+            </div>` : ''}
             <div class="cp-hero-actions">
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-accent cp-cta">▶ Watch on YouTube</a>` : ''}
               ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-on-dark"><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
               <button class="btn btn-on-dark${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
               <button class="cp-report-link" onclick="openReportModal('${c.id}','${jsAttrStr(c.name)}')">Report issue</button>
               ${c.claimedBy && currentUser && c.claimedBy === currentUser.id
-                ? '<span class="cp-claimed-badge" title="You manage this channel">✓ You manage this channel</span>'
+                ? `<a href="/manage/${c.id}" class="cp-claimed-badge" onclick="event.preventDefault();navigate('/manage/${c.id}')" title="Edit your channel's profile" style="cursor:pointer;text-decoration:underline">✓ You manage this channel — Manage Channel</a>`
                 : !c.claimedBy ? `<button class="cp-report-link" onclick="openClaimModal('${c.id}','${jsAttrStr(c.name)}')">Claim this channel</button>` : ''}
             </div>
           </div>
@@ -1833,6 +1852,20 @@ async function renderProfile(slug) {
           <span class="live-dot-sm"></span>
           <strong>${escHtml(c.name)} is streaming live right now</strong>
           <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto;flex-shrink:0">Watch Live &rarr;</a>
+        </div>` : ''}
+
+        ${c.featuredVideoId ? `
+        <div class="cp-section-card">
+          <div class="cp-section-head">
+            <span class="cp-section-label">Featured Video</span>
+            <span class="cp-section-meta">Pinned by the creator</span>
+          </div>
+          <a href="https://youtube.com/watch?v=${safeId(c.featuredVideoId)}" target="_blank" rel="noopener" class="cp-video-card">
+            <div class="cp-video-thumb-wrap">
+              <img src="https://i.ytimg.com/vi/${safeId(c.featuredVideoId)}/hqdefault.jpg" alt="" class="cp-video-thumb" loading="lazy">
+              <span class="cp-video-play">▶</span>
+            </div>
+          </a>
         </div>` : ''}
 
         ${c.latestVideoId ? `
@@ -3556,6 +3589,319 @@ async function submitClaim(creatorId) {
   } catch (e) {
     msg.style.color = 'var(--red)';
     msg.textContent = 'Network error. Please try again.';
+  }
+}
+
+// ── Manage Channel panel ─────────────────────────────────────────────────
+// Self-service editing for a claimed creator's own profile. Every write
+// goes through the manage-channel Netlify function, which re-verifies
+// ownership server-side and appends to frfc_creator_edit_log — this page
+// only ever sends a diff of what actually changed. League/team are
+// deliberately not editable here (see manage-channel.js for why).
+let mcOriginal = null; // snapshot of editable fields, to diff on save
+let mcFeaturedPick = null; // pending featured-video selection, if changed
+
+function renderManageChannel(creatorId) {
+  if (!currentUser) return renderAuthRequired('manage your channel');
+  const c = creators.find(cr => cr.id === creatorId);
+  if (!c) {
+    document.getElementById('app').innerHTML = '<div class="container section-message"><div class="empty-state"><div class="es-title">Creator not found</div><a href="/discover" class="btn btn-primary" style="margin-top:12px">Browse creators</a></div></div>';
+    return;
+  }
+  if (c.claimedBy !== currentUser.id) {
+    document.getElementById('app').innerHTML = `<div class="container section-message"><div class="empty-state"><div class="es-title">You don't manage this channel</div><p style="color:var(--text-dim)">Only the account that claimed ${escHtml(c.name)} can access this page.</p><a href="${creatorLink(c)}" class="btn btn-primary" style="margin-top:12px">Back to profile</a></div></div>`;
+    return;
+  }
+
+  mcOriginal = {
+    description: c.description || '',
+    content_types: [...c.contentTypes],
+    social_x: c.socialX || '',
+    social_twitch: c.socialTwitch || '',
+    social_discord: c.socialDiscord || '',
+    social_tiktok: c.socialTiktok || '',
+  };
+  mcFeaturedPick = c.featuredVideoId || null;
+
+  const contentTypeChecks = CONTENT_TYPES.map(t => `
+    <label class="acct-check">
+      <input type="checkbox" class="mc-content-type" value="${escHtml(t)}" ${c.contentTypes.includes(t) ? 'checked' : ''}>
+      ${escHtml(t)}
+    </label>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">Manage Channel</div>
+            <h1 class="page-hero-title">${escHtml(c.name)}</h1>
+            <p class="page-hero-subtitle">Edits here appear on your public profile immediately. Want to change your club or league? <a href="/contact">Contact us</a> — that one goes through review since it affects rankings.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container container-mid section">
+      <div class="sc-card" style="margin-bottom:16px">
+        <div class="sc-head"><div class="sc-head-title">Profile picture</div></div>
+        <div class="sc-body">
+          <div class="acct-avatar-row">
+            <div id="mcAvatarPreview" class="acct-avatar">${c.avatar ? `<img src="${escHtml(c.avatar)}" alt="">` : `<div class="avatar-fallback">${escHtml(avatarInitials(c.name))}</div>`}</div>
+            <div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+                <label for="mcAvatarFile" class="btn btn-secondary btn-sm" style="cursor:pointer">Upload new photo</label>
+                <input type="file" id="mcAvatarFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+                <span id="mcAvatarMsg" style="font-size:var(--fs-sm);color:var(--text-muted)"></span>
+              </div>
+              <div style="font-size:var(--fs-xs);color:var(--text-muted)">JPG, PNG, WebP or GIF — up to 2MB. ${c.avatarCustom ? 'Currently a custom photo — the automatic YouTube sync won\'t override it.' : 'Currently synced from YouTube automatically.'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sc-card" style="margin-bottom:16px">
+        <div class="sc-head"><div class="sc-head-title">Channel description</div></div>
+        <div class="sc-body">
+          <textarea id="mcDescription" class="admin-form-input" style="min-height:100px;resize:vertical" maxlength="1000" placeholder="Tell fans what your channel is about...">${escHtml(c.description || '')}</textarea>
+          <div style="text-align:right;font-size:var(--fs-xs);color:var(--text-muted);margin-top:4px">Shown on your profile instead of the auto-generated summary.</div>
+        </div>
+      </div>
+
+      <div class="sc-card" style="margin-bottom:16px">
+        <div class="sc-head"><div class="sc-head-title">Content type</div></div>
+        <div class="sc-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${contentTypeChecks}</div>
+        </div>
+      </div>
+
+      <div class="sc-card" style="margin-bottom:16px">
+        <div class="sc-head"><div class="sc-head-title">Social links</div></div>
+        <div class="sc-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div><label class="field-label">X (Twitter)</label><input id="mcSocialX" class="admin-form-input" placeholder="https://x.com/..." value="${escHtml(c.socialX || '')}"></div>
+            <div><label class="field-label">Twitch</label><input id="mcSocialTwitch" class="admin-form-input" placeholder="https://twitch.tv/..." value="${escHtml(c.socialTwitch || '')}"></div>
+            <div><label class="field-label">Discord</label><input id="mcSocialDiscord" class="admin-form-input" placeholder="https://discord.gg/..." value="${escHtml(c.socialDiscord || '')}"></div>
+            <div><label class="field-label">TikTok</label><input id="mcSocialTiktok" class="admin-form-input" placeholder="https://tiktok.com/@..." value="${escHtml(c.socialTiktok || '')}"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sc-card" style="margin-bottom:16px">
+        <div class="sc-head"><div class="sc-head-title">Featured video</div></div>
+        <div class="sc-body">
+          <p style="font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:12px">Pin a specific video to show above your latest upload. Optional.</p>
+          <div id="mcFeaturedGrid"><div style="font-size:var(--fs-sm);color:var(--text-muted)">Loading your videos…</div></div>
+          ${c.featuredVideoId ? '<button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="mcClearFeatured()">Clear featured video</button>' : ''}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="saveManageChannel('${creatorId}')">Save changes</button>
+        <a href="${creatorLink(c)}" class="btn btn-ghost" onclick="event.preventDefault();navigate('${creatorLink(c)}')">Back to profile</a>
+        <span id="mcSaveMsg" style="font-size:var(--fs-sm)"></span>
+      </div>
+
+      <div class="sc-card" style="margin-bottom:16px">
+        <div class="sc-head"><div class="sc-head-title">Edit history</div></div>
+        <div class="sc-body">
+          <div id="mcHistory"><div style="font-size:var(--fs-sm);color:var(--text-muted)">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="sc-card" style="border-color:rgba(230,57,70,.25)">
+        <div class="sc-head"><div class="sc-head-title" style="color:var(--red)">Danger zone</div></div>
+        <div class="sc-body">
+          <p style="font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:12px">Un-claiming removes your ownership of this profile. Anyone will be able to claim it again by re-verifying the same YouTube channel.</p>
+          <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="confirmUnclaimChannel('${creatorId}')">Un-claim this channel</button>
+        </div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+
+  const fileInput = document.getElementById('mcAvatarFile');
+  if (fileInput) fileInput.addEventListener('change', e => handleManageAvatarUpload(e, creatorId));
+
+  mcLoadFeaturedVideos(c);
+  mcLoadHistory(creatorId);
+}
+
+async function mcLoadFeaturedVideos(c) {
+  const grid = document.getElementById('mcFeaturedGrid');
+  if (!grid) return;
+  if (!c.youtubeChannelId) { grid.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">No YouTube channel on file yet — check back after the next sync.</div>'; return; }
+  try {
+    const detRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=channels&part=contentDetails&id=${c.youtubeChannelId}`);
+    const detData = await detRes.json();
+    const uploadsId = detData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsId) throw new Error('no uploads playlist');
+    const plRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=playlistItems&part=snippet&playlistId=${uploadsId}&maxResults=12`);
+    const plData = await plRes.json();
+    const videos = (plData.items || []).map(item => ({
+      id: item.snippet.resourceId.videoId,
+      title: item.snippet.title,
+      thumb: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+    })).filter(v => v.id);
+    if (!videos.length) { grid.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">No videos found.</div>'; return; }
+    grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
+      ${videos.map(v => `
+        <div class="mc-video-pick${mcFeaturedPick === v.id ? ' active' : ''}" data-video-id="${escHtml(v.id)}" onclick="mcSelectFeatured(this)" title="${escHtml(v.title)}">
+          <img src="${escHtml(v.thumb || '')}" alt="" loading="lazy">
+        </div>`).join('')}
+    </div>`;
+  } catch (e) {
+    grid.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">Couldn\'t load your videos right now.</div>';
+  }
+}
+
+function mcSelectFeatured(el) {
+  document.querySelectorAll('.mc-video-pick.active').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  mcFeaturedPick = el.getAttribute('data-video-id');
+}
+
+function mcClearFeatured() {
+  mcFeaturedPick = null;
+  document.querySelectorAll('.mc-video-pick.active').forEach(x => x.classList.remove('active'));
+  swShowToast('Featured video will be cleared on save.');
+}
+
+async function mcLoadHistory(creatorId) {
+  const el = document.getElementById('mcHistory');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('frfc_creator_edit_log')
+      .select('field, old_value, new_value, created_at')
+      .eq('creator_id', creatorId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    if (!data || !data.length) { el.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">No edits yet.</div>'; return; }
+    el.innerHTML = data.map(row => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:var(--fs-sm)">
+        <strong>${escHtml(row.field)}</strong> changed &middot; <span style="color:var(--text-muted)">${timeAgo(row.created_at)}</span>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">Couldn\'t load edit history.</div>';
+  }
+}
+
+async function handleManageAvatarUpload(e, creatorId) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const msg = document.getElementById('mcAvatarMsg');
+  msg.textContent = 'Uploading…';
+  msg.style.color = 'var(--text-dim)';
+  if (file.size > 2 * 1024 * 1024) { msg.style.color = 'var(--red)'; msg.textContent = 'Too large — max 2MB.'; return; }
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${currentUser.id}/creator-${creatorId}.${ext}`;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { msg.textContent = 'Please sign in again.'; msg.style.color = 'var(--red)'; return; }
+    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/avatars/${path}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session.access_token}`, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+      body: file,
+    });
+    if (!uploadRes.ok) { msg.style.color = 'var(--red)'; msg.textContent = 'Upload failed.'; return; }
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
+    const patchRes = await mcPatch(creatorId, { avatar_url: publicUrl });
+    if (!patchRes.ok) { msg.style.color = 'var(--red)'; msg.textContent = patchRes.error || 'Save failed.'; return; }
+    const c = creators.find(cr => cr.id === creatorId);
+    if (c) { c.avatar = publicUrl; c.avatarCustom = true; }
+    document.getElementById('mcAvatarPreview').innerHTML = `<img src="${publicUrl}" alt="">`;
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Uploaded!';
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error.';
+  }
+}
+
+// Sends only the fields whose value actually differs from mcOriginal — the
+// server diffs again independently, but doing it here too keeps "No
+// changes" saves from writing a no-op edit-log row for nothing.
+async function saveManageChannel(creatorId) {
+  const msg = document.getElementById('mcSaveMsg');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Saving…';
+
+  const contentTypes = [...document.querySelectorAll('.mc-content-type:checked')].map(el => el.value);
+  const current = {
+    description: document.getElementById('mcDescription').value.trim(),
+    content_types: contentTypes,
+    social_x: document.getElementById('mcSocialX').value.trim(),
+    social_twitch: document.getElementById('mcSocialTwitch').value.trim(),
+    social_discord: document.getElementById('mcSocialDiscord').value.trim(),
+    social_tiktok: document.getElementById('mcSocialTiktok').value.trim(),
+  };
+
+  const patch = {};
+  for (const [key, value] of Object.entries(current)) {
+    const before = mcOriginal[key];
+    const same = Array.isArray(before) ? JSON.stringify(before) === JSON.stringify(value) : before === value;
+    if (!same) patch[key] = value;
+  }
+  const c = creators.find(cr => cr.id === creatorId);
+  if (mcFeaturedPick !== (c.featuredVideoId || null)) patch.featured_video_id = mcFeaturedPick;
+
+  if (!Object.keys(patch).length) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'No changes to save.'; return; }
+
+  const result = await mcPatch(creatorId, patch);
+  if (!result.ok) { msg.style.color = 'var(--red)'; msg.textContent = result.error || 'Save failed.'; return; }
+
+  if (c) {
+    if ('description' in patch) c.description = patch.description;
+    if ('content_types' in patch) c.contentTypes = patch.content_types;
+    if ('social_x' in patch) c.socialX = patch.social_x;
+    if ('social_twitch' in patch) c.socialTwitch = patch.social_twitch;
+    if ('social_discord' in patch) c.socialDiscord = patch.social_discord;
+    if ('social_tiktok' in patch) c.socialTiktok = patch.social_tiktok;
+    if ('featured_video_id' in patch) c.featuredVideoId = patch.featured_video_id || '';
+  }
+  msg.style.color = 'var(--green)';
+  msg.textContent = 'Saved!';
+  mcLoadHistory(creatorId);
+}
+
+async function mcPatch(creatorId, patch) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return { ok: false, error: 'Please sign in again.' };
+    const res = await fetch('/.netlify/functions/manage-channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ creatorId, action: 'update', patch }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || `Failed (${res.status})` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: 'Network error.' };
+  }
+}
+
+function confirmUnclaimChannel(creatorId) {
+  const c = creators.find(cr => cr.id === creatorId);
+  confirmDialog(`Un-claim ${c ? c.name : 'this channel'}? You'll lose management access immediately.`, () => unclaimChannel(creatorId), { confirmLabel: 'Un-claim', danger: true });
+}
+
+async function unclaimChannel(creatorId) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch('/.netlify/functions/manage-channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ creatorId, action: 'unclaim' }),
+    });
+    if (!res.ok) { swShowToast('Failed to un-claim — please try again.'); return; }
+    const c = creators.find(cr => cr.id === creatorId);
+    if (c) c.claimedBy = null;
+    swShowToast('Channel un-claimed.');
+    navigate(c ? creatorLink(c) : '/discover');
+  } catch (e) {
+    swShowToast('Network error — please try again.');
   }
 }
 

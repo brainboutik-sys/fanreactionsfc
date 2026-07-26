@@ -30,7 +30,7 @@ exports.handler = async () => {
 
   // 1. Fetch all creators.
   const selectRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_streamers?select=id,name,channel_url,avatar_url`,
+    `${supabaseUrl}/rest/v1/frfc_streamers?select=id,name,channel_url,avatar_url,avatar_custom`,
     { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
   );
   if (!selectRes.ok) return ok({ error: 'supabase select failed', status: selectRes.status }, 502);
@@ -63,7 +63,9 @@ exports.handler = async () => {
         total_view_count: parseInt(stats.viewCount) || 0,
         video_count: parseInt(stats.videoCount) || 0,
         channel_created_at: snippet.publishedAt || null,
-        avatar_url:
+        // A claimed creator's uploaded avatar (avatar_custom=true, set via
+        // manage-channel.js) is never overwritten by the YouTube sync.
+        avatar_url: c.avatar_custom ? c.avatar_url :
           (snippet.thumbnails && (snippet.thumbnails.high && snippet.thumbnails.high.url || snippet.thumbnails.medium && snippet.thumbnails.medium.url)) ||
           c.avatar_url,
         channel_country: snippet.country || c.channel_country || null,

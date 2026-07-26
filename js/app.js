@@ -799,15 +799,27 @@ let _searchTimer = null;
 // Static pages the hero/nav search can jump to — matched by name or keyword
 // so "vote", "battle", "stream" etc. surface the right page even if the
 // query doesn't literally appear in its title.
+// `icon` is either a path into the custom PNG icon set or, where that set
+// doesn't cover the page yet, an emoji placeholder — pageIconHTML() renders
+// whichever it finds. Swap a placeholder to a path as soon as the artwork
+// exists; nothing else needs to change.
 const SITE_PAGES = [
   { name: 'Rankings', path: '/rankings', icon: '🏆', keywords: ['leaderboard', 'top', 'chart'] },
-  { name: 'Community Feature Requests', path: '/community/features', icon: '💡', keywords: ['suggest', 'idea', 'vote', 'request'] },
-  { name: 'Creator Battle', path: '/', icon: '⚔️', keywords: ['battle', 'vote', 'vs'] },
-  { name: 'Streamwall', path: '/streamwall', icon: '📡', keywords: ['live', 'watch', 'stream'] },
-  { name: 'Become a Creator', path: '/become-a-creator', icon: '🎬', keywords: ['start', 'stream', 'guide', 'tutorial'] },
+  { name: 'Community Feature Requests', path: '/community/features', icon: '/img/icons/feature-request.png', keywords: ['suggest', 'idea', 'vote', 'request'] },
+  { name: 'Creator Battle', path: '/', icon: '/img/icons/creator-battle.png', keywords: ['battle', 'vote', 'vs'] },
+  { name: 'Streamwall', path: '/streamwall', icon: '/img/icons/live-now.png', keywords: ['live', 'watch', 'stream'] },
+  { name: 'Become a Creator', path: '/become-a-creator', icon: '/img/icons/become-a-creator.png', keywords: ['start', 'stream', 'guide', 'tutorial'] },
   { name: 'Description Generator', path: '/tools/generator', icon: '📝', keywords: ['title', 'tags', 'description'] },
   { name: 'Submit a Creator', path: '/submit', icon: '➕', keywords: ['add', 'suggest', 'new channel'] },
 ];
+
+// Renders a SITE_PAGES icon: an <img> for the custom set, the raw glyph for
+// the emoji still awaiting artwork.
+function pageIconHTML(icon) {
+  return icon.startsWith('/')
+    ? `<img src="${icon}" alt="" class="search-crest" loading="lazy" onerror="this.style.display='none'">`
+    : icon;
+}
 
 function renderSearchResults(q, input) {
   const wrap = input.closest('.search-wrap');
@@ -851,7 +863,7 @@ function renderSearchResults(q, input) {
     html += '<div class="search-group-head">Pages</div>';
     html += pageMatches.map(p => `
       <a href="${p.path}" class="search-result">
-        <span class="cc-avatar search-crest-wrap" style="display:flex;align-items:center;justify-content:center;font-size:var(--fs-lg)">${p.icon}</span>
+        <span class="cc-avatar search-crest-wrap" style="font-size:var(--fs-lg)">${pageIconHTML(p.icon)}</span>
         <div class="sr-info">
           <div class="sr-name">${escHtml(p.name)}</div>
         </div>
@@ -1639,7 +1651,7 @@ function renderDiscover() {
           <div class="league-accordion">
             <div class="league-acc-item">
               <div class="league-acc-header ${!leagueFilter && !teamFilter ? 'active' : ''}" onclick="applyFilter('league','')" role="button" tabindex="0">
-                <span style="font-size:var(--fs-base)">⚽</span> All Leagues
+                <img src="/img/icons/leagues.png" alt="" class="acc-league-logo" onerror="this.style.display='none'"> All Leagues
                 <span class="acc-count">${creators.length}</span>
               </div>
             </div>
@@ -1761,7 +1773,7 @@ async function renderProfile(slug) {
             <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
             <div class="cp-hero-actions">
               ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-accent cp-cta">▶ Watch on YouTube</a>` : ''}
-              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-on-dark">📡 Live / Streams</a>` : ''}
+              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-on-dark"><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
               <button class="btn btn-on-dark${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
               <button class="cp-report-link" onclick="openReportModal('${c.id}','${jsAttrStr(c.name)}')">Report issue</button>
               ${c.claimedBy && currentUser && c.claimedBy === currentUser.id
@@ -1885,7 +1897,7 @@ async function renderProfile(slug) {
           <div class="cp-sidebar-title">Links</div>
           <div class="cp-links">
             ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-yt">▶ YouTube Channel</a>` : ''}
-            ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-live">📡 Live / Streams</a>` : ''}
+            ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-live"><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
           </div>
         </div>` : ''}
       </aside>

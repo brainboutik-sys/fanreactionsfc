@@ -183,6 +183,10 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .btn-ghost:hover{color:var(--text);background:var(--bg-hover)}
 .btn-danger{background:rgba(230,57,70,.08);color:var(--red);border-color:rgba(230,57,70,.25)}
 .btn-danger:hover{background:var(--red);color:#fff}
+/* Inline icon from the custom PNG set, sized to sit with button text.
+   vertical-align covers non-flex hosts (e.g. .cp-link-btn, which is
+   display:block); flex hosts centre it via align-items and ignore it. */
+.btn-ico{width:16px;height:16px;object-fit:contain;display:inline-block;vertical-align:-3px;flex-shrink:0}
 /* Modifiers — combine with any variant */
 .btn-sm{padding:5px 12px;font-size:var(--fs-sm)}
 .btn-lg{padding:12px 28px;font-size:var(--fs-md)}

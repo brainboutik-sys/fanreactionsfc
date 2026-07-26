@@ -950,14 +950,21 @@ function renderHome() {
   const totalLive = liveNow.length;
   const totalClubs = Object.keys(clubCounts).length;
 
+  // Skip the ~3MB autoplaying hero video entirely on mobile (real bandwidth
+  // cost, small screen) and when the visitor has asked for reduced motion —
+  // the .hero element already has the poster image as a CSS background, so
+  // omitting <video> just leaves that static image in place seamlessly.
+  const skipHeroVideo = window.matchMedia('(max-width: 600px)').matches
+    || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   document.getElementById('app').innerHTML = `
     <!-- Hero -->
     <section class="hero">
+      ${skipHeroVideo ? '' : `
       <video class="hero-video" autoplay muted loop playsinline poster="/img/hero-bg.jpg">
         <source src="/img/videos/header-video.mp4" type="video/mp4">
-      </video>
+      </video>`}
       <div class="container">
-        <img src="/img/logo-wide.png" alt="FanReactionsFC" class="hero-logo">
         <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
         <p class="subtitle">The definitive database of football YouTubers. Ranked daily.</p>
         <div class="search-wrap">

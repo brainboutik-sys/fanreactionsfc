@@ -148,8 +148,6 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
 .hero > *:not(.hero-video){position:relative;z-index:2}
 .hero .container{position:relative;z-index:2}
-.hero-logo{display:block;margin:0 auto 20px;height:110px;width:auto;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.3))}
-@media(max-width:600px){.hero-logo{height:72px;margin-bottom:16px}}
 .hero h1{font-size:2.4rem;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin-bottom:10px;color:#fff}
 .hero h1 .accent{color:var(--yellow)}
 .hero .subtitle{color:rgba(255,255,255,.65);font-size:1.05rem;margin-bottom:28px}

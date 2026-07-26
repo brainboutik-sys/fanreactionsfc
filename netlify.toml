@@ -30,6 +30,11 @@ schedule = "30 4 * * *"
 [functions."live-check-fixtures-background"]
 schedule = "*/5 * * * *"
 
+# Daily GDPR retention cleanup — deletes contact messages / creator reports
+# past the retention window documented in /privacy (see retention-cleanup.js).
+[functions."retention-cleanup"]
+schedule = "0 5 * * *"
+
 # Dynamic sitemap generated from the Supabase creator list.
 [[redirects]]
   from = "/sitemap.xml"

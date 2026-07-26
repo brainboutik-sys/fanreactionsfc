@@ -2753,7 +2753,7 @@ function renderPrivacyPolicy() {
       <tr><td>Supabase</td><td>Database, authentication, file storage</td></tr>
       <tr><td>Netlify</td><td>Website hosting, serverless functions</td></tr>
       <tr><td>Resend</td><td>Transactional email (notifications you trigger, e.g. contact replies)</td></tr>
-      <tr><td>Google (Sign-In, YouTube, Fonts, Tag Manager/Analytics)</td><td>Authentication, video embeds, site fonts, analytics (analytics only with consent)</td></tr>
+      <tr><td>Google (Sign-In, YouTube, Tag Manager/Analytics)</td><td>Authentication, video embeds, analytics (analytics only with consent)</td></tr>
       <tr><td>football-data.org</td><td>Match fixture data used to detect live streams</td></tr>
     </table>
     <p>We do not sell your personal data.</p>
@@ -2762,7 +2762,7 @@ function renderPrivacyPolicy() {
     <p>Some of the providers above (Google, Resend, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data is retained while your account is active. Contact messages and creator reports are retained for as long as needed to resolve the inquiry, then periodically deleted. You can request earlier deletion — see Section 7.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. You can request earlier deletion at any time — see Section 9.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>

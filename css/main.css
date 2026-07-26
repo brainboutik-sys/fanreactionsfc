@@ -915,13 +915,21 @@ img.review-avatar{background:var(--bg-hover)}
 
 /* ── Become a Creator section ─────────────────────────────────────────── */
 .become-section{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}
-.become-video{aspect-ratio:16/9;width:100%;border-radius:var(--radius);overflow:hidden;background:#000}
+.become-video{position:relative;aspect-ratio:16/9;width:100%;border-radius:var(--radius);overflow:hidden;background:#000}
 .become-video iframe{width:100%;height:100%;border:0}
 .become-text h3{font-size:1.2rem;font-weight:800;margin-bottom:8px;color:var(--text)}
 .become-text p{color:var(--text-dim);font-size:.88rem;line-height:1.6;margin-bottom:16px}
 .btn-yellow{display:inline-flex;align-items:center;gap:6px;background:var(--yellow);color:var(--navy);font-weight:700;padding:10px 22px;border-radius:var(--radius-pill);font-size:.88rem;border:none;cursor:pointer;transition:background .15s}
 .btn-yellow:hover{background:#ffd000;color:var(--navy)}
 @media(max-width:700px){.become-section{grid-template-columns:1fr}}
+
+/* ── YouTube click-to-load facade ──────────────────────────────────────── */
+/* No request to youtube-nocookie.com fires until this is clicked — see
+   ytFacadeHTML()/ytFacadePlay() in js/app.js. */
+.yt-facade{position:absolute;inset:0;width:100%;height:100%;cursor:pointer;background:#000}
+.yt-facade img{width:100%;height:100%;object-fit:cover;display:block;opacity:.85}
+.yt-facade-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.4rem;padding-left:4px;transition:background .15s,transform .15s}
+.yt-facade:hover .yt-facade-play{background:var(--red);transform:translate(-50%,-50%) scale(1.08)}
 
 /* ── Legal pages (Privacy / Cookies / Terms) ───────────────────────────── */
 .legal-content{max-width:760px;margin:0 auto;color:var(--text);font-size:.92rem;line-height:1.7}
@@ -942,6 +950,10 @@ img.review-avatar{background:var(--bg-hover)}
 .consent-banner-text{flex:1;min-width:240px;font-size:.85rem;line-height:1.5;color:rgba(255,255,255,.85);margin:0}
 .consent-banner-text a{color:var(--yellow);text-decoration:underline}
 .consent-banner-actions{display:flex;gap:10px;flex-shrink:0}
+/* Equal visual weight for both choices — a compliant cookie banner must not
+   design "Accept" to look more prominent than "Reject" (EU/Brazil requirement). */
+.consent-btn{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.5);font-weight:700}
+.consent-btn:hover{background:rgba(255,255,255,.12);border-color:#fff}
 @media(max-width:600px){.consent-banner-actions{width:100%}.consent-banner-actions .btn{flex:1}}
 
 /* ── Streamwall: picker ──────────────────────────────────────────────── */
@@ -955,7 +967,7 @@ img.review-avatar{background:var(--bg-hover)}
 .sw-pick-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08)}
 .sw-pick-card input{position:absolute;opacity:0;pointer-events:none}
 .sw-pick-video{position:relative;aspect-ratio:16/9;width:100%;background:#000}
-.sw-pick-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.sw-pick-video iframe,.sw-pick-video img{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover}
 .sw-pick-live-badge{position:absolute;top:8px;left:8px;background:var(--red);color:#fff;font-size:.62rem;font-weight:800;letter-spacing:.03em;padding:2px 7px;border-radius:4px;pointer-events:none;z-index:2}
 .sw-pick-bar{display:flex;align-items:center;gap:10px;padding:10px 12px}
 .sw-pick-check{width:18px;height:18px;border-radius:5px;border:2px solid var(--border);flex-shrink:0;position:relative;transition:all .15s}

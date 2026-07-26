@@ -99,6 +99,7 @@ function getTeamsByLeague() {
 // choice is a plain yes/no stored locally; only 'true' triggers loadGTM().
 const CONSENT_KEY = 'frfc_consent_analytics';
 const GTM_ID = 'GTM-NSWNRXKH';
+const CONSENT_NOTICE_VERSION = '2026-07-26';
 
 function getConsent() {
   const v = localStorage.getItem(CONSENT_KEY);
@@ -109,6 +110,19 @@ function setConsent(analytics) {
   try { localStorage.setItem(CONSENT_KEY, String(analytics)); } catch (e) {}
   hideConsentBanner();
   if (analytics) loadGTMIfConsented();
+  logConsentChoice(analytics);
+}
+
+// Best-effort audit trail (GDPR accountability principle) — records that a
+// consent choice was made, when, and under which notice version. Anonymous:
+// no cookie/fingerprint is attached, so this cannot be used to identify who
+// made the choice, only that the banner is functioning and choices are real.
+function logConsentChoice(analytics) {
+  fetch(`${SUPABASE_URL}/rest/v1/frfc_consent_log`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ analytics_accepted: analytics, notice_version: CONSENT_NOTICE_VERSION, page_path: location.pathname }),
+  }).catch(() => {});
 }
 
 function initConsentBanner() {
@@ -623,6 +637,31 @@ function jsAttrStr(s) {
 }
 function safeId(s) { return (s || '').replace(/[^A-Za-z0-9_-]/g, ''); }
 function safeUrl(s) { try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
+
+// ── YouTube click-to-load facade ────────────────────────────────────────
+// No request to Google/YouTube fires until the visitor actually clicks play
+// — a static thumbnail stands in for the iframe until then. Only used for
+// passive/promotional embeds; Streamwall itself is exempted because opening
+// it is already a deliberate, explicit action to watch video.
+function ytFacadeHTML(videoId, opts = {}) {
+  const id = safeId(videoId);
+  const params = opts.params || 'autoplay=1';
+  return `<div class="yt-facade" data-video="${id}" data-params="${escHtml(params)}" onclick="ytFacadePlay(this)" role="button" tabindex="0" aria-label="Play video" onkeydown="if(event.key==='Enter')ytFacadePlay(this)">
+    <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" loading="lazy">
+    <span class="yt-facade-play" aria-hidden="true">&#9658;</span>
+  </div>`;
+}
+
+function ytFacadePlay(el) {
+  const id = el.getAttribute('data-video');
+  const params = el.getAttribute('data-params') || 'autoplay=1';
+  const iframe = document.createElement('iframe');
+  iframe.src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
+  iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+  iframe.setAttribute('allowfullscreen', '');
+  iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0';
+  el.replaceWith(iframe);
+}
 // Subtle, pulsing red dot used next to a creator's name site-wide when
 // they're currently livestreaming on YouTube.
 function liveDot(isLive) { return isLive ? '<span class="live-dot" title="Live now" aria-label="Live now"></span>' : ''; }
@@ -1141,7 +1180,7 @@ function renderHome() {
         <div class="sc-body">
           <div class="become-section">
             <div class="become-video">
-              <iframe src="https://www.youtube-nocookie.com/embed/RA7-Wtsk8Pg" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+              ${ytFacadeHTML('RA7-Wtsk8Pg')}
             </div>
             <div class="become-text">
               <h3>Start Your Watchalong Journey</h3>
@@ -2732,6 +2771,9 @@ function renderPrivacyPolicy() {
   legalPageShell('Legal', 'Privacy Policy', `
     <p>FanReactionsFC ("we", "us") operates fanreactionsfc.com, a directory and community site for football YouTube creators. This policy explains what personal data we collect, why, and the choices you have.</p>
 
+    <h2>Who we are</h2>
+    <p>FanReactionsFC.com is operated by Vincent Tervooren, who acts as the data controller for the personal data described in this policy. You can reach us at <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a> for any privacy question or request.</p>
+
     <h2>1. Data we collect</h2>
     <table class="legal-table">
       <tr><th>What</th><th>When</th><th>Why</th></tr>
@@ -2802,11 +2844,11 @@ function renderCookiePolicy() {
     <h2>Optional — only set if you accept</h2>
     <table class="legal-table">
       <tr><th>Provider</th><th>Purpose</th><th>Control</th></tr>
-      <tr><td>Google Tag Manager / Google Analytics (GA4)</td><td>Aggregate traffic and usage analytics</td><td>Only loads after you click "Accept analytics"; reject or withdraw anytime via the "Cookie preferences" link in the footer</td></tr>
+      <tr><td>Google Tag Manager / Google Analytics (GA4) — <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a></td><td>Aggregate traffic and usage analytics</td><td>Only loads after you click "Accept analytics"; reject or withdraw anytime via the "Cookie preferences" link in the footer</td></tr>
     </table>
 
     <h2>Third-party embeds</h2>
-    <p>Creator videos and live streams are embedded from YouTube using its privacy-enhanced <code>youtube-nocookie.com</code> domain, which limits cookie use until you actually interact with (play) a video. Playing an embedded video may still set YouTube/Google cookies under Google's own policy.</p>
+    <p>Creator videos and live streams are embedded from YouTube (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>) using its privacy-enhanced <code>youtube-nocookie.com</code> domain. Promotional and preview videos show a static thumbnail and only load the YouTube player after you click play, so no request reaches Google just from viewing those pages. The one exception is Streamwall: clicking "Open Streamwall" is itself the action that loads the video players you selected, since that page's whole purpose is watching those streams. Once a YouTube player loads, YouTube/Google may set cookies under Google's own policy.</p>
 
     <h2>Managing cookies</h2>
     <p>You can change your analytics choice anytime via the "Cookie preferences" link in the site footer, or clear cookies/localStorage in your browser settings.</p>
@@ -3734,7 +3776,7 @@ function swPickCardHTML(c) {
     <label class="sw-pick-card" for="swpick-${c.id}">
       <input type="checkbox" id="swpick-${c.id}"${checked} onchange="swToggleSelect('${c.id}', this)">
       <div class="sw-pick-video">
-        <iframe src="https://www.youtube-nocookie.com/embed/${safeId(c.liveVideoId)}?autoplay=0&mute=1&enablejsapi=1" loading="lazy" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <img src="https://i.ytimg.com/vi/${safeId(c.liveVideoId)}/hqdefault.jpg" alt="" loading="lazy">
         <span class="sw-pick-live-badge">LIVE</span>
       </div>
       <div class="sw-pick-bar">
@@ -4147,8 +4189,8 @@ function renderBecomeCreator() {
     <div class="container" style="padding-top:28px;padding-bottom:60px">
       <div class="sc-card" style="margin-bottom:24px">
         <div class="sc-body" style="padding:0;overflow:hidden">
-          <div style="aspect-ratio:16/9;width:100%;background:#000">
-            <iframe src="https://www.youtube-nocookie.com/embed/RA7-Wtsk8Pg" style="width:100%;height:100%;border:0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          <div style="position:relative;aspect-ratio:16/9;width:100%;background:#000">
+            ${ytFacadeHTML('RA7-Wtsk8Pg')}
           </div>
         </div>
       </div>

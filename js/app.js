@@ -3269,7 +3269,7 @@ async function handleAuth(type) {
 //      keyboard shortcuts, localStorage persistence.
 const SW_STORAGE_KEY = 'frfc_streamwall_streams';
 const SW_GOAL_KEY = 'frfc_streamwall_goal_ids';
-const SW_PICKER_MAX = 12;
+const SW_PICKER_MAX = 16;
 const SW_WALL_MAX = 16;
 const SW_COLS = 4;
 
@@ -3394,12 +3394,18 @@ function swPickCardHTML(c) {
   return `
     <label class="sw-pick-card" for="swpick-${c.id}">
       <input type="checkbox" id="swpick-${c.id}" onchange="swToggleSelect('${c.id}', this)">
-      <span class="sw-pick-check"></span>
-      ${avatarImg(c, 'sw-pick-avatar')}
-      <span class="sw-pick-info">
-        <span class="sw-pick-name">${escHtml(c.name)}</span>
-        <span class="sw-pick-meta">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}${c.subscriberCount ? ' &middot; ' + formatNum(c.subscriberCount) : ''}</span>
-      </span>
+      <div class="sw-pick-video">
+        <iframe src="https://www.youtube.com/embed/${safeId(c.liveVideoId)}?autoplay=0&mute=1&enablejsapi=1" loading="lazy" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <span class="sw-pick-live-badge">LIVE</span>
+      </div>
+      <div class="sw-pick-bar">
+        <span class="sw-pick-check"></span>
+        ${avatarImg(c, 'sw-pick-avatar')}
+        <span class="sw-pick-info">
+          <span class="sw-pick-name">${escHtml(c.name)}</span>
+          <span class="sw-pick-meta">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}${c.subscriberCount ? ' &middot; ' + formatNum(c.subscriberCount) : ''}</span>
+        </span>
+      </div>
     </label>`;
 }
 
@@ -3424,7 +3430,7 @@ function swLaunchWall() {
     .filter(Boolean)
     .map(c => c.liveVideoId);
   try { localStorage.setItem(SW_STORAGE_KEY, JSON.stringify(ids)); } catch (e) {}
-  navigate('/streamwall?wall=1');
+  window.open('/streamwall?wall=1', '_blank');
 }
 
 // ── Wall ─────────────────────────────────────────────────────────────────

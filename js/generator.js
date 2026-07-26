@@ -169,7 +169,7 @@ function renderHTML() {
       </div>
     </div>
 
-    <button class="btn-generate" id="btnGenerate" onclick="Gen.generate()">&#9889; Generate Content</button>
+    <button class="btn btn-primary btn-block btn-lg" id="btnGenerate" style="margin-top:8px" onclick="Gen.generate()">&#9889; Generate Content</button>
 
     <!-- Output -->
     <div class="output-section" id="outputSection">

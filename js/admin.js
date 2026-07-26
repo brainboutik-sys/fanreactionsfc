@@ -142,7 +142,7 @@ function renderDashboard() {
     '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Creators by League</span></div><div class="admin-card-body">' +
       Object.entries(leagueCounts).sort(function(a,b){return b[1]-a[1]}).map(function(e) {
         var pct = Math.round(e[1] / allCreators.length * 100);
-        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="width:120px;font-size:.82rem;font-weight:600">' + escHtml(e[0]) + '</span><div style="flex:1;height:8px;background:var(--bg-hover);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:var(--navy);border-radius:4px"></div></div><span style="font-size:.78rem;color:var(--text-dim);width:40px;text-align:right">' + e[1] + '</span></div>';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="width:120px;font-size:var(--fs-sm);font-weight:600">' + escHtml(e[0]) + '</span><div style="flex:1;height:8px;background:var(--bg-hover);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:var(--navy);border-radius:4px"></div></div><span style="font-size:var(--fs-sm);color:var(--text-dim);width:40px;text-align:right">' + e[1] + '</span></div>';
       }).join('') +
     '</div></div>' +
     '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Top by Views</span></div><div class="admin-card-body no-pad">' +
@@ -185,7 +185,7 @@ function renderCreators() {
     '</div>' +
     '<table class="admin-table"><thead><tr><th>Creator</th><th>Team</th><th>League</th><th>Subs</th><th>Views</th><th>Frequency</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
     paged.map(function(c) {
-      var avatarHtml = c.avatar_url ? '<img class="row-avatar" src="' + c.avatar_url + '" alt="" onerror="this.style.display=\'none\'">' : '<div class="row-avatar avatar-fallback" style="width:32px;height:32px;font-size:.6rem">' + (c.name||'?').substring(0,2).toUpperCase() + '</div>';
+      var avatarHtml = c.avatar_url ? '<img class="row-avatar" src="' + c.avatar_url + '" alt="" onerror="this.style.display=\'none\'">' : '<div class="row-avatar avatar-fallback" style="width:32px;height:32px;font-size:var(--fs-xs)">' + (c.name||'?').substring(0,2).toUpperCase() + '</div>';
       return '<tr>' +
         '<td><div style="display:flex;align-items:center;gap:10px">' + avatarHtml + '<div><div class="row-name">' + escHtml(c.name) + '</div><div class="row-dim">' + escHtml(c.channel_url || '') + '</div></div></div></td>' +
         '<td>' + escHtml(c.team || '') + '</td>' +
@@ -284,7 +284,7 @@ function openCreatorForm(c) {
       '<div class="admin-form-row"><label class="admin-form-label" for="cf_team">Team</label><select class="admin-form-select" id="cf_team">' + buildTeamSelect(c?.league || '', c?.team || '') + '</select></div>' +
     '</div>' +
     formField('Country Code', 'cf_country', c?.channel_country || '', 'text') +
-    '<div style="font-size:.72rem;color:var(--text-muted,#888);margin:-8px 0 12px">2-letter ISO code (e.g. GB, US, FR). Only needed if YouTube doesn\'t provide one.</div>' +
+    '<div style="font-size:var(--fs-xs);color:var(--text-muted,#888);margin:-8px 0 12px">2-letter ISO code (e.g. GB, US, FR). Only needed if YouTube doesn\'t provide one.</div>' +
     '<div class="admin-form-grid">' +
       formCheck('Verified', 'cf_verified', c?.verified) +
       formCheck('Featured', 'cf_featured', c?.featured) +
@@ -364,7 +364,7 @@ function renderSubmissions() {
     pending.map(function(s) {
       return '<tr>' +
         '<td class="row-name">' + escHtml(s.name) + '</td>' +
-        '<td><a href="' + escHtml(s.channel_url) + '" target="_blank" rel="noopener" style="color:var(--accent);font-size:.82rem">' + escHtml(s.channel_url).substring(0, 40) + '...</a></td>' +
+        '<td><a href="' + escHtml(s.channel_url) + '" target="_blank" rel="noopener" style="color:var(--accent);font-size:var(--fs-sm)">' + escHtml(s.channel_url).substring(0, 40) + '...</a></td>' +
         '<td>' + escHtml(s.team) + '</td>' +
         '<td><span class="admin-badge admin-badge-dim">' + escHtml(s.league) + '</span></td>' +
         '<td class="row-dim">' + timeAgo(s.submitted_at) + '</td>' +
@@ -430,7 +430,7 @@ function renderUsers() {
     stat('Admin Users', '1', 'super_admin role') +
   '</div>' +
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">User Management</span></div><div class="admin-card-body">' +
-    '<p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">User accounts are managed through Supabase Auth. Favorites are linked to auth.users via foreign keys.</p>' +
+    '<p style="color:var(--text-dim);font-size:var(--fs-base);margin-bottom:12px">User accounts are managed through Supabase Auth. Favorites are linked to auth.users via foreign keys.</p>' +
     '<a href="https://supabase.com/dashboard/project/dsxijgrpxsfywxuffbmt/auth/users" target="_blank" rel="noopener" class="btn-admin btn-admin-primary">Open Supabase Auth Dashboard</a>' +
   '</div></div>';
 }
@@ -439,17 +439,17 @@ function renderUsers() {
 function renderSettings() {
   return '<div class="admin-page-header"><div><h1 class="admin-page-title">Settings</h1><div class="admin-page-subtitle">Platform configuration</div></div></div>' +
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">YouTube API</span></div><div class="admin-card-body">' +
-    '<div class="admin-form-row"><div class="admin-form-label">API Key</div><div style="font-size:.85rem;color:var(--text-dim)">Configured server-side (Netlify env var YOUTUBE_API_KEY)</div></div>' +
-    '<div class="admin-form-row"><div class="admin-form-label">Daily Quota</div><div style="font-size:.85rem">10,000 units/day (YouTube Data API v3)</div></div>' +
-    '<div class="admin-form-row"><div class="admin-form-label">Last Sync</div><div style="font-size:.85rem">' + getLastSync() + '</div></div>' +
-    '<div style="display:flex;align-items:center;gap:12px;margin-top:8px"><button class="btn-admin btn-admin-primary" onclick="Admin.runSync()">Run YouTube Sync Now</button><span id="syncStatus" style="font-size:.82rem;color:var(--text-dim)"></span></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">API Key</div><div style="font-size:var(--fs-base);color:var(--text-dim)">Configured server-side (Netlify env var YOUTUBE_API_KEY)</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">Daily Quota</div><div style="font-size:var(--fs-base)">10,000 units/day (YouTube Data API v3)</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">Last Sync</div><div style="font-size:var(--fs-base)">' + getLastSync() + '</div></div>' +
+    '<div style="display:flex;align-items:center;gap:12px;margin-top:8px"><button class="btn-admin btn-admin-primary" onclick="Admin.runSync()">Run YouTube Sync Now</button><span id="syncStatus" style="font-size:var(--fs-sm);color:var(--text-dim)"></span></div>' +
   '</div></div>' +
 
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Platform Info</span></div><div class="admin-card-body">' +
-    '<div class="admin-form-row"><div class="admin-form-label">Site URL</div><div style="font-size:.85rem">fanreactionsfc.com</div></div>' +
-    '<div class="admin-form-row"><div class="admin-form-label">Hosting</div><div style="font-size:.85rem">Netlify (site ID: a845b6ad-3669-4634-b5df-f757ac227b71)</div></div>' +
-    '<div class="admin-form-row"><div class="admin-form-label">Database</div><div style="font-size:.85rem">Supabase (dsxijgrpxsfywxuffbmt)</div></div>' +
-    '<div class="admin-form-row"><div class="admin-form-label">Stack</div><div style="font-size:.85rem">Static SPA (HTML/CSS/JS), Supabase Postgres, YouTube Data API v3</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">Site URL</div><div style="font-size:var(--fs-base)">fanreactionsfc.com</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">Hosting</div><div style="font-size:var(--fs-base)">Netlify (site ID: a845b6ad-3669-4634-b5df-f757ac227b71)</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">Database</div><div style="font-size:var(--fs-base)">Supabase (dsxijgrpxsfywxuffbmt)</div></div>' +
+    '<div class="admin-form-row"><div class="admin-form-label">Stack</div><div style="font-size:var(--fs-base)">Static SPA (HTML/CSS/JS), Supabase Postgres, YouTube Data API v3</div></div>' +
   '</div></div>' +
 
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Danger Zone</span></div><div class="admin-card-body">' +

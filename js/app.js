@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sb.auth.onAuthStateChange(() => refreshAuth());
   } catch (e) {
     console.error('Init failed:', e);
-    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><h2>Something went wrong</h2><p style="color:var(--text-dim)">' + e.message + '</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>';
+    document.getElementById('app').innerHTML = '<div class="container section-message"><h2>Something went wrong</h2><p style="color:var(--text-dim)">' + e.message + '</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>';
   }
 });
 
@@ -229,7 +229,7 @@ function navigate(path, push = true) {
 function renderAuthRequired(what) {
   const label = what || 'view this page';
   document.getElementById('app').innerHTML = `
-    <div class="container" style="padding:60px 20px;text-align:center">
+    <div class="container section-message">
       <div class="empty-state">
         <div class="es-icon">&#128274;</div>
         <div class="es-title">Sign in required</div>
@@ -366,7 +366,7 @@ function handleRoute() {
       currentRoute = { page: 'notfound' };
       updatePageMeta('Page Not Found | FanReactionsFC', 'The page you were looking for doesn\'t exist.');
       app.innerHTML = `
-        <div class="container" style="padding:60px 20px;text-align:center">
+        <div class="container section-message">
           <div class="empty-state">
             <div class="es-icon">&#128269;</div>
             <div class="es-title">Page not found</div>
@@ -378,7 +378,7 @@ function handleRoute() {
     }
   } catch (e) {
     app.innerHTML = `
-      <div class="container" style="padding:60px 20px;text-align:center">
+      <div class="container section-message">
         <div class="empty-state">
           <div class="es-icon">&#9888;</div>
           <div class="es-title">Something went wrong rendering this page.</div>
@@ -462,13 +462,13 @@ function showUserMenu() {
   const displayName = (currentProfile && currentProfile.display_name) || '';
   menu.innerHTML = `
     <div style="padding:8px 16px;border-bottom:1px solid var(--border)">
-      ${displayName ? `<div style="font-size:.88rem;font-weight:600;color:var(--text)">${escHtml(displayName)}</div>` : ''}
-      <div style="font-size:.78rem;color:var(--text-dim)">${escHtml(currentUser.email)}</div>
+      ${displayName ? `<div style="font-size:var(--fs-base);font-weight:600;color:var(--text)">${escHtml(displayName)}</div>` : ''}
+      <div style="font-size:var(--fs-sm);color:var(--text-dim)">${escHtml(currentUser.email)}</div>
     </div>
-    <a href="/account" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Account settings</a>
-    <a href="/tools/generator" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Description Generator</a>
-    <a href="/admin" style="display:block;padding:8px 16px;font-size:.85rem;color:var(--text)">Admin Panel</a>
-    <button onclick="signOut()" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:.85rem;color:var(--accent);background:none;border:none;border-top:1px solid var(--border)">Sign Out</button>`;
+    <a href="/account" style="display:block;padding:8px 16px;font-size:var(--fs-base);color:var(--text)">Account settings</a>
+    <a href="/tools/generator" style="display:block;padding:8px 16px;font-size:var(--fs-base);color:var(--text)">Description Generator</a>
+    <a href="/admin" style="display:block;padding:8px 16px;font-size:var(--fs-base);color:var(--text)">Admin Panel</a>
+    <button onclick="signOut()" style="display:block;width:100%;text-align:left;padding:8px 16px;font-size:var(--fs-base);color:var(--accent);background:none;border:none;border-top:1px solid var(--border)">Sign Out</button>`;
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', function rem() { menu.remove(); document.removeEventListener('click', rem); }, { once: true }), 10);
 }
@@ -851,7 +851,7 @@ function renderSearchResults(q, input) {
     html += '<div class="search-group-head">Pages</div>';
     html += pageMatches.map(p => `
       <a href="${p.path}" class="search-result">
-        <span class="cc-avatar search-crest-wrap" style="display:flex;align-items:center;justify-content:center;font-size:1.1rem">${p.icon}</span>
+        <span class="cc-avatar search-crest-wrap" style="display:flex;align-items:center;justify-content:center;font-size:var(--fs-lg)">${p.icon}</span>
         <div class="sr-info">
           <div class="sr-name">${escHtml(p.name)}</div>
         </div>
@@ -1018,7 +1018,7 @@ function renderHome() {
     <!-- Live Now — leads right under the stat bar since seeing who's live
          is the site's core value proposition, ahead of Creator Battle. -->
     ${liveNow.length ? `
-    <div class="container" style="padding-top:28px">
+    <div class="container section-stack">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/live-now.png" alt=""><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveNow.length}</span></div>
@@ -1074,7 +1074,7 @@ function renderHome() {
     </div>
 
     <!-- FRFC Channel banner -->
-    <div class="container" style="padding-top:28px">
+    <div class="container section-stack">
       <div class="frfc-banner">
         <div class="frfc-banner-logo-wrap">
           <img src="/img/logo-round.png" alt="FanReactionsFC" class="frfc-banner-logo" onerror="this.parentNode.style.display='none'">
@@ -1096,7 +1096,7 @@ function renderHome() {
 
     <!-- Upcoming streams -->
     ${upcoming.length ? `
-    <div class="container" style="padding-top:24px">
+    <div class="container section-stack">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title">&#128197; Upcoming Streams</div>
@@ -1127,14 +1127,14 @@ function renderHome() {
     </div>` : ''}
 
     <!-- Top Clubs -->
-    <div class="container" style="padding-top:24px">
+    <div class="container section-stack">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/top-clubs.png" alt="">Top Clubs</div>
           <div class="sc-head-right">
             <div class="club-filter-row" style="margin:0;gap:6px">
-              <span class="chip club-filter active" style="font-size:.72rem;padding:4px 12px" onclick="filterClubs(this,'')">All</span>
-              ${LEAGUES.map(l => `<span class="chip club-filter" style="font-size:.72rem;padding:4px 10px" onclick="filterClubs(this,'${jsAttrStr(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
+              <span class="chip club-filter active" style="font-size:var(--fs-xs);padding:4px 12px" onclick="filterClubs(this,'')">All</span>
+              ${LEAGUES.map(l => `<span class="chip club-filter" style="font-size:var(--fs-xs);padding:4px 10px" onclick="filterClubs(this,'${jsAttrStr(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${escHtml(l.name)}</span>`).join('')}
             </div>
             <a href="/discover" class="sc-head-link">View all &rarr;</a>
           </div>
@@ -1161,13 +1161,13 @@ function renderHome() {
             <div class="cta-band-title">Know a great football creator?</div>
             <p class="cta-band-sub">Help us grow the database — submissions are reviewed and published within 24 hours.</p>
           </div>
-          <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
+          <a href="/submit" class="btn btn-primary btn-pill btn-lg">+ Suggest a Creator</a>
         </div>
       </div>
     </div>
 
     <!-- Explore the community -->
-    <div class="container" style="padding-top:24px">
+    <div class="container section-stack">
       <div class="home-promo-row">
         <a href="/community/features" class="home-promo-card">
           <span class="home-promo-icon"><img src="/img/icons/feature-request.png" alt=""></span>
@@ -1189,7 +1189,7 @@ function renderHome() {
     </div>
 
     <!-- Become a Creator -->
-    <div class="container" style="padding-top:24px">
+    <div class="container section-stack">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/become-a-creator.png" alt="">Become a Creator</div>
@@ -1202,7 +1202,7 @@ function renderHome() {
             <div class="become-text">
               <h3>Start Your Watchalong Journey</h3>
               <p>Learn how to set up a professional streaming environment for football watchalongs — completely free. Prism Live Studio, Uno Overlays, live scoreboards, and more.</p>
-              <a href="/become-a-creator" class="btn-yellow" onclick="event.preventDefault();navigate('/become-a-creator')">Read the Full Guide &rarr;</a>
+              <a href="/become-a-creator" class="btn btn-accent btn-pill" onclick="event.preventDefault();navigate('/become-a-creator')">Read the Full Guide &rarr;</a>
             </div>
           </div>
         </div>
@@ -1210,7 +1210,7 @@ function renderHome() {
     </div>
 
     <!-- Top Creators -->
-    <div class="container" style="padding-top:24px;padding-bottom:60px">
+    <div class="container section">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title"><img class="section-title-icon" src="/img/icons/top-creators.png" alt="">Top Creators</div>
@@ -1627,19 +1627,19 @@ function renderDiscover() {
             <h1 class="page-hero-title">Discover Creators</h1>
             <p class="page-hero-subtitle" style="max-width:640px">${escHtml(discoverIntro)}</p>
           </div>
-          <a href="/submit" class="btn-cta-band btn-cta-band--yellow" style="flex-shrink:0">+ Suggest a Creator</a>
+          <a href="/submit" class="btn btn-accent btn-pill btn-lg">+ Suggest a Creator</a>
         </div>
       </div>
     </div>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       <div class="discover-layout">
         <!-- Left sidebar: League/Club accordion -->
         <aside class="filter-sidebar" id="filterSidebar">
           <div class="league-accordion">
             <div class="league-acc-item">
               <div class="league-acc-header ${!leagueFilter && !teamFilter ? 'active' : ''}" onclick="applyFilter('league','')" role="button" tabindex="0">
-                <span style="font-size:.9rem">⚽</span> All Leagues
+                <span style="font-size:var(--fs-base)">⚽</span> All Leagues
                 <span class="acc-count">${creators.length}</span>
               </div>
             </div>
@@ -1681,9 +1681,9 @@ function renderDiscover() {
           <!-- Active filters + result count -->
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">
             <span class="discover-result-count">${filtered.length} creator${filtered.length !== 1 ? 's' : ''}</span>
-            ${leagueFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('league','')">${leagueChipImg(leagueFilter)} ${escHtml(leagueFilter)} &times;</span>` : ''}
-            ${teamFilter ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('team','')">${escHtml(teamFilter)} &times;</span>` : ''}
-            ${favOnly ? `<span class="chip active" style="font-size:.78rem;padding:4px 12px" onclick="applyFilter('favs','')">Favorites &times;</span>` : ''}
+            ${leagueFilter ? `<span class="chip active" style="font-size:var(--fs-sm);padding:4px 12px" onclick="applyFilter('league','')">${leagueChipImg(leagueFilter)} ${escHtml(leagueFilter)} &times;</span>` : ''}
+            ${teamFilter ? `<span class="chip active" style="font-size:var(--fs-sm);padding:4px 12px" onclick="applyFilter('team','')">${escHtml(teamFilter)} &times;</span>` : ''}
+            ${favOnly ? `<span class="chip active" style="font-size:var(--fs-sm);padding:4px 12px" onclick="applyFilter('favs','')">Favorites &times;</span>` : ''}
           </div>
 
           <div class="card-grid">
@@ -1729,7 +1729,7 @@ function toggleAccordion(el, leagueName) {
 async function renderProfile(slug) {
   const c = creators.find(cr => (cr.slug || slugify(cr.name)) === slug);
   if (!c) {
-    document.getElementById('app').innerHTML = '<div class="container" style="padding-top:60px"><div class="empty-state"><div class="es-title">Creator not found</div><a href="/discover" class="btn btn-primary" style="margin-top:12px">Browse creators</a></div></div>';
+    document.getElementById('app').innerHTML = '<div class="container section-message"><div class="empty-state"><div class="es-title">Creator not found</div><a href="/discover" class="btn btn-primary" style="margin-top:12px">Browse creators</a></div></div>';
     return;
   }
 
@@ -1755,14 +1755,14 @@ async function renderProfile(slug) {
             <div class="cp-hero-eyebrow">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.league ? '&middot; ' + escHtml(c.league) : ''}</div>
             <h1 class="cp-hero-name">
               ${escHtml(c.name)}
-              ${c.verified ? '<span class="badge badge-green" style="font-size:.7rem;vertical-align:middle">Verified</span>' : ''}
+              ${c.verified ? '<span class="badge badge-green" style="font-size:var(--fs-xs);vertical-align:middle">Verified</span>' : ''}
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>
             <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
             <div class="cp-hero-actions">
-              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-yellow cp-cta">▶ Watch on YouTube</a>` : ''}
-              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-ghost-white">📡 Live / Streams</a>` : ''}
-              <button class="btn btn-ghost-white${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
+              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-accent cp-cta">▶ Watch on YouTube</a>` : ''}
+              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-on-dark">📡 Live / Streams</a>` : ''}
+              <button class="btn btn-on-dark${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
               <button class="cp-report-link" onclick="openReportModal('${c.id}','${jsAttrStr(c.name)}')">Report issue</button>
               ${c.claimedBy && currentUser && c.claimedBy === currentUser.id
                 ? '<span class="cp-claimed-badge" title="You manage this channel">✓ You manage this channel</span>'
@@ -1856,7 +1856,7 @@ async function renderProfile(slug) {
               <div class="cta-band-title">Know a great ${escHtml(c.team)} creator?</div>
               <p class="cta-band-sub">Help us grow the database — submissions reviewed within 24h.</p>
             </div>
-            <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
+            <a href="/submit" class="btn btn-primary btn-pill btn-lg">+ Suggest a Creator</a>
           </div>
         </div>
       </div>
@@ -1865,8 +1865,8 @@ async function renderProfile(slug) {
       <aside class="cp-sidebar">
         ${c.subscriberCount ? `
         <div class="cp-sidebar-card">
-          <div class="cp-sidebar-title">Subscriber Growth <span style="font-size:.68rem;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">— last 30 days</span></div>
-          <div id="subSparkline" style="padding:12px 0 4px;text-align:center;color:var(--text-muted);font-size:.82rem">Loading…</div>
+          <div class="cp-sidebar-title">Subscriber Growth <span style="font-size:var(--fs-xs);color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">— last 30 days</span></div>
+          <div id="subSparkline" style="padding:12px 0 4px;text-align:center;color:var(--text-muted);font-size:var(--fs-sm)">Loading…</div>
         </div>` : ''}
 
         <div class="cp-sidebar-card">
@@ -1916,11 +1916,11 @@ async function renderProfile(slug) {
           const sign = isUp ? '+' : '−';
           sparkEl.innerHTML = `
             <div style="text-align:center;padding:10px 0 6px">
-              <div style="font-size:2.4rem;font-weight:800;color:${color};letter-spacing:-.03em;line-height:1">${sign}${formatNum(Math.abs(growth))}</div>
-              <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-top:6px">subscribers</div>
+              <div style="font-size:var(--fs-3xl);font-weight:800;color:${color};letter-spacing:-.03em;line-height:1">${sign}${formatNum(Math.abs(growth))}</div>
+              <div style="font-size:var(--fs-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-top:6px">subscribers</div>
             </div>`;
         } else {
-          sparkEl.innerHTML = `<div style="padding:12px 0;text-align:center;color:var(--text-muted);font-size:.82rem">Not enough data yet</div>`;
+          sparkEl.innerHTML = `<div style="padding:12px 0;text-align:center;color:var(--text-muted);font-size:var(--fs-sm)">Not enough data yet</div>`;
         }
       }
     });
@@ -2106,14 +2106,14 @@ function renderClubPage(club) {
             </div>
           </div>
           <div class="page-hero-actions">
-            <a href="/clubs/${encodeURIComponent(club)}/videos" class="btn btn-ghost-white btn-sm">📺 Videos</a>
-            <a href="/submit" class="btn-cta-band btn-cta-band--yellow" style="padding:8px 18px;font-size:.82rem">+ Suggest</a>
+            <a href="/clubs/${encodeURIComponent(club)}/videos" class="btn btn-on-dark btn-sm">📺 Videos</a>
+            <a href="/submit" class="btn btn-accent btn-pill btn-sm">+ Suggest</a>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title">${crestImg(club, 'crest-sm')} Creators</div>
@@ -2136,7 +2136,7 @@ function renderClubPage(club) {
             <div class="cta-band-title">Know a ${escHtml(club)} YouTuber we're missing?</div>
             <p class="cta-band-sub">Help us grow the database — submissions reviewed within 24h.</p>
           </div>
-          <a href="/submit" class="btn-cta-band">+ Suggest a Creator</a>
+          <a href="/submit" class="btn btn-primary btn-pill btn-lg">+ Suggest a Creator</a>
         </div>
       </div>
     </div>
@@ -2177,11 +2177,11 @@ function renderClubVideos(club) {
       </div>
     </div>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title">${crestImg(club, 'crest-sm')} Recent Uploads</div>
-          <span style="font-size:.82rem;color:var(--text-muted)">${videos.length} video${videos.length !== 1 ? 's' : ''}</span>
+          <span style="font-size:var(--fs-sm);color:var(--text-muted)">${videos.length} video${videos.length !== 1 ? 's' : ''}</span>
         </div>
         <div class="sc-body">
           ${videos.length ? `<div class="team-video-grid">
@@ -2386,12 +2386,12 @@ async function renderRankings() {
       </div>
     </div>` : ''}
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       ${ranked.length ? `
       <div class="sc-card" style="margin-bottom:0">
         <div class="sc-head">
           <div class="sc-head-title">&#127942; ${teamFilter ? escHtml(teamFilter) : (leagueFilter ? escHtml(leagueFilter) : 'All Leagues')}</div>
-          <div style="font-size:.82rem;color:var(--text-dim)">${ranked.length} creator${ranked.length !== 1 ? 's' : ''} &middot; ${formatNum(ranked.reduce((a, c) => a + (c.subscriberCount || 0), 0))} combined subscribers</div>
+          <div style="font-size:var(--fs-sm);color:var(--text-dim)">${ranked.length} creator${ranked.length !== 1 ? 's' : ''} &middot; ${formatNum(ranked.reduce((a, c) => a + (c.subscriberCount || 0), 0))} combined subscribers</div>
         </div>
         <div class="sc-body--tight">
       <div class="rk-table-outer">
@@ -2451,7 +2451,7 @@ async function renderVoterLeaderboard() {
         </div>
       </div>
     </div>
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       <div id="voterLbBody"><div class="empty-state" style="padding:40px 0"><div style="color:var(--text-dim)">Loading leaderboard…</div></div></div>
     </div>${renderFooter()}`;
 
@@ -2468,7 +2468,7 @@ async function renderVoterLeaderboard() {
     <div class="sc-card" style="margin-bottom:0">
       <div class="sc-head">
         <div class="sc-head-title">&#128499; Top Voters</div>
-        <div style="font-size:.82rem;color:var(--text-dim)">${voters.length} voter${voters.length !== 1 ? 's' : ''}</div>
+        <div style="font-size:var(--fs-sm);color:var(--text-dim)">${voters.length} voter${voters.length !== 1 ? 's' : ''}</div>
       </div>
       <div class="sc-body--tight">
         <div class="rankings-card" style="border:none;border-radius:0;box-shadow:none">
@@ -2476,7 +2476,7 @@ async function renderVoterLeaderboard() {
             const rankClass = i < 3 ? ' rk-row--top rk-row--top' + (i + 1) : '';
             return `<div class="rk-row${rankClass}" style="cursor:default">
               <div class="rk-rank">${i + 1}</div>
-              <span class="av-wrap"><div class="rk-avatar avatar-fallback" style="width:40px;height:40px;font-size:.8rem">${(v.display_name || '?')[0].toUpperCase()}</div></span>
+              <span class="av-wrap"><div class="rk-avatar avatar-fallback" style="width:40px;height:40px;font-size:var(--fs-sm)">${(v.display_name || '?')[0].toUpperCase()}</div></span>
               <div class="rk-info">
                 <div class="rk-name">${escHtml(v.display_name)}</div>
               </div>
@@ -2494,7 +2494,7 @@ async function renderVoterLeaderboard() {
 // ── Render: Generator ────────────────────────────────────────────────────
 async function renderGenerator() {
   if (typeof Gen === 'undefined') {
-    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Generator module not loaded.</p></div>' + renderFooter();
+    document.getElementById('app').innerHTML = '<div class="container section-message"><p>Generator module not loaded.</p></div>' + renderFooter();
     return;
   }
   if (!creators.length) await loadCreators();
@@ -2534,7 +2534,7 @@ function renderSubmit() {
       </div>
     </div>
 
-    <div class="container" style="max-width:560px;padding-top:28px;padding-bottom:60px">
+    <div class="container container-narrow section">
       <div id="submitForm">
         <div class="sc-card" style="margin-bottom:0">
           <div class="sc-head"><div class="sc-head-title">Creator details</div></div>
@@ -2543,7 +2543,7 @@ function renderSubmit() {
             <label class="field-label">YouTube Channel URL</label>
             <input type="text" id="sub_channel" class="admin-form-input" placeholder="e.g. https://www.youtube.com/@AFTVmedia" oninput="checkDuplicateChannel(this.value)">
             <div id="channelDupeWarn" class="dupe-warn"></div>
-            <div style="font-size:.72rem;color:var(--text-muted);margin-top:4px">We'll fetch the channel name automatically.</div>
+            <div style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:4px">We'll fetch the channel name automatically.</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <div>
@@ -2557,8 +2557,8 @@ function renderSubmit() {
               <select id="sub_team" class="admin-form-select">${teamSelect()}</select>
             </div>
           </div>
-          <button class="btn-generate" onclick="submitCreator()" style="margin-top:8px">Submit for Review</button>
-          <div id="submitMsg" style="text-align:center;margin-top:12px;font-size:.85rem"></div>
+          <button class="btn btn-primary btn-block btn-lg" onclick="submitCreator()" style="margin-top:8px">Submit for Review</button>
+          <div id="submitMsg" style="text-align:center;margin-top:12px;font-size:var(--fs-base)"></div>
           </div>
         </div>
       </div>
@@ -2662,7 +2662,7 @@ async function submitCreator() {
     body: JSON.stringify({ record: submission }),
   }).catch(function() { /* non-critical */ });
 
-  document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
+  document.getElementById('submitForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:var(--fs-2xl);margin-bottom:12px">&#10003;</div><h2 style="font-size:var(--fs-lg);font-weight:700;margin-bottom:6px">Thank you!</h2><p style="color:var(--text-dim);font-size:var(--fs-base);margin-bottom:20px">Your submission is under review. If approved, the creator will appear on the site.</p><a href="/discover" class="btn btn-primary">Browse Creators</a></div>';
 }
 
 // ── Render: Contact Us ───────────────────────────────────────────────────
@@ -2680,7 +2680,7 @@ function renderContact() {
       </div>
     </div>
 
-    <div class="container" style="max-width:560px;padding-top:28px;padding-bottom:60px">
+    <div class="container container-narrow section">
       <div id="contactForm">
         <div class="sc-card" style="margin-bottom:0">
           <div class="sc-head"><div class="sc-head-title">Send a message</div></div>
@@ -2701,9 +2701,9 @@ function renderContact() {
               <label class="field-label">Message</label>
               <textarea id="ct_message" class="admin-form-input" rows="6" placeholder="Tell us more..." style="resize:vertical"></textarea>
             </div>
-            <button class="btn-generate" onclick="submitContact()">Send Message</button>
-            <div style="text-align:center;margin-top:10px;font-size:.76rem;color:var(--text-muted)">We'll only use this to reply to you — see our <a href="/privacy">Privacy Policy</a>.</div>
-            <div id="contactMsg" style="text-align:center;margin-top:12px;font-size:.85rem"></div>
+            <button class="btn btn-primary btn-block btn-lg" onclick="submitContact()">Send Message</button>
+            <div style="text-align:center;margin-top:10px;font-size:var(--fs-xs);color:var(--text-muted)">We'll only use this to reply to you — see our <a href="/privacy">Privacy Policy</a>.</div>
+            <div id="contactMsg" style="text-align:center;margin-top:12px;font-size:var(--fs-base)"></div>
           </div>
         </div>
       </div>
@@ -2754,7 +2754,7 @@ async function submitContact() {
     return err('Send failed: ' + (e.message || 'unknown error'));
   }
 
-  document.getElementById('contactForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:2rem;margin-bottom:12px">&#10003;</div><h2 style="font-size:1.2rem;font-weight:700;margin-bottom:6px">Message sent!</h2><p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">Thanks for reaching out — we\'ll get back to you soon.</p><a href="/" class="btn btn-primary">Back to Home</a></div>';
+  document.getElementById('contactForm').innerHTML = '<div style="text-align:center;padding:40px 0"><div style="font-size:var(--fs-2xl);margin-bottom:12px">&#10003;</div><h2 style="font-size:var(--fs-lg);font-weight:700;margin-bottom:6px">Message sent!</h2><p style="color:var(--text-dim);font-size:var(--fs-base);margin-bottom:20px">Thanks for reaching out — we\'ll get back to you soon.</p><a href="/" class="btn btn-primary">Back to Home</a></div>';
 }
 
 // ── Render: Legal pages (Privacy / Cookies / Terms) ────────────────────────
@@ -2777,7 +2777,7 @@ function legalPageShell(eyebrow, title, bodyHtml) {
         </div>
       </div>
     </div>
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       <div class="legal-content">${bodyHtml}</div>
     </div>
     ${renderFooter()}
@@ -2940,7 +2940,7 @@ async function renderAccount() {
         </div>
       </div>
     </div>
-    <div class="container" style="max-width:720px;padding-top:28px;padding-bottom:60px">
+    <div class="container container-mid section">
       <div id="accountBody"><div class="empty-state" style="padding:40px 0"><div style="color:var(--text-dim)">Loading…</div></div></div>
     </div>${renderFooter()}`;
 
@@ -2990,9 +2990,9 @@ async function renderAccount() {
               <label for="acctAvatarFile" class="btn btn-secondary btn-sm" style="cursor:pointer">Upload new photo</label>
               <input type="file" id="acctAvatarFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
               ${avatarPreview ? '<button class="btn btn-ghost btn-sm" onclick="removeAvatar()" type="button">Remove</button>' : ''}
-              <span id="acctAvatarMsg" style="font-size:.78rem;color:var(--text-muted)"></span>
+              <span id="acctAvatarMsg" style="font-size:var(--fs-sm);color:var(--text-muted)"></span>
             </div>
-            <div style="font-size:.72rem;color:var(--text-muted)">JPG, PNG, WebP or GIF — up to 2MB.</div>
+            <div style="font-size:var(--fs-xs);color:var(--text-muted)">JPG, PNG, WebP or GIF — up to 2MB.</div>
           </div>
         </div>
       </div>
@@ -3080,19 +3080,19 @@ async function renderAccount() {
     <div class="sc-card" style="margin-bottom:16px">
       <div class="sc-head"><div class="sc-head-title">Privacy &amp; Data</div></div>
       <div class="sc-body">
-        <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:14px">Download a copy of your data, or permanently delete your account. See our <a href="/privacy">Privacy Policy</a> for details.</p>
+        <p style="font-size:var(--fs-base);color:var(--text-dim);margin-bottom:14px">Download a copy of your data, or permanently delete your account. See our <a href="/privacy">Privacy Policy</a> for details.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="exportMyData()">Export my data</button>
           <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="confirmDeleteAccount()">Delete my account</button>
         </div>
-        <div id="acctPrivacyMsg" style="font-size:.82rem;margin-top:10px"></div>
+        <div id="acctPrivacyMsg" style="font-size:var(--fs-sm);margin-top:10px"></div>
       </div>
     </div>
 
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="saveAccount()">Save changes</button>
       <button class="btn btn-ghost" onclick="signOut()">Sign out</button>
-      <span id="acctSaveMsg" style="font-size:.85rem"></span>
+      <span id="acctSaveMsg" style="font-size:var(--fs-base)"></span>
     </div>
   `;
 
@@ -3288,14 +3288,14 @@ function loadAdminAssets() {
 // ── Render: Admin ────────────────────────────────────────────────────────
 async function renderAdmin() {
   if (!currentUser) return renderAuthRequired('open the admin panel');
-  document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><div style="color:var(--text-dim);font-size:.9rem">Loading admin…</div></div>';
+  document.getElementById('app').innerHTML = '<div class="container section-message"><div style="color:var(--text-dim);font-size:var(--fs-base)">Loading admin…</div></div>';
   try {
     await loadAdminAssets();
   } catch (e) {
-    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module failed to load.</p></div>';
+    document.getElementById('app').innerHTML = '<div class="container section-message"><p>Admin module failed to load.</p></div>';
     return;
   }
-  if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><p>Admin module not loaded.</p></div>'; return; }
+  if (typeof Admin === 'undefined') { document.getElementById('app').innerHTML = '<div class="container section-message"><p>Admin module not loaded.</p></div>'; return; }
 
   // Use direct PostgREST fetch instead of supabase-js — the latter has
   // been observed hanging on production for certain reads.
@@ -3312,7 +3312,7 @@ async function renderAdmin() {
   } catch { /* fall through — renders Access Denied */ }
 
   if (!isAdmin) {
-    document.getElementById('app').innerHTML = '<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128274;</div><div class="es-title">Access Denied</div><p style="color:var(--text-dim)">You do not have admin privileges.</p><a href="/" class="btn btn-primary" style="margin-top:12px">Back to Home</a></div></div>';
+    document.getElementById('app').innerHTML = '<div class="container section-message"><div class="empty-state"><div class="es-icon">&#128274;</div><div class="es-title">Access Denied</div><p style="color:var(--text-dim)">You do not have admin privileges.</p><a href="/" class="btn btn-primary" style="margin-top:12px">Back to Home</a></div></div>';
     return;
   }
   // Render admin chrome, then hand off to the Admin module for data loading.
@@ -3320,7 +3320,7 @@ async function renderAdmin() {
   try {
     await Admin.init();
   } catch (e) {
-    document.getElementById('app').innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#9888;</div><div class="es-title">Admin failed to load</div><p style="color:var(--text-dim);margin-bottom:16px">${escHtml(e.message || String(e))}</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div></div>`;
+    document.getElementById('app').innerHTML = `<div class="container section-message"><div class="empty-state"><div class="es-icon">&#9888;</div><div class="es-title">Admin failed to load</div><p style="color:var(--text-dim);margin-bottom:16px">${escHtml(e.message || String(e))}</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div></div>`;
   }
 }
 
@@ -3455,9 +3455,9 @@ function openReportModal(creatorId, creatorName) {
       <option value="other">Something else</option>
     </select>
     <label>Details (optional)</label>
-    <textarea id="reportDetails" placeholder="Anything that would help us verify..." style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical;margin-bottom:14px"></textarea>
+    <textarea id="reportDetails" placeholder="Anything that would help us verify..." style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:var(--fs-base);resize:vertical;margin-bottom:14px"></textarea>
     <button class="btn btn-primary" onclick="submitReport('${creatorId}')">Submit report</button>
-    <div style="font-size:.74rem;color:var(--text-muted);margin-top:10px">See our <a href="/privacy">Privacy Policy</a> for how report data is used.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:10px">See our <a href="/privacy">Privacy Policy</a> for how report data is used.</div>
     <div class="auth-msg" id="reportMsg"></div>`;
   overlay.classList.add('open');
   activateModalA11y(overlay, modal, closeModal);
@@ -3508,7 +3508,7 @@ function openClaimModal(creatorId, creatorName) {
     <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
     <h2>Claim this channel</h2>
     <p class="modal-sub">Verify you run <strong>${escHtml(creatorName)}</strong> to manage this profile.</p>
-    <ol style="font-size:.85rem;color:var(--text-dim);line-height:1.7;padding-left:20px;margin-bottom:14px">
+    <ol style="font-size:var(--fs-base);color:var(--text-dim);line-height:1.7;padding-left:20px;margin-bottom:14px">
       <li>Open your channel's <strong>About</strong> section on YouTube.</li>
       <li>Add this code anywhere in the description: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-weight:700;color:var(--text)">${code}</code></li>
       <li>Save, then click Verify below.</li>
@@ -3709,12 +3709,12 @@ function renderStreamwallPicker() {
       </div>
     </div>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       ${liveCreators.length ? `
       <div class="sc-card" style="margin-bottom:0">
         <div class="sc-head">
           <div class="sc-head-title"><span class="live-dot-sm"></span> Live Now <span class="live-count">${liveCreators.length}</span></div>
-          <div id="swPickCount" style="font-size:.82rem;color:var(--text-dim)">0 / ${SW_PICKER_MAX} selected</div>
+          <div id="swPickCount" style="font-size:var(--fs-sm);color:var(--text-dim)">0 / ${SW_PICKER_MAX} selected</div>
         </div>
         <div class="sc-body">
           <div class="sw-pick-filter-row" id="swPickLeagueRow">
@@ -4206,7 +4206,7 @@ function renderBecomeCreator() {
       </div>
     </div>
 
-    <div class="container" style="padding-top:28px;padding-bottom:60px">
+    <div class="container section">
       <div class="sc-card" style="margin-bottom:24px">
         <div class="sc-body" style="padding:0;overflow:hidden">
           <div style="position:relative;aspect-ratio:16/9;width:100%;background:#000">
@@ -4377,7 +4377,7 @@ function renderBecomeCreator() {
         <div class="tutorial-cta">
           <div class="tutorial-cta-title">Ready to start your football channel?</div>
           <p class="tutorial-cta-sub">Submit your channel to FanReactionsFC and get discovered by football fans worldwide.</p>
-          <a href="/submit" class="btn-yellow" onclick="event.preventDefault();navigate('/submit')">+ Submit Your Channel</a>
+          <a href="/submit" class="btn btn-accent btn-pill btn-lg" onclick="event.preventDefault();navigate('/submit')">+ Submit Your Channel</a>
         </div>
       </div>
     </div>
@@ -4432,7 +4432,7 @@ function renderFooter() {
           <a href="#" onclick="event.preventDefault();openConsentSettings()">Cookie Preferences</a>
           <a href="#" onclick="event.preventDefault();doNotSellOptOut()">Do Not Sell or Share My Info</a>
         </div>
-        <div style="text-align:center;margin-top:12px;font-size:.68rem;color:var(--text-muted)">Club crests and trademarks are the property of their respective owners and are used here for identification purposes only.</div>
+        <div style="text-align:center;margin-top:12px;font-size:var(--fs-xs);color:var(--text-muted)">Club crests and trademarks are the property of their respective owners and are used here for identification purposes only.</div>
       </div>
     </footer>`;
 }

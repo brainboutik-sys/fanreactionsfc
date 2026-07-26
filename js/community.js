@@ -275,7 +275,7 @@ function openFeatureSubmitModal() {
       ${FR_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
     </select>
     <label>Description</label>
-    <textarea id="frDesc" placeholder="Explain what you'd like and why it matters..." style="width:100%;min-height:120px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical;margin-bottom:14px"></textarea>
+    <textarea id="frDesc" placeholder="Explain what you'd like and why it matters..." style="width:100%;min-height:120px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:var(--fs-base);resize:vertical;margin-bottom:14px"></textarea>
     <button class="btn btn-primary" style="width:100%" onclick="submitFeatureRequest()">Submit Idea</button>
     <div class="auth-msg" id="frMsg"></div>`;
   overlay.classList.add('open');
@@ -317,7 +317,7 @@ async function renderFeatureDetail(featureId) {
     </div>`;
   const { data, error } = await sb.from('frfc_feature_requests').select('*').eq('id', featureId).limit(1);
   if (error || !data || !data.length) {
-    app.innerHTML = `<div class="container" style="padding:60px 20px;text-align:center"><div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">Feature request not found</div><a href="/community/features" class="btn btn-primary" style="margin-top:12px">Back to Features</a></div></div>${renderFooter()}`;
+    app.innerHTML = `<div class="container section-message"><div class="empty-state"><div class="es-icon">&#128269;</div><div class="es-title">Feature request not found</div><a href="/community/features" class="btn btn-primary" style="margin-top:12px">Back to Features</a></div></div>${renderFooter()}`;
     return;
   }
   const r = data[0];
@@ -389,10 +389,10 @@ async function renderFeatureDetail(featureId) {
           <div class="fr-comments-section" id="frComments">
             <h3>Discussion</h3>
             ${r.is_locked ? `<p class="fr-locked-notice">${FR_ICONS.lockClosed} This discussion is locked.</p>` : ''}
-            <div id="frCommentList"><div style="color:var(--text-dim);font-size:.85rem">Loading comments...</div></div>
+            <div id="frCommentList"><div style="color:var(--text-dim);font-size:var(--fs-base)">Loading comments...</div></div>
             ${!r.is_locked ? `
               <div class="fr-comment-form" id="frCommentForm">
-                <textarea id="frCommentBody" placeholder="${currentUser ? 'Add a comment...' : 'Sign in to comment'}" ${currentUser ? '' : 'disabled'} style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.88rem;resize:vertical"></textarea>
+                <textarea id="frCommentBody" placeholder="${currentUser ? 'Add a comment...' : 'Sign in to comment'}" ${currentUser ? '' : 'disabled'} style="width:100%;min-height:80px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:var(--fs-base);resize:vertical"></textarea>
                 <button class="btn btn-primary" style="margin-top:8px" onclick="postFeatureComment('${r.id}')" ${currentUser ? '' : 'disabled'}>Post Comment</button>
                 <span class="auth-msg" id="frCommentMsg"></span>
               </div>` : ''}
@@ -418,7 +418,7 @@ function renderFeatureAdminPanel(r) {
       </div>
       <div class="fr-admin-row">
         <label>Official Response</label>
-        <textarea id="frAdminResponse" style="width:100%;min-height:60px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.85rem;resize:vertical">${r.admin_response ? escHtml(r.admin_response) : ''}</textarea>
+        <textarea id="frAdminResponse" style="width:100%;min-height:60px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:var(--fs-base);resize:vertical">${r.admin_response ? escHtml(r.admin_response) : ''}</textarea>
         <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="adminPostOfficialResponse('${r.id}')">Save Response</button>
       </div>
       <div class="fr-admin-row fr-admin-toggles">
@@ -497,7 +497,7 @@ async function loadFeatureComments(featureId) {
   comments.filter(c => c.parent_id).forEach(c => { (replies[c.parent_id] = replies[c.parent_id] || []).push(c); });
   const list = document.getElementById('frCommentList');
   if (!list) return;
-  if (!comments.length) { list.innerHTML = '<p style="color:var(--text-dim);font-size:.85rem">No comments yet. Be the first to share your thoughts!</p>'; return; }
+  if (!comments.length) { list.innerHTML = '<p style="color:var(--text-dim);font-size:var(--fs-base)">No comments yet. Be the first to share your thoughts!</p>'; return; }
   function renderComment(c, isReply = false) {
     const liked = userLikes.has(c.id);
     return `
@@ -526,7 +526,7 @@ function showReplyForm(parentId, featureId) {
   if (container.innerHTML.trim()) { container.innerHTML = ''; return; }
   container.innerHTML = `
     <div class="fr-reply-form">
-      <textarea id="replyBody_${parentId}" placeholder="Write a reply..." style="width:100%;min-height:50px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:.84rem;resize:vertical"></textarea>
+      <textarea id="replyBody_${parentId}" placeholder="Write a reply..." style="width:100%;min-height:50px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);font-family:inherit;font-size:var(--fs-base);resize:vertical"></textarea>
       <button class="btn btn-primary btn-sm" style="margin-top:4px" onclick="postFeatureComment('${featureId}','${parentId}')">Reply</button>
     </div>`;
 }

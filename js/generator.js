@@ -15,7 +15,7 @@ const EMOTIONS = [
 
 const FIXED_IG = 'https://www.instagram.com/fanreactionsfc/';
 const FIXED_X = 'https://x.com/FanReactionsFC';
-const PROMO_BLOCK = '\u{1F455} Grab your kit with an exclusive 8% discount \u2014 use code FRFC at checkout: https://www.okayjersey.com\n\u{1F3A8} Get your custom LINEUP BUILDER stream layout here: https://www.stream-builder.co.uk/?referral=FanReactionsFC';
+const PROMO_BLOCK = '\u{1F455} Grab your kit with an exclusive 8% discount \u2014 use code FRFC at checkout: https://www.okayjersey.com\n\u{1F3A8} Get your custom LINEUP BUILDER stream layout here: https://www.stream-builder.co.uk/?referral=FanReactionsFC\n\u26bd Discover more football fan reaction creators, live streams and rankings at https://www.fanreactionsfc.com';
 
 // ── State ────────────────────────────────────────────────────────────────────
 var videoType = 'fan', counter = 0, homeGoals = 0, awayGoals = 0;
@@ -93,6 +93,7 @@ function renderHTML() {
             <option>Carabao Cup</option>
             <option>Conference League</option>
             <option>FIFA World Cup</option>
+            <option>Friendlies</option>
           </select>
         </div>
       </div>

@@ -8,6 +8,8 @@
   included_files = ["index.html"]
 [functions."club-og"]
   included_files = ["index.html"]
+[functions."news-article"]
+  included_files = ["index.html"]
 
 # ── Scheduled functions ──────────────────────────────────────────────────
 # Baseline live-check: every 30 minutes — safety net for anything the
@@ -54,6 +56,15 @@ schedule = "0 5 * * *"
 [[redirects]]
   from = "/clubs/*"
   to = "/.netlify/functions/club-og"
+  status = 200
+
+# Server-rendered news articles — real body content + JSON-LD for crawlers,
+# not just meta tags (see news-article.js for why this goes further than
+# creator-og.js/club-og.js). /news itself (the listing) falls through
+# unmodified since the function only acts on /news/:slug.
+[[redirects]]
+  from = "/news/*"
+  to = "/.netlify/functions/news-article"
   status = 200
 
 # Keep internal dev docs off the production domain (they still live in the

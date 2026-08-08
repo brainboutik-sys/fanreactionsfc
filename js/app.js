@@ -243,7 +243,7 @@ function renderAuthRequired(what) {
 }
 
 function updateNavActive(path) {
-  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navBecome: '/become-a-creator', navCommunity: '/community' };
+  const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navNews: '/news', navBecome: '/become-a-creator', navCommunity: '/community' };
   Object.entries(links).forEach(([id, prefix]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -2213,9 +2213,36 @@ function renderClubPage(club) {
           <a href="/submit" class="btn btn-primary btn-pill btn-lg">+ Suggest a Creator</a>
         </div>
       </div>
+      <div id="clubRelatedNews"></div>
     </div>
     ${renderFooter()}
   `;
+
+  loadClubRelatedNews(club);
+}
+
+// Fetched after the main club page renders so a slow/failed news query never
+// delays the creator grid — the whole point of this section is a bonus
+// internal link, not core content.
+async function loadClubRelatedNews(club) {
+  const el = document.getElementById('clubRelatedNews');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('frfc_articles')
+      .select('slug,title,summary,cover_image_url,tags,published_at')
+      .eq('status', 'published')
+      .eq('related_team', club)
+      .order('published_at', { ascending: false })
+      .limit(3);
+    if (error || !data || !data.length) return;
+    // Bail if the user has already navigated elsewhere by the time this resolves.
+    if (currentRoute.page !== 'club' || currentRoute.club !== club) return;
+    el.innerHTML = `
+      <div class="sc-card" style="margin-top:20px">
+        <div class="sc-head"><div class="sc-head-title">${crestImg(club, 'crest-sm')} ${escHtml(club)} in the News</div></div>
+        <div class="sc-body"><div class="news-grid">${data.map(newsCardHTML).join('')}</div></div>
+      </div>`;
+  } catch (e) { /* non-critical — silently skip */ }
 }
 
 // ── Render: Club Latest Videos ────────────────────────────────────────────
@@ -4910,6 +4937,7 @@ function renderFooter() {
             <h4>Browse</h4>
             <a href="/discover">All Creators</a>
             <a href="/rankings">Rankings</a>
+            <a href="/news">News</a>
             ${LEAGUES.slice(0, 3).map(l => `<a href="/discover?league=${encodeURIComponent(l.name)}" style="display:flex;align-items:center;gap:6px">${leagueChipImg(l.name)} ${l.name}</a>`).join('')}
           </div>
           <div class="footer-col">

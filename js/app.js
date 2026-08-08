@@ -651,7 +651,8 @@ async function toggleFavorite(id) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
+// slugify() lives in js/lib/slugify.js (loaded before this script — see
+// index.html) so it can be unit tested with a plain require(), no DOM.
 function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 // Safe to embed as a single-quoted JS string literal inside a double-quoted
 // HTML onclick="..." attribute — e.g. onclick="fn('${jsAttrStr(name)}')".

@@ -59,68 +59,11 @@ exports.handler = async (event) => {
     if (!creatorsRes.ok || !historyRes.ok) throw new Error('Supabase read failed');
 
     const creators = await creatorsRes.json();
-    const creatorById = new Map(creators.map(c => [c.id, c]));
     const history = await historyRes.json();
     const videoMetrics = videoRes.ok ? await videoRes.json() : [];
 
-    // Per creator: earliest snapshot at/after periodStart if one exists,
-    // else the latest snapshot before periodStart (best available baseline);
-    // and the single latest snapshot overall as "current".
-    const byCreator = new Map();
-    for (const row of history) {
-      if (!byCreator.has(row.creator_id)) byCreator.set(row.creator_id, []);
-      byCreator.get(row.creator_id).push(row);
-    }
-
-    const growthRows = [];
-    for (const [creatorId, rows] of byCreator) {
-      const inWindow = rows.filter(r => new Date(r.recorded_at) >= periodStart);
-      const before = rows.filter(r => new Date(r.recorded_at) < periodStart);
-      const baseline = inWindow.length ? inWindow[0] : (before.length ? before[before.length - 1] : null);
-      const current = rows[rows.length - 1];
-      if (!baseline || !current || baseline === current) continue;
-      const delta = current.subscriber_count - baseline.subscriber_count;
-      growthRows.push({
-        creatorId, baseline: baseline.subscriber_count, current: current.subscriber_count,
-        baselineAt: baseline.recorded_at, currentAt: current.recorded_at, delta,
-        pct: baseline.subscriber_count > 0 ? (delta / baseline.subscriber_count) * 100 : null,
-      });
-    }
-
-    const fastestGrowthPct = growthRows
-      .filter(r => r.baseline >= MIN_BASELINE_FOR_PCT_GROWTH && r.pct !== null)
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, TOP_N)
-      .map(r => rankEntry(creatorById, r, 'pct'));
-
-    const largestAbsoluteGain = growthRows
-      .sort((a, b) => b.delta - a.delta)
-      .slice(0, TOP_N)
-      .map(r => rankEntry(creatorById, r, 'delta'));
-
-    // Most active: distinct videos first observed within the window, per
-    // creator. Sparse-to-empty until frfc_video_metrics has accumulated a
-    // few weeks of runs — that's a real "insufficient data" state, not a
-    // bug, and is disclosed as such rather than silently omitted.
-    const firstSeenByVideo = new Map();
-    for (const row of videoMetrics) {
-      if (!firstSeenByVideo.has(row.video_id)) firstSeenByVideo.set(row.video_id, row);
-    }
-    const activeCounts = new Map();
-    for (const row of firstSeenByVideo.values()) {
-      activeCounts.set(row.creator_id, (activeCounts.get(row.creator_id) || 0) + 1);
-    }
-    const mostActive = [...activeCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, TOP_N)
-      .map(([creatorId, count]) => {
-        const c = creatorById.get(creatorId);
-        return { creatorId, name: c ? c.name : 'Unknown', team: c ? c.team : null, slug: c ? c.slug : null, newVideos: count };
-      });
-
-    const dataQualityNotes = [];
-    if (!fastestGrowthPct.length) dataQualityNotes.push('No creators met the minimum subscriber baseline for a percentage-growth ranking this period.');
-    if (!mostActive.length) dataQualityNotes.push('Video-level activity history is still accumulating (frfc_video_metrics) — this section will populate after a few more sync runs.');
+    const { fastestGrowthPct, largestAbsoluteGain, mostActive, dataQualityNotes, growthRowsCount } =
+      computeWeeklyRankings({ creators, history, videoMetrics, periodStart, periodEnd });
 
     const fmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     const workingTitle = `Weekly Creator Rankings — ${fmt(periodStart)} to ${fmt(periodEnd)}`;
@@ -145,7 +88,7 @@ exports.handler = async (event) => {
         working_title: workingTitle,
         score: 100,
         score_components: { type: 'deterministic', note: 'Weekly rankings are computed from stored data, not heuristically scored.' },
-        explanation: `Computed from ${growthRows.length} creators with subscriber history in the ${periodDays}-day window.`,
+        explanation: `Computed from ${growthRowsCount} creators with subscriber history in the ${periodDays}-day window.`,
         creator_ids: [...new Set([...fastestGrowthPct, ...largestAbsoluteGain].map(r => r.creatorId))],
         payload,
       }),
@@ -174,7 +117,7 @@ exports.handler = async (event) => {
       });
     }
 
-    await finishJobRun(supabaseUrl, sbHeaders, jobRunId, { status: 'success', items_processed: growthRows.length, items_failed: 0 });
+    await finishJobRun(supabaseUrl, sbHeaders, jobRunId, { status: 'success', items_processed: growthRowsCount, items_failed: 0 });
     return res(200, { ok: true, candidateId: candidate.id, workingTitle, dataQualityNotes });
   } catch (e) {
     await finishJobRun(supabaseUrl, sbHeaders, jobRunId, { status: 'failed', items_processed: 0, items_failed: 1, error_summary: { message: e.message } });
@@ -182,13 +125,90 @@ exports.handler = async (event) => {
   }
 };
 
-function rankEntry(creatorById, r, sortField) {
+function rankEntry(creatorById, r) {
   const c = creatorById.get(r.creatorId);
   return {
     creatorId: r.creatorId, name: c ? c.name : 'Unknown', team: c ? c.team : null, slug: c ? c.slug : null,
     baseline: r.baseline, current: r.current, delta: r.delta, pct: r.pct !== null ? Number(r.pct.toFixed(1)) : null,
     baselineAt: r.baselineAt, currentAt: r.currentAt,
   };
+}
+
+// Pure — no I/O — so it can be unit tested directly against synthetic
+// data instead of only ever being exercised end-to-end against Supabase.
+function computeWeeklyRankings({ creators, history, videoMetrics, periodStart, periodEnd }) {
+  const creatorById = new Map(creators.map(c => [c.id, c]));
+
+  // Per creator: latest snapshot strictly before periodStart as the
+  // "start of period" baseline — falling back to the earliest in-window
+  // snapshot only when there's no earlier data at all (a brand-new
+  // creator whose whole history sits inside the lookback). Current is
+  // always the single latest snapshot overall. Preferring a before-window
+  // baseline (rather than the earliest in-window point) matters: a
+  // creator synced only once during the window would otherwise get the
+  // same row picked for both baseline and current, and be silently
+  // skipped as "no change" even though real history exists to compare
+  // against.
+  const byCreator = new Map();
+  for (const row of history) {
+    if (!byCreator.has(row.creator_id)) byCreator.set(row.creator_id, []);
+    byCreator.get(row.creator_id).push(row);
+  }
+
+  const growthRows = [];
+  for (const [creatorId, rows] of byCreator) {
+    const inWindow = rows.filter(r => new Date(r.recorded_at) >= periodStart);
+    const before = rows.filter(r => new Date(r.recorded_at) < periodStart);
+    const baseline = before.length ? before[before.length - 1] : (inWindow.length ? inWindow[0] : null);
+    const current = rows[rows.length - 1];
+    if (!baseline || !current || baseline === current) continue;
+    const delta = current.subscriber_count - baseline.subscriber_count;
+    growthRows.push({
+      creatorId, baseline: baseline.subscriber_count, current: current.subscriber_count,
+      baselineAt: baseline.recorded_at, currentAt: current.recorded_at, delta,
+      pct: baseline.subscriber_count > 0 ? (delta / baseline.subscriber_count) * 100 : null,
+    });
+  }
+
+  const fastestGrowthPct = growthRows
+    .filter(r => r.baseline >= MIN_BASELINE_FOR_PCT_GROWTH && r.pct !== null)
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, TOP_N)
+    .map(r => rankEntry(creatorById, r));
+
+  const largestAbsoluteGain = growthRows
+    .slice()
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, TOP_N)
+    .map(r => rankEntry(creatorById, r));
+
+  // Most active: distinct videos first observed within the window, per
+  // creator. Sparse-to-empty until frfc_video_metrics has accumulated a
+  // few weeks of runs — that's a real "insufficient data" state, not a
+  // bug, and is disclosed as such rather than silently omitted. Dedup by
+  // video_id first — repeated sync runs snapshot the same video's stats
+  // on every pass, and this must not inflate the "new videos" count.
+  const firstSeenByVideo = new Map();
+  for (const row of videoMetrics) {
+    if (!firstSeenByVideo.has(row.video_id)) firstSeenByVideo.set(row.video_id, row);
+  }
+  const activeCounts = new Map();
+  for (const row of firstSeenByVideo.values()) {
+    activeCounts.set(row.creator_id, (activeCounts.get(row.creator_id) || 0) + 1);
+  }
+  const mostActive = [...activeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TOP_N)
+    .map(([creatorId, count]) => {
+      const c = creatorById.get(creatorId);
+      return { creatorId, name: c ? c.name : 'Unknown', team: c ? c.team : null, slug: c ? c.slug : null, newVideos: count };
+    });
+
+  const dataQualityNotes = [];
+  if (!fastestGrowthPct.length) dataQualityNotes.push('No creators met the minimum subscriber baseline for a percentage-growth ranking this period.');
+  if (!mostActive.length) dataQualityNotes.push('Video-level activity history is still accumulating (frfc_video_metrics) — this section will populate after a few more sync runs.');
+
+  return { fastestGrowthPct, largestAbsoluteGain, mostActive, dataQualityNotes, growthRowsCount: growthRows.length };
 }
 
 async function startJobRun(supabaseUrl, sbHeaders, jobType) {
@@ -227,3 +247,6 @@ async function logStatus(supabaseUrl, sbHeaders, candidateId, oldStatus, newStat
 function res(statusCode, body) {
   return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
+
+module.exports.computeWeeklyRankings = computeWeeklyRankings;
+module.exports.MIN_BASELINE_FOR_PCT_GROWTH = MIN_BASELINE_FOR_PCT_GROWTH;

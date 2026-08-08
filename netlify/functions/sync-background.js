@@ -28,6 +28,8 @@ exports.handler = async () => {
   if (!sbKey) return ok({ error: 'SUPABASE_SERVICE_ROLE_KEY not set' }, 500);
   if (!ytKey) return ok({ error: 'YOUTUBE_API_KEY not set' }, 500);
 
+  const jobRunId = await startJobRun(supabaseUrl, sbKey, 'sync-background');
+
   // 1. Fetch all creators.
   const selectRes = await fetch(
     `${supabaseUrl}/rest/v1/frfc_streamers?select=id,name,channel_url,avatar_url,avatar_custom`,
@@ -37,6 +39,7 @@ exports.handler = async () => {
   const creators = await selectRes.json();
 
   let okCount = 0, failCount = 0, quota = 0;
+  const videoMetricRows = [];
 
   for (const c of creators) {
     const m = (c.channel_url || '').match(/@([A-Za-z0-9_.-]+)/);
@@ -140,6 +143,20 @@ exports.handler = async () => {
                 update.upcoming_video_thumbnail = `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`;
                 update.upcoming_video_scheduled_at = soonest.sched;
               }
+
+              // Snapshot every fetched video's stats — this is data already
+              // paid for by the request above (no extra quota), just not
+              // persisted per-video until now. Weekly ranking calculations
+              // (Epic 2) read this history instead of only ever seeing
+              // "latest video" for whichever video happened to be newest
+              // at sync time.
+              videoMetricRows.push(...items.map(it => ({
+                creator_id: c.id,
+                video_id: it.id,
+                views: parseInt(it.statistics && it.statistics.viewCount) || 0,
+                likes: it.statistics && it.statistics.likeCount != null ? parseInt(it.statistics.likeCount) : null,
+                comments: it.statistics && it.statistics.commentCount != null ? parseInt(it.statistics.commentCount) : null,
+              })));
             } catch (e) { /* video detail fetch failed, continue with playlist-only data */ }
 
             // 4. Upload frequency
@@ -198,8 +215,53 @@ exports.handler = async () => {
     }
   }
 
-  return ok({ total: creators.length, ok: okCount, fail: failCount, quota });
+  // One batch insert for every video snapshot collected across the whole
+  // run, rather than a request per creator.
+  if (videoMetricRows.length) {
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/frfc_video_metrics`, {
+        method: 'POST',
+        headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(videoMetricRows),
+      });
+    } catch (e) { /* metrics are a nice-to-have for rankings, never fail the sync over them */ }
+  }
+
+  await finishJobRun(supabaseUrl, sbKey, jobRunId, {
+    status: failCount === 0 ? 'success' : (okCount > 0 ? 'partial' : 'failed'),
+    items_processed: okCount,
+    items_failed: failCount,
+    quota_used: quota,
+  });
+
+  return ok({ total: creators.length, ok: okCount, fail: failCount, quota, videoMetricsRecorded: videoMetricRows.length });
 };
+
+// ── Job health tracking (frfc_job_runs) ─────────────────────────────────────
+// Best-effort on both ends — a health-tracking failure should never take
+// down the actual sync it's reporting on.
+async function startJobRun(supabaseUrl, sbKey, jobType) {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/frfc_job_runs`, {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ job_type: jobType, status: 'running' }),
+    });
+    const rows = await res.json().catch(() => []);
+    return rows[0] && rows[0].id;
+  } catch (e) { return null; }
+}
+
+async function finishJobRun(supabaseUrl, sbKey, jobRunId, patch) {
+  if (!jobRunId) return;
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_job_runs?id=eq.${jobRunId}`, {
+      method: 'PATCH',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ ...patch, finished_at: new Date().toISOString() }),
+    });
+  } catch (e) { /* non-critical */ }
+}
 
 async function ytFetch(key, endpoint, params) {
   params.key = key;

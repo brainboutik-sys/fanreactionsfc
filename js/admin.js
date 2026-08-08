@@ -11,6 +11,7 @@ var adminPage = 'dashboard';
 var allCreators = [];
 var allSubmissions = [];
 var allArticles = [];
+var allCandidates = [];
 var allUsers = [];
 var adminLog = [];
 var creatorSearch = '';
@@ -42,16 +43,18 @@ async function logAction(action, entityType, entityId, details) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
-  var [creatorsRes, logRes, subsRes, articlesRes] = await Promise.all([
+  var [creatorsRes, logRes, subsRes, articlesRes, candidatesRes] = await Promise.all([
     sb.from('frfc_streamers').select('*').order('name'),
     sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
     sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false }),
-    sb.from('frfc_articles').select('*').order('updated_at', { ascending: false })
+    sb.from('frfc_articles').select('*').order('updated_at', { ascending: false }),
+    sb.from('frfc_story_candidates').select('*').order('created_at', { ascending: false }).limit(50)
   ]);
   allCreators = creatorsRes.data || [];
   adminLog = logRes.data || [];
   allSubmissions = subsRes.data || [];
   allArticles = articlesRes.data || [];
+  allCandidates = candidatesRes.data || [];
 }
 
 // ── Render shell ─────────────────────────────────────────────────────────────
@@ -61,6 +64,7 @@ function renderHTML() {
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
     { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
     { id: 'news',      icon: '&#9998;', label: 'News', badge: allArticles.filter(function(a){return a.status==='draft'}).length || null },
+    { id: 'queue',     icon: '&#9873;', label: 'Editorial Queue', badge: allCandidates.filter(function(c){return c.status==='evidence_ready' || c.status==='review_ready'}).length || null },
     { id: 'health',    icon: '&#9877;', label: 'Health' },
     { id: 'users',     icon: '&#9823;', label: 'Users' },
     { id: 'settings',  icon: '&#9881;', label: 'Settings' },
@@ -112,6 +116,7 @@ function renderPage() {
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
+  else if (adminPage === 'queue')    content.innerHTML = toggle + renderQueue();
   else if (adminPage === 'health')   { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Health</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderHealth(); }
   else if (adminPage === 'users')    content.innerHTML = toggle + renderUsers();
   else if (adminPage === 'settings') content.innerHTML = toggle + renderSettings();
@@ -280,6 +285,7 @@ function onLeagueChange() {
 function openCreatorForm(c) {
   var isEdit = !!c;
   var modal = document.getElementById('adminModal');
+  modal.className = 'admin-modal';
   modal.innerHTML =
     '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
     '<div class="admin-modal-title">' + (isEdit ? 'Edit Creator' : 'Add Creator') + '</div>' +
@@ -469,6 +475,7 @@ function openArticleForm(a) {
   // instead of letting the database default one, so the two always match.
   var articleId = a ? a.id : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
   var modal = document.getElementById('adminModal');
+  modal.className = 'admin-modal';
   modal.innerHTML =
     '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
     '<div class="admin-modal-title">' + (isEdit ? 'Edit Article' : 'New Article') + '</div>' +
@@ -628,6 +635,203 @@ function deleteArticle(id, title) {
     await loadAdminData();
     renderPage();
   }, { title: 'Delete article', confirmLabel: 'Delete' });
+}
+
+// ── Editorial Queue ──────────────────────────────────────────────────────────
+var STATUS_BADGE_CLASS = {
+  detected: 'admin-badge-dim', evidence_ready: 'admin-badge-blue', drafting: 'admin-badge-blue',
+  review_ready: 'admin-badge-yellow', approved: 'admin-badge-green', scheduled: 'admin-badge-green',
+  published: 'admin-badge-green', rejected: 'admin-badge-red', generation_failed: 'admin-badge-red',
+  validation_failed: 'admin-badge-red', publish_failed: 'admin-badge-red', archived: 'admin-badge-dim',
+};
+function candidateStatusBadge(status) {
+  return '<span class="admin-badge ' + (STATUS_BADGE_CLASS[status] || 'admin-badge-dim') + '">' + escHtml(status.replace(/_/g, ' ')) + '</span>';
+}
+
+function renderQueue() {
+  var active = allCandidates.filter(function(c) { return ['detected', 'evidence_ready', 'drafting', 'review_ready'].indexOf(c.status) !== -1; });
+  var resolved = allCandidates.filter(function(c) { return active.indexOf(c) === -1; });
+
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Editorial Queue</h1><div class="admin-page-subtitle">Story candidates awaiting review</div></div>' +
+    '<button class="btn-admin btn-admin-primary" id="genRankingBtn" onclick="Admin.generateWeeklyRanking()">Generate Weekly Ranking</button></div>' +
+
+  (active.length ? '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Needs Review</span></div><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Title</th><th>Type</th><th>Status</th><th>Score</th><th>Created</th><th>Actions</th></tr></thead><tbody>' +
+    active.map(function(c) {
+      return '<tr>' +
+        '<td class="row-name">' + escHtml(c.working_title) + '</td>' +
+        '<td style="font-size:var(--fs-sm);color:var(--text-dim)">' + escHtml(c.type.replace(/_/g, ' ')) + '</td>' +
+        '<td>' + candidateStatusBadge(c.status) + '</td>' +
+        '<td>' + (c.score == null ? '&mdash;' : c.score) + '</td>' +
+        '<td class="row-dim">' + timeAgo(c.created_at) + '</td>' +
+        '<td><div class="row-actions">' +
+          '<button class="btn-admin btn-admin-primary" onclick="Admin.openCandidateDetail(\'' + c.id + '\')">Review</button>' +
+        '</div></td></tr>';
+    }).join('') + '</tbody></table></div></div>'
+  : '<div class="admin-card"><div class="admin-card-body" style="text-align:center;color:var(--text-dim);padding:32px">Nothing waiting for review. Click &ldquo;Generate Weekly Ranking&rdquo; to create one from the last 7 days of data.</div></div>') +
+
+  (resolved.length ? '<div class="admin-card" style="margin-top:16px"><div class="admin-card-header"><span class="admin-card-title">Resolved</span></div><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Title</th><th>Status</th><th>Updated</th></tr></thead><tbody>' +
+    resolved.slice(0, 20).map(function(c) {
+      return '<tr><td class="row-name">' + escHtml(c.working_title) + '</td><td>' + candidateStatusBadge(c.status) + '</td><td class="row-dim">' + timeAgo(c.updated_at) + '</td></tr>';
+    }).join('') + '</tbody></table></div></div>' : '');
+}
+
+async function generateWeeklyRanking() {
+  var btn = document.getElementById('genRankingBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  try {
+    var session = (await sb.auth.getSession()).data.session;
+    var res = await fetch('/.netlify/functions/weekly-ranking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ periodDays: 7 }),
+    });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) { toast(data.error || 'Failed to generate ranking', 'error'); return; }
+    toast('Ranking generated: ' + data.workingTitle, 'success');
+    if (data.dataQualityNotes && data.dataQualityNotes.length) {
+      data.dataQualityNotes.forEach(function(n) { toast(n, 'info'); });
+    }
+    await loadAdminData();
+    renderPage();
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Generate Weekly Ranking'; }
+  }
+}
+
+function rankTableHTML(title, rows, valueLabel, valueFn) {
+  if (!rows || !rows.length) return '<p style="color:var(--text-muted);font-size:var(--fs-sm)">' + escHtml(title) + ': no qualifying data this period.</p>';
+  return '<div style="margin-bottom:20px"><div class="admin-form-label" style="margin-bottom:8px">' + escHtml(title) + '</div><table class="admin-table"><thead><tr><th>#</th><th>Creator</th><th>Club</th><th>' + valueLabel + '</th></tr></thead><tbody>' +
+    rows.map(function(r, i) {
+      return '<tr><td>' + (i + 1) + '</td><td class="row-name">' + escHtml(r.name) + '</td><td style="color:var(--text-dim);font-size:var(--fs-sm)">' + escHtml(r.team || '') + '</td><td>' + valueFn(r) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function openCandidateDetail(id) {
+  var c = allCandidates.find(function(x) { return x.id === id; });
+  if (!c) return;
+  var modal = document.getElementById('adminModal');
+  var body = '';
+
+  if (c.type === 'weekly_ranking') {
+    var p = c.payload || {};
+    var s = p.sections || {};
+    body =
+      '<p style="color:var(--text-dim);font-size:var(--fs-sm);margin-bottom:16px">' + escHtml(c.explanation || '') + '</p>' +
+      (p.data_quality_notes && p.data_quality_notes.length ? p.data_quality_notes.map(function(n) { return '<div class="admin-badge admin-badge-yellow" style="display:block;margin-bottom:8px;white-space:normal;text-align:left">' + escHtml(n) + '</div>'; }).join('') : '') +
+      rankTableHTML('Fastest Growth (%)', s.fastest_growth_pct, 'Growth', function(r) { return r.baseline + ' &rarr; ' + r.current + ' (' + (r.pct >= 0 ? '+' : '') + r.pct + '%)'; }) +
+      rankTableHTML('Largest Absolute Gain', s.largest_absolute_gain, 'Growth', function(r) { return r.baseline + ' &rarr; ' + r.current + ' (' + (r.delta >= 0 ? '+' : '') + r.delta + ')'; }) +
+      rankTableHTML('Most Active (new videos)', s.most_active, 'New videos', function(r) { return r.newVideos; });
+  } else {
+    body = '<p style="color:var(--text-dim)">No detail view built yet for candidate type &ldquo;' + escHtml(c.type) + '&rdquo;.</p>';
+  }
+
+  var canDraft = c.status === 'evidence_ready' && c.type === 'weekly_ranking';
+  var canPublish = c.status === 'review_ready' || (c.payload && c.payload.draft);
+
+  modal.className = 'admin-modal admin-modal-wide';
+  modal.innerHTML =
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
+    '<div class="admin-modal-title">' + escHtml(c.working_title) + '</div>' +
+    '<div class="admin-modal-sub">' + candidateStatusBadge(c.status) + ' &middot; Score: ' + (c.score == null ? '&mdash;' : c.score) + '</div>' +
+    '<div style="max-height:50vh;overflow-y:auto;margin:16px 0">' + body + '</div>' +
+    (c.payload && c.payload.draft ? '<div class="admin-card" style="margin-bottom:16px"><div class="admin-card-header"><span class="admin-card-title">Draft preview</span></div><div class="admin-card-body"><strong>' + escHtml(c.payload.draft.title) + '</strong><p style="font-size:var(--fs-sm);color:var(--text-dim);margin-top:8px;white-space:pre-wrap">' + escHtml(c.payload.draft.summary) + '</p></div></div>' : '') +
+    '<div class="admin-form-actions" style="justify-content:space-between">' +
+      '<button class="btn-admin btn-admin-danger" onclick="Admin.rejectCandidate(\'' + c.id + '\')">Reject</button>' +
+      '<div style="display:flex;gap:8px">' +
+        (canDraft ? '<button class="btn-admin btn-admin-ghost" onclick="Admin.generateRankingDraft(\'' + c.id + '\')">Generate Draft</button>' : '') +
+        (canPublish ? '<button class="btn-admin btn-admin-primary" onclick="Admin.approveAndPublishCandidate(\'' + c.id + '\')">Approve &amp; Publish</button>' : '') +
+      '</div>' +
+    '</div>';
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+}
+
+// E2.5 — deterministic templated draft, no AI. Turns the ranking payload
+// into publish-ready title/summary/body text using the same plain-text
+// paragraph convention as every other article (see newsBodyHTML in app.js).
+function buildRankingDraft(candidate) {
+  var p = candidate.payload || {};
+  var s = p.sections || {};
+  var fmt = function(iso) { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); };
+  var title = candidate.working_title;
+  var summary = 'This week\'s football creator rankings: fastest growth, biggest subscriber gains, and the most active channels.';
+
+  var paras = [];
+  paras.push('Here\'s how football YouTube creators performed between ' + fmt(p.period_start) + ' and ' + fmt(p.period_end) + '.');
+
+  if (s.fastest_growth_pct && s.fastest_growth_pct.length) {
+    var top = s.fastest_growth_pct[0];
+    paras.push('FASTEST GROWTH: ' + top.name + (top.team ? ' (' + top.team + ')' : '') + ' posted the fastest subscriber growth this week, up ' + top.pct + '% from ' + top.baseline + ' to ' + top.current + ' subscribers.' +
+      (s.fastest_growth_pct.length > 1 ? ' ' + s.fastest_growth_pct.slice(1, 5).map(function(r) { return r.name + ' (+' + r.pct + '%)'; }).join(', ') + ' round out the top five.' : ''));
+  }
+
+  if (s.largest_absolute_gain && s.largest_absolute_gain.length) {
+    var topAbs = s.largest_absolute_gain[0];
+    paras.push('BIGGEST GAIN: ' + topAbs.name + ' added the most subscribers in absolute terms, gaining ' + topAbs.delta.toLocaleString() + ' to reach ' + topAbs.current.toLocaleString() + '.');
+  }
+
+  if (s.most_active && s.most_active.length) {
+    var topActive = s.most_active[0];
+    paras.push('MOST ACTIVE: ' + topActive.name + ' published the most new videos this week (' + topActive.newVideos + ').');
+  } else {
+    paras.push('Upload-activity rankings will appear here once more weeks of data have been collected.');
+  }
+
+  paras.push('Rankings are computed directly from tracked subscriber and upload data — see each creator\'s profile on FanReactionsFC for their full history.');
+
+  return { title: title, summary: summary, body: paras.join('\n\n') };
+}
+
+async function generateRankingDraft(id) {
+  var c = allCandidates.find(function(x) { return x.id === id; });
+  if (!c) return;
+  var draft = buildRankingDraft(c);
+  var payload = Object.assign({}, c.payload, { draft: draft });
+  var res = await sb.from('frfc_story_candidates').update({ payload: payload, status: 'review_ready' }).eq('id', id);
+  if (res.error) { toast(res.error.message, 'error'); return; }
+  await sb.from('frfc_candidate_status_log').insert({ candidate_id: id, old_status: c.status, new_status: 'review_ready', changed_by: currentUser.id, note: 'Templated draft generated' });
+  toast('Draft generated', 'success');
+  await loadAdminData();
+  openCandidateDetail(id);
+}
+
+async function approveAndPublishCandidate(id) {
+  var c = allCandidates.find(function(x) { return x.id === id; });
+  if (!c || !c.payload || !c.payload.draft) { toast('Generate a draft first', 'error'); return; }
+  confirmDialog('Publish "' + c.payload.draft.title + '"? It goes live immediately.', async function() {
+    var draft = c.payload.draft;
+    var slug = slugify(draft.title) + '-' + new Date(c.created_at).toISOString().slice(0, 10);
+    var articleRes = await sb.from('frfc_articles').insert({
+      title: draft.title, slug: slug, summary: draft.summary, body: draft.body,
+      tags: [c.type.replace(/_/g, ' ')], status: 'published', published_at: new Date().toISOString(),
+      author_id: currentUser.id,
+    }).select();
+    if (articleRes.error) { toast('Publish failed: ' + articleRes.error.message, 'error'); return; }
+    var articleId = articleRes.data[0].id;
+    await sb.from('frfc_story_candidates').update({ status: 'published', article_id: articleId }).eq('id', id);
+    await sb.from('frfc_candidate_status_log').insert({ candidate_id: id, old_status: c.status, new_status: 'published', changed_by: currentUser.id, note: 'Published as article ' + articleId });
+    toast('Published!', 'success');
+    closeModal();
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Publish article', confirmLabel: 'Publish', danger: false });
+}
+
+function rejectCandidate(id) {
+  var c = allCandidates.find(function(x) { return x.id === id; });
+  if (!c) return;
+  confirmDialog('Reject "' + c.working_title + '"?', async function() {
+    await sb.from('frfc_story_candidates').update({ status: 'rejected' }).eq('id', id);
+    await sb.from('frfc_candidate_status_log').insert({ candidate_id: id, old_status: c.status, new_status: 'rejected', changed_by: currentUser.id });
+    toast('Rejected', 'info');
+    closeModal();
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Reject candidate', confirmLabel: 'Reject' });
 }
 
 // ── Health page ──────────────────────────────────────────────────────────────
@@ -934,7 +1138,12 @@ window.Admin = {
   runSync: runSync,
   resetAllLive: resetAllLive,
   closeModal: closeModal,
-  toast: toast
+  toast: toast,
+  generateWeeklyRanking: generateWeeklyRanking,
+  openCandidateDetail: openCandidateDetail,
+  generateRankingDraft: generateRankingDraft,
+  approveAndPublishCandidate: approveAndPublishCandidate,
+  rejectCandidate: rejectCandidate
 };
 
 })();

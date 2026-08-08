@@ -61,6 +61,7 @@ function renderHTML() {
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
     { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
     { id: 'news',      icon: '&#9998;', label: 'News', badge: allArticles.filter(function(a){return a.status==='draft'}).length || null },
+    { id: 'health',    icon: '&#9877;', label: 'Health' },
     { id: 'users',     icon: '&#9823;', label: 'Users' },
     { id: 'settings',  icon: '&#9881;', label: 'Settings' },
     { id: 'logs',      icon: '&#9776;', label: 'Activity Log' }
@@ -111,6 +112,7 @@ function renderPage() {
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
+  else if (adminPage === 'health')   { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Health</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderHealth(); }
   else if (adminPage === 'users')    content.innerHTML = toggle + renderUsers();
   else if (adminPage === 'settings') content.innerHTML = toggle + renderSettings();
   else if (adminPage === 'logs')     content.innerHTML = toggle + renderLogs();
@@ -573,6 +575,48 @@ function deleteArticle(id, title) {
     await loadAdminData();
     renderPage();
   }, { title: 'Delete article', confirmLabel: 'Delete' });
+}
+
+// ── Health page ──────────────────────────────────────────────────────────────
+// frfc_job_runs has no writers yet — this fills in once ingestion jobs
+// (Epic 2 onward) start recording runs. The page itself is ready now so
+// there's somewhere for that data to show up without a later UI change.
+async function loadAndRenderHealth() {
+  var content = document.getElementById('adminContent');
+  var runs = [];
+  try {
+    var res = await sb.from('frfc_job_runs').select('*').order('started_at', { ascending: false }).limit(50);
+    runs = res.data || [];
+  } catch (e) { /* render with empty state below */ }
+
+  var byType = {};
+  runs.forEach(function(r) { if (!byType[r.job_type]) byType[r.job_type] = r; });
+  var statusBadge = function(s) {
+    if (s === 'success') return '<span class="admin-badge admin-badge-green">Success</span>';
+    if (s === 'failed') return '<span class="admin-badge admin-badge-red">Failed</span>';
+    if (s === 'partial') return '<span class="admin-badge admin-badge-dim">Partial</span>';
+    return '<span class="admin-badge admin-badge-dim">Running</span>';
+  };
+
+  var html = '<div class="admin-page-header"><div><h1 class="admin-page-title">Health</h1><div class="admin-page-subtitle">Scheduled job status and history</div></div></div>';
+
+  if (!runs.length) {
+    html += '<div class="admin-card"><div class="admin-card-body" style="text-align:center;color:var(--text-dim);padding:32px">No job runs recorded yet. This page fills in automatically once ingestion jobs start writing to <code>frfc_job_runs</code>.</div></div>';
+  } else {
+    html += '<div class="admin-stats">' +
+      Object.values(byType).map(function(r) {
+        return stat(r.job_type, statusBadge(r.status), timeAgo(r.started_at));
+      }).join('') +
+    '</div>';
+    html += '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Recent Runs</span></div><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Job</th><th>Status</th><th>Started</th><th>Processed</th><th>Failed</th><th>Quota</th></tr></thead><tbody>' +
+      runs.map(function(r) {
+        return '<tr><td class="row-name">' + escHtml(r.job_type) + '</td><td>' + statusBadge(r.status) + '</td><td class="row-dim">' + timeAgo(r.started_at) + '</td><td>' + r.items_processed + '</td><td>' + r.items_failed + '</td><td>' + (r.quota_used == null ? '&mdash;' : r.quota_used) + '</td></tr>';
+      }).join('') +
+    '</tbody></table></div></div>';
+  }
+
+  var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  content.innerHTML = toggle + html;
 }
 
 // ── Users page ───────────────────────────────────────────────────────────────

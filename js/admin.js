@@ -737,11 +737,12 @@ function openCandidateDetail(id) {
     '<div class="admin-modal-title">' + escHtml(c.working_title) + '</div>' +
     '<div class="admin-modal-sub">' + candidateStatusBadge(c.status) + ' &middot; Score: ' + (c.score == null ? '&mdash;' : c.score) + '</div>' +
     '<div style="max-height:50vh;overflow-y:auto;margin:16px 0">' + body + '</div>' +
-    (c.payload && c.payload.draft ? '<div class="admin-card" style="margin-bottom:16px"><div class="admin-card-header"><span class="admin-card-title">Draft preview</span></div><div class="admin-card-body"><strong>' + escHtml(c.payload.draft.title) + '</strong><p style="font-size:var(--fs-sm);color:var(--text-dim);margin-top:8px;white-space:pre-wrap">' + escHtml(c.payload.draft.summary) + '</p></div></div>' : '') +
+    (c.payload && c.payload.draft ? '<div class="admin-card" style="margin-bottom:16px"><div class="admin-card-header"><span class="admin-card-title">Draft preview</span>' + (c.payload.draft.ai_generated ? '<span class="admin-badge admin-badge-blue" style="margin-left:8px">AI-assisted</span>' : '<span class="admin-badge admin-badge-dim" style="margin-left:8px">Templated</span>') + '</div><div class="admin-card-body"><strong>' + escHtml(c.payload.draft.title) + '</strong><p style="font-size:var(--fs-sm);color:var(--text-dim);margin-top:8px;white-space:pre-wrap">' + escHtml(c.payload.draft.summary) + '</p></div></div>' : '') +
     '<div class="admin-form-actions" style="justify-content:space-between">' +
       '<button class="btn-admin btn-admin-danger" onclick="Admin.rejectCandidate(\'' + c.id + '\')">Reject</button>' +
       '<div style="display:flex;gap:8px">' +
         (canDraft ? '<button class="btn-admin btn-admin-ghost" onclick="Admin.generateRankingDraft(\'' + c.id + '\')">Generate Draft</button>' : '') +
+        (canDraft ? '<button class="btn-admin btn-admin-ghost" id="aiDraftBtn" onclick="Admin.generateAiDraft(\'' + c.id + '\')">Generate AI Draft</button>' : '') +
         (canPublish ? '<button class="btn-admin btn-admin-primary" onclick="Admin.approveAndPublishCandidate(\'' + c.id + '\')">Approve &amp; Publish</button>' : '') +
       '</div>' +
     '</div>';
@@ -799,6 +800,33 @@ async function generateRankingDraft(id) {
   openCandidateDetail(id);
 }
 
+// E3.1 — AI-assisted alternative to buildRankingDraft(). Sends the
+// already-computed, already-trusted candidate payload to the ai-draft
+// Netlify function, which asks gpt-4o-mini to write prose around those
+// numbers (never to invent new ones) and appends the AI-disclosure
+// footer server-side.
+async function generateAiDraft(id) {
+  var btn = document.getElementById('aiDraftBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  try {
+    var session = (await sb.auth.getSession()).data.session;
+    var res = await fetch('/.netlify/functions/ai-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ candidateId: id }),
+    });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) { toast(data.error || 'Failed to generate AI draft', 'error'); return; }
+    toast('AI draft generated', 'success');
+    await loadAdminData();
+    openCandidateDetail(id);
+  } catch (e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Generate AI Draft'; }
+  }
+}
+
 async function approveAndPublishCandidate(id) {
   var c = allCandidates.find(function(x) { return x.id === id; });
   if (!c || !c.payload || !c.payload.draft) { toast('Generate a draft first', 'error'); return; }
@@ -808,7 +836,7 @@ async function approveAndPublishCandidate(id) {
     var articleRes = await sb.from('frfc_articles').insert({
       title: draft.title, slug: slug, summary: draft.summary, body: draft.body,
       tags: [c.type.replace(/_/g, ' ')], status: 'published', published_at: new Date().toISOString(),
-      author_id: currentUser.id,
+      author_id: currentUser.id, ai_assisted: !!draft.ai_generated,
     }).select();
     if (articleRes.error) { toast('Publish failed: ' + articleRes.error.message, 'error'); return; }
     var articleId = articleRes.data[0].id;
@@ -1142,6 +1170,7 @@ window.Admin = {
   generateWeeklyRanking: generateWeeklyRanking,
   openCandidateDetail: openCandidateDetail,
   generateRankingDraft: generateRankingDraft,
+  generateAiDraft: generateAiDraft,
   approveAndPublishCandidate: approveAndPublishCandidate,
   rejectCandidate: rejectCandidate
 };

@@ -10,6 +10,7 @@ var adminRole = null;
 var adminPage = 'dashboard';
 var allCreators = [];
 var allSubmissions = [];
+var allArticles = [];
 var allUsers = [];
 var adminLog = [];
 var creatorSearch = '';
@@ -41,14 +42,16 @@ async function logAction(action, entityType, entityId, details) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
-  var [creatorsRes, logRes, subsRes] = await Promise.all([
+  var [creatorsRes, logRes, subsRes, articlesRes] = await Promise.all([
     sb.from('frfc_streamers').select('*').order('name'),
     sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
-    sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false })
+    sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false }),
+    sb.from('frfc_articles').select('*').order('updated_at', { ascending: false })
   ]);
   allCreators = creatorsRes.data || [];
   adminLog = logRes.data || [];
   allSubmissions = subsRes.data || [];
+  allArticles = articlesRes.data || [];
 }
 
 // ── Render shell ─────────────────────────────────────────────────────────────
@@ -57,6 +60,7 @@ function renderHTML() {
     { id: 'dashboard', icon: '&#9632;', label: 'Dashboard' },
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
     { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
+    { id: 'news',      icon: '&#9998;', label: 'News', badge: allArticles.filter(function(a){return a.status==='draft'}).length || null },
     { id: 'users',     icon: '&#9823;', label: 'Users' },
     { id: 'settings',  icon: '&#9881;', label: 'Settings' },
     { id: 'logs',      icon: '&#9776;', label: 'Activity Log' }
@@ -106,6 +110,7 @@ function renderPage() {
   if (adminPage === 'dashboard')  content.innerHTML = toggle + renderDashboard();
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
+  else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
   else if (adminPage === 'users')    content.innerHTML = toggle + renderUsers();
   else if (adminPage === 'settings') content.innerHTML = toggle + renderSettings();
   else if (adminPage === 'logs')     content.innerHTML = toggle + renderLogs();
@@ -422,6 +427,154 @@ function rejectSubmission(id) {
   }, { title: 'Reject submission', confirmLabel: 'Reject' });
 }
 
+// ── News page ────────────────────────────────────────────────────────────────
+function renderNews() {
+  var published = allArticles.filter(function(a){return a.status==='published'});
+
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">News</h1><div class="admin-page-subtitle">' + allArticles.length + ' articles &middot; ' + published.length + ' published</div></div>' +
+    '<button class="btn-admin btn-admin-primary" onclick="Admin.openAddArticle()">New Article</button></div>' +
+
+  (allArticles.length ? '<div class="admin-card"><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Title</th><th>Status</th><th>Tags</th><th>Updated</th><th>Actions</th></tr></thead><tbody>' +
+    allArticles.map(function(a) {
+      return '<tr>' +
+        '<td class="row-name">' + escHtml(a.title) + '</td>' +
+        '<td>' + (a.status === 'published' ? '<span class="admin-badge admin-badge-green">Published</span>' : '<span class="admin-badge admin-badge-dim">Draft</span>') + '</td>' +
+        '<td style="font-size:var(--fs-sm);color:var(--text-dim)">' + (a.tags||[]).map(escHtml).join(', ') + '</td>' +
+        '<td class="row-dim">' + timeAgo(a.updated_at) + '</td>' +
+        '<td><div class="row-actions">' +
+          '<button class="btn-admin btn-admin-ghost" onclick="Admin.editArticle(\'' + a.id + '\')">Edit</button>' +
+          (a.status === 'published'
+            ? '<button class="btn-admin" onclick="Admin.unpublishArticle(\'' + a.id + '\')">Unpublish</button>'
+            : '<button class="btn-admin btn-admin-success" onclick="Admin.publishArticle(\'' + a.id + '\')">Publish</button>') +
+          '<button class="btn-admin btn-admin-danger" onclick="Admin.deleteArticle(\'' + a.id + '\',\'' + jsAttrStr(a.title) + '\')">Delete</button>' +
+        '</div></td></tr>';
+    }).join('') + '</tbody></table></div></div>'
+  : '<div class="admin-card"><div class="admin-card-body" style="text-align:center;color:var(--text-dim);padding:32px">No articles yet &mdash; click &ldquo;New Article&rdquo; to write your first one.</div></div>');
+}
+
+function openAddArticle() { openArticleForm(null); }
+
+function editArticle(id) {
+  var a = allArticles.find(function(x){return x.id===id});
+  if (a) openArticleForm(a);
+}
+
+function openArticleForm(a) {
+  var isEdit = !!a;
+  var modal = document.getElementById('adminModal');
+  modal.innerHTML =
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
+    '<div class="admin-modal-title">' + (isEdit ? 'Edit Article' : 'New Article') + '</div>' +
+    '<div class="admin-modal-sub">' + (isEdit ? escHtml(a.title) : 'Draft a new article — nothing is public until you click Publish') + '</div>' +
+    formField('Title', 'af_title', a?.title || '') +
+    formField('Slug', 'af_slug', a?.slug || '') +
+    '<div style="font-size:var(--fs-xs);color:var(--text-muted);margin:-8px 0 12px">URL: /news/<span id="af_slug_preview">' + escHtml(a?.slug || '') + '</span></div>' +
+    formField('Dek (optional subtitle)', 'af_dek', a?.dek || '') +
+    formField('Summary (used for the article card and search description)', 'af_summary', a?.summary || '', 'textarea') +
+    '<div class="admin-form-row"><label class="admin-form-label" for="af_body">Body</label><textarea class="admin-form-input" id="af_body" rows="14" style="resize:vertical;font-family:inherit">' + escHtml(a?.body || '') + '</textarea></div>' +
+    formField('Cover Image URL', 'af_cover', a?.cover_image_url || '') +
+    formField('Tags (comma-separated)', 'af_tags', (a?.tags||[]).join(', ')) +
+    '<div class="admin-form-row"><label class="admin-form-label" for="af_team">Related Club (optional — cross-links the article from that club\'s page)</label><select class="admin-form-select" id="af_team">' + buildTeamSelect('', a?.related_team || '') + '</select></div>' +
+    '<div class="admin-form-actions">' +
+      '<button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button>' +
+      '<button class="btn-admin btn-admin-primary" onclick="Admin.saveArticle(\'' + (a?.id || '') + '\')">' + (isEdit ? 'Save Changes' : 'Save Draft') + '</button>' +
+    '</div>';
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+  document.getElementById('af_title').addEventListener('input', function() {
+    if (!isEdit) document.getElementById('af_slug').value = slugify(this.value);
+    document.getElementById('af_slug_preview').textContent = document.getElementById('af_slug').value;
+  });
+  document.getElementById('af_slug').addEventListener('input', function() {
+    document.getElementById('af_slug_preview').textContent = this.value;
+  });
+}
+
+async function saveArticle(id) {
+  try {
+    var title = document.getElementById('af_title').value.trim();
+    var slug = document.getElementById('af_slug').value.trim() || slugify(title);
+    var summary = document.getElementById('af_summary').value.trim();
+    var body = document.getElementById('af_body').value.trim();
+    if (!title) { toast('Title is required', 'error'); return; }
+    if (!slug) { toast('Slug is required', 'error'); return; }
+    if (!summary) { toast('Summary is required', 'error'); return; }
+    if (!body) { toast('Body is required', 'error'); return; }
+
+    var data = {
+      title: title,
+      slug: slug,
+      dek: document.getElementById('af_dek').value.trim() || null,
+      summary: summary,
+      body: body,
+      cover_image_url: document.getElementById('af_cover').value.trim() || null,
+      tags: document.getElementById('af_tags').value.split(',').map(function(t){return t.trim()}).filter(Boolean),
+      related_team: document.getElementById('af_team').value || null
+    };
+
+    var err, res, newId;
+    if (id) {
+      res = await sb.from('frfc_articles').update(data).eq('id', id);
+      err = res.error;
+      newId = id;
+      if (!err) await logAction('update', 'article', id, { title: title });
+    } else {
+      data.author_id = currentUser.id;
+      res = await sb.from('frfc_articles').insert(data).select();
+      err = res.error;
+      newId = res.data && res.data[0] && res.data[0].id;
+      if (!err) await logAction('create', 'article', newId, { title: title });
+    }
+
+    if (err) { toast(err.message, 'error'); return; }
+    toast(id ? 'Article updated' : 'Draft saved', 'success');
+    closeModal();
+    await loadAdminData();
+    renderPage();
+  } catch (e) {
+    console.error('saveArticle error:', e);
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+function publishArticle(id) {
+  var a = allArticles.find(function(x){return x.id===id});
+  if (!a) return;
+  confirmDialog('Publish "' + a.title + '"? It becomes publicly visible and indexable immediately.', async function() {
+    var res = await sb.from('frfc_articles').update({ status: 'published', published_at: a.published_at || new Date().toISOString() }).eq('id', id);
+    if (res.error) { toast(res.error.message, 'error'); return; }
+    await logAction('publish', 'article', id, { title: a.title });
+    toast('Published', 'success');
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Publish article', confirmLabel: 'Publish', danger: false });
+}
+
+function unpublishArticle(id) {
+  var a = allArticles.find(function(x){return x.id===id});
+  if (!a) return;
+  confirmDialog('Unpublish "' + a.title + '"? It will no longer be publicly visible.', async function() {
+    var res = await sb.from('frfc_articles').update({ status: 'draft' }).eq('id', id);
+    if (res.error) { toast(res.error.message, 'error'); return; }
+    await logAction('unpublish', 'article', id, { title: a.title });
+    toast('Unpublished', 'info');
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Unpublish article', confirmLabel: 'Unpublish' });
+}
+
+function deleteArticle(id, title) {
+  confirmDialog('Delete "' + title + '"? This cannot be undone.', async function() {
+    var res = await sb.from('frfc_articles').delete().eq('id', id);
+    if (res.error) { toast(res.error.message, 'error'); return; }
+    await logAction('delete', 'article', id, { title: title });
+    toast('Article deleted', 'success');
+    await loadAdminData();
+    renderPage();
+  }, { title: 'Delete article', confirmLabel: 'Delete' });
+}
+
 // ── Users page ───────────────────────────────────────────────────────────────
 function renderUsers() {
   return '<div class="admin-page-header"><div><h1 class="admin-page-title">Users</h1><div class="admin-page-subtitle">Registered users and favorites</div></div></div>' +
@@ -675,6 +828,12 @@ window.Admin = {
   creatorNext: creatorNext,
   approveSubmission: approveSubmission,
   rejectSubmission: rejectSubmission,
+  openAddArticle: openAddArticle,
+  editArticle: editArticle,
+  saveArticle: saveArticle,
+  publishArticle: publishArticle,
+  unpublishArticle: unpublishArticle,
+  deleteArticle: deleteArticle,
   runSync: runSync,
   resetAllLive: resetAllLive,
   closeModal: closeModal,

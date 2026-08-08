@@ -324,6 +324,14 @@ function handleRoute() {
       currentRoute = { page: 'contact' };
       updatePageMeta('Contact Us | FanReactionsFC', 'Get in touch with the FanReactionsFC team — questions, feedback, or partnership inquiries.');
       renderContact();
+    } else if (path === '/news') {
+      currentRoute = { page: 'news' };
+      updatePageMeta('News | FanReactionsFC', 'Football creator news, rankings, and fan-culture coverage from FanReactionsFC.');
+      renderNewsList();
+    } else if (path.startsWith('/news/')) {
+      const slug = path.split('/news/')[1].replace(/\/$/, '');
+      currentRoute = { page: 'newsArticle', slug };
+      renderNewsArticle(slug);
     } else if (path === '/privacy') {
       currentRoute = { page: 'privacy' };
       updatePageMeta('Privacy Policy | FanReactionsFC', 'How FanReactionsFC collects, uses, and protects your personal data.');
@@ -2845,6 +2853,122 @@ function legalPageShell(eyebrow, title, bodyHtml) {
     </div>
     <div class="container section">
       <div class="legal-content">${bodyHtml}</div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+// ── Render: News ────────────────────────────────────────────────────────
+// Articles aren't preloaded like creators are (loadCreators() runs once at
+// boot) — each news route fetches directly from Supabase on entry, same as
+// renderContact()/renderAccount(). Body is stored as plain text; paragraphs
+// are split on blank lines and escaped, matching the site's existing
+// plain-string content model rather than introducing a markdown parser.
+const NEWS_PAGE_SIZE = 12;
+let newsOffset = 0;
+
+function newsBodyHTML(body) {
+  return body.split(/\n\s*\n/).map(p => `<p>${escHtml(p.trim())}</p>`).join('');
+}
+
+function newsCardHTML(a) {
+  return `
+    <a href="/news/${escHtml(a.slug)}" class="news-card" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">
+      ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="" class="news-card-thumb" loading="lazy"></div>` : ''}
+      <div class="news-card-body">
+        ${a.tags && a.tags.length ? `<div class="news-card-tags">${a.tags.slice(0, 2).map(t => `<span class="news-card-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+        <div class="news-card-title">${escHtml(a.title)}</div>
+        <div class="news-card-summary">${escHtml(a.summary)}</div>
+        <div class="news-card-meta">${a.published_at ? timeAgo(a.published_at) : ''}</div>
+      </div>
+    </a>`;
+}
+
+async function renderNewsList() {
+  newsOffset = 0;
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">News</div>
+            <h1 class="page-hero-title">FanReactionsFC News</h1>
+            <p class="page-hero-subtitle">Football creator news, rankings, and fan-culture coverage.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container section">
+      <div id="newsGrid" class="news-grid"><div class="empty-state" style="grid-column:1/-1"><div style="color:var(--text-dim)">Loading…</div></div></div>
+      <div style="text-align:center;margin-top:24px"><button class="btn btn-secondary" id="newsLoadMore" style="display:none" onclick="loadMoreNews()">Load more</button></div>
+    </div>
+    ${renderFooter()}
+  `;
+  await loadNewsPage(true);
+}
+
+async function loadNewsPage(replace) {
+  const grid = document.getElementById('newsGrid');
+  const moreBtn = document.getElementById('newsLoadMore');
+  try {
+    const { data, error } = await sb.from('frfc_articles')
+      .select('slug,title,summary,cover_image_url,tags,published_at')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .range(newsOffset, newsOffset + NEWS_PAGE_SIZE - 1);
+    if (error) throw error;
+    const html = (data || []).map(newsCardHTML).join('');
+    if (replace) grid.innerHTML = html || '<div class="empty-state" style="grid-column:1/-1"><div class="es-title">No articles yet</div><p style="color:var(--text-dim)">Check back soon.</p></div>';
+    else grid.insertAdjacentHTML('beforeend', html);
+    newsOffset += (data || []).length;
+    moreBtn.style.display = (data && data.length === NEWS_PAGE_SIZE) ? 'inline-flex' : 'none';
+  } catch (e) {
+    if (replace) grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p style="color:var(--text-dim)">Couldn\'t load articles right now.</p></div>';
+  }
+}
+
+function loadMoreNews() { loadNewsPage(false); }
+
+async function renderNewsArticle(slug) {
+  document.getElementById('app').innerHTML = '<div class="container section-message"><div style="color:var(--text-dim)">Loading…</div></div>';
+  let article = null;
+  try {
+    const { data, error } = await sb.from('frfc_articles').select('*').eq('slug', slug).eq('status', 'published').maybeSingle();
+    if (error) throw error;
+    article = data;
+  } catch (e) { /* falls through to not-found */ }
+
+  if (!article) {
+    document.getElementById('app').innerHTML = '<div class="container section-message"><div class="empty-state"><div class="es-title">Article not found</div><a href="/news" class="btn btn-primary" style="margin-top:12px" onclick="event.preventDefault();navigate(\'/news\')">Back to News</a></div></div>';
+    return;
+  }
+
+  updatePageMeta(`${article.title} | FanReactionsFC News`, article.summary);
+
+  sb.rpc('increment_article_view', { article_id: article.id }).then(() => {});
+
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">News${article.tags && article.tags.length ? ' &middot; ' + escHtml(article.tags[0]) : ''}</div>
+            <h1 class="page-hero-title">${escHtml(article.title)}</h1>
+            ${article.dek ? `<p class="page-hero-subtitle">${escHtml(article.dek)}</p>` : ''}
+            <div class="news-article-meta">${article.published_at ? new Date(article.published_at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : ''}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container container-narrow section">
+      ${article.cover_image_url ? `<img src="${escHtml(article.cover_image_url)}" alt="" class="news-article-cover">` : ''}
+      <div class="news-article-body">${newsBodyHTML(article.body)}</div>
+      ${article.related_team ? `
+      <div class="news-article-related">
+        <span>More on</span>
+        <a href="/clubs/${encodeURIComponent(article.related_team)}" onclick="event.preventDefault();navigate('/clubs/${encodeURIComponent(article.related_team)}')">${crestImg(article.related_team, 'crest-sm')} ${escHtml(article.related_team)}</a>
+      </div>` : ''}
+      <div style="margin-top:32px"><a href="/news" class="btn btn-secondary" onclick="event.preventDefault();navigate('/news')">&larr; Back to News</a></div>
     </div>
     ${renderFooter()}
   `;

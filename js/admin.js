@@ -463,6 +463,11 @@ function editArticle(id) {
 
 function openArticleForm(a) {
   var isEdit = !!a;
+  // Generated up front (not on save) so the cover image can be uploaded to
+  // its final storage path — article-covers/{id}/cover.ext — before the
+  // article row exists at all. saveArticle() inserts using this same id
+  // instead of letting the database default one, so the two always match.
+  var articleId = a ? a.id : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
   var modal = document.getElementById('adminModal');
   modal.innerHTML =
     '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
@@ -474,12 +479,26 @@ function openArticleForm(a) {
     formField('Dek (optional subtitle)', 'af_dek', a?.dek || '') +
     formField('Summary (used for the article card and search description)', 'af_summary', a?.summary || '', 'textarea') +
     '<div class="admin-form-row"><label class="admin-form-label" for="af_body">Body</label><textarea class="admin-form-input" id="af_body" rows="14" style="resize:vertical;font-family:inherit">' + escHtml(a?.body || '') + '</textarea></div>' +
-    formField('Cover Image URL', 'af_cover', a?.cover_image_url || '') +
+    '<div class="admin-form-row">' +
+      '<label class="admin-form-label">Cover Image <span style="font-weight:400;color:var(--text-muted)">— also used as the social share image (Facebook, X, Discord, etc.)</span></label>' +
+      '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">' +
+        '<div id="af_cover_preview" style="width:160px;aspect-ratio:1200/630;border-radius:6px;overflow:hidden;background:var(--bg-hover);flex-shrink:0;border:1px solid var(--border)">' +
+          (a?.cover_image_url ? '<img src="' + escHtml(a.cover_image_url) + '" alt="" style="width:100%;height:100%;object-fit:cover">' : '') +
+        '</div>' +
+        '<div>' +
+          '<label for="af_cover_file" class="btn-admin btn-admin-ghost" style="cursor:pointer;display:inline-block">Upload image</label>' +
+          '<input type="file" id="af_cover_file" accept="image/jpeg,image/png,image/webp" style="display:none">' +
+          '<div style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:6px">JPEG or WebP, 1200&times;630px, under 4MB. That size/ratio is what Facebook, X, and Discord expect for a link preview.</div>' +
+          '<div id="af_cover_msg" style="font-size:var(--fs-xs);margin-top:4px"></div>' +
+        '</div>' +
+      '</div>' +
+      '<input type="hidden" id="af_cover" value="' + escHtml(a?.cover_image_url || '') + '">' +
+    '</div>' +
     formField('Tags (comma-separated)', 'af_tags', (a?.tags||[]).join(', ')) +
     '<div class="admin-form-row"><label class="admin-form-label" for="af_team">Related Club (optional — cross-links the article from that club\'s page)</label><select class="admin-form-select" id="af_team">' + buildTeamSelect('', a?.related_team || '') + '</select></div>' +
     '<div class="admin-form-actions">' +
       '<button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button>' +
-      '<button class="btn-admin btn-admin-primary" onclick="Admin.saveArticle(\'' + (a?.id || '') + '\')">' + (isEdit ? 'Save Changes' : 'Save Draft') + '</button>' +
+      '<button class="btn-admin btn-admin-primary" onclick="Admin.saveArticle(\'' + (isEdit ? articleId : '') + '\',\'' + articleId + '\')">' + (isEdit ? 'Save Changes' : 'Save Draft') + '</button>' +
     '</div>';
   var overlay = document.getElementById('adminModalOverlay');
   overlay.classList.add('open');
@@ -491,9 +510,39 @@ function openArticleForm(a) {
   document.getElementById('af_slug').addEventListener('input', function() {
     document.getElementById('af_slug_preview').textContent = this.value;
   });
+  document.getElementById('af_cover_file').addEventListener('change', function(e) { handleArticleCoverUpload(e, articleId); });
 }
 
-async function saveArticle(id) {
+async function handleArticleCoverUpload(e, articleId) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) return;
+  var msg = document.getElementById('af_cover_msg');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Uploading…';
+  if (file.size > 4 * 1024 * 1024) { msg.style.color = 'var(--red)'; msg.textContent = 'Too large — max 4MB.'; return; }
+  var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  var path = articleId + '/cover.' + ext;
+  try {
+    var session = (await sb.auth.getSession()).data.session;
+    if (!session) { msg.style.color = 'var(--red)'; msg.textContent = 'Please sign in again.'; return; }
+    var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/article-covers/' + path, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+      body: file
+    });
+    if (!uploadRes.ok) { msg.style.color = 'var(--red)'; msg.textContent = 'Upload failed.'; return; }
+    var publicUrl = SUPABASE_URL + '/storage/v1/object/public/article-covers/' + path + '?t=' + Date.now();
+    document.getElementById('af_cover').value = publicUrl;
+    document.getElementById('af_cover_preview').innerHTML = '<img src="' + publicUrl + '" alt="" style="width:100%;height:100%;object-fit:cover">';
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Uploaded!';
+  } catch (err) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Upload failed: ' + err.message;
+  }
+}
+
+async function saveArticle(id, articleId) {
   try {
     var title = document.getElementById('af_title').value.trim();
     var slug = document.getElementById('af_slug').value.trim() || slugify(title);
@@ -522,6 +571,10 @@ async function saveArticle(id) {
       newId = id;
       if (!err) await logAction('update', 'article', id, { title: title });
     } else {
+      // Uses the id generated when the form opened — the cover image (if
+      // any) was already uploaded to article-covers/{articleId}/, so the
+      // row has to be created with that same id, not a fresh database default.
+      data.id = articleId;
       data.author_id = currentUser.id;
       res = await sb.from('frfc_articles').insert(data).select();
       err = res.error;

@@ -54,7 +54,7 @@ const TEAM_NAME_MAP = {
   'Charlton Athletic FC': 'Charlton',
   'Coventry City FC': 'Coventry',
   'Derby County FC': 'Derby',
-  'Hull City AFC': 'Hull',
+  'Hull City AFC': 'Hull City',
   'Ipswich Town FC': 'Ipswich',
   'Leicester City FC': 'Leicester',
   'Middlesbrough FC': 'Middlesbrough',

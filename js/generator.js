@@ -57,7 +57,8 @@ function renderHTML() {
     <div class="gen-card">
       <div class="gen-card-title"><span class="step-num">1</span>Video Type</div>
       <div class="type-tabs">
-        <button class="type-tab active" onclick="Gen.setType('fan')">&#9917; Fan Reactions</button>
+        <button class="type-tab active" onclick="Gen.setType('fan')">&#9917; Home Fan Reactions</button>
+        <button class="type-tab" onclick="Gen.setType('fanAway')">&#9917; Away Fan Reactions</button>
         <button class="type-tab" onclick="Gen.setType('mixed')">&#129309; Mixed Fans</button>
         <button class="type-tab" onclick="Gen.setType('rivals')">&#128520; Rivals &amp; Haters</button>
         <button class="type-tab" onclick="Gen.setType('postmatch')">&#127908; Post-Match</button>
@@ -330,7 +331,7 @@ function onEmotionType() {
 function setType(t) {
   videoType = t;
   document.querySelectorAll('.type-tab').forEach(function(el, i) {
-    el.classList.toggle('active', ['fan', 'mixed', 'rivals', 'postmatch', 'transfer'][i] === t);
+    el.classList.toggle('active', ['fan', 'fanAway', 'mixed', 'rivals', 'postmatch', 'transfer'][i] === t);
   });
   document.getElementById('rivalRow').style.display    = t === 'rivals'   ? 'block' : 'none';
   document.getElementById('transferRow').style.display  = t === 'transfer' ? 'block' : 'none';
@@ -637,10 +638,12 @@ function generate() {
   var social = ['\u{1F4F8} Instagram: ' + FIXED_IG, '\u{1F426} X: ' + FIXED_X].join('\n');
 
   var title = '', desc = '', tags = [];
-  if (videoType === 'fan') {
-    title = tA + ' Fans ' + emotRaw + ' Reactions to ' + tA + ' ' + score + ' ' + tB + ' | ' + comp + ' Fan Reactions';
-    desc = tA + ' fans react to ' + tA + ' ' + score + ' ' + tB + ' \u2014 every goal, every moment, every emotion. Watch die-hard ' + tA + ' supporters experience every goal, every near-miss, and every heart-stopping moment of this ' + comp + ' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n' + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n' + social;
-    tags = [tA + ' Fan Reaction', tA + ' Fans React', tA + ' vs ' + tB, tA + ' ' + score + ' ' + tB, comp + ' Fan Reactions', 'Football Fan Reactions', tA + ' goal reaction', tA + ' watchalong', 'Premier League Fan Reactions', 'Champions League Fan Reactions', 'fan reactions football', tA + ' fans ' + emotPlain.toLowerCase(), tB + ' fan reaction', 'fan reactions compilation', 'football reactions'];
+  if (videoType === 'fan' || videoType === 'fanAway') {
+    var reactingTeam = videoType === 'fanAway' ? tB : tA;
+    var otherTeam = videoType === 'fanAway' ? tA : tB;
+    title = reactingTeam + ' Fans ' + emotRaw + ' Reactions to ' + tA + ' ' + score + ' ' + tB + ' | ' + comp + ' Fan Reactions';
+    desc = reactingTeam + ' fans react to ' + tA + ' ' + score + ' ' + tB + ' \u2014 every goal, every moment, every emotion. Watch die-hard ' + reactingTeam + ' supporters experience every goal, every near-miss, and every heart-stopping moment of this ' + comp + ' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n' + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n' + social;
+    tags = [reactingTeam + ' Fan Reaction', reactingTeam + ' Fans React', tA + ' vs ' + tB, tA + ' ' + score + ' ' + tB, comp + ' Fan Reactions', 'Football Fan Reactions', reactingTeam + ' goal reaction', reactingTeam + ' watchalong', 'Premier League Fan Reactions', 'Champions League Fan Reactions', 'fan reactions football', reactingTeam + ' fans ' + emotPlain.toLowerCase(), otherTeam + ' fan reaction', 'fan reactions compilation', 'football reactions'];
   } else if (videoType === 'mixed') {
     title = tA + ' & ' + tB + ' Fans ' + emotRaw + ' Reactions to ' + tA + ' ' + score + ' ' + tB + ' | ' + comp + ' Fan Reactions';
     desc = tA + ' and ' + tB + ' fans react to ' + tA + ' ' + score + ' ' + tB + ' \u2014 every goal, every moment, every emotion from both sides. Watch die-hard supporters from both clubs experience every goal, every near-miss, and every heart-stopping moment of this ' + comp + ' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n' + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n' + social;

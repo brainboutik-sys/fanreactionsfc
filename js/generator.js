@@ -555,6 +555,13 @@ function buildTags(list) {
 
 function plainEmotion(e) { return e.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '').trim(); }
 
+// YouTube only shows the first 3 hashtags found in a description above the
+// video title/in search — matching that exact count is deliberate, not
+// arbitrary. Strips spaces/punctuation so multi-word names hashtag cleanly
+// (e.g. "Premier League" → "#PremierLeague").
+function toHashtag(s) { return '#' + String(s).replace(/[^a-zA-Z0-9]/g, ''); }
+function buildHashtags(a, b, c) { return [toHashtag(a), toHashtag(b), toHashtag(c)].join(' '); }
+
 // ── Validation ───────────────────────────────────────────────────────────────
 function validate() {
   var errors = [];
@@ -637,32 +644,43 @@ function generate() {
   var chBlock = chLines.length ? chLines.join('\n') : '\u26BD [Add channel credits above]';
   var social = ['\u{1F4F8} Instagram: ' + FIXED_IG, '\u{1F426} X: ' + FIXED_X].join('\n');
 
-  var title = '', desc = '', tags = [];
+  var title = '', desc = '', tags = [], hashtags = '';
   if (videoType === 'fan' || videoType === 'fanAway') {
     var reactingTeam = videoType === 'fanAway' ? tB : tA;
     var otherTeam = videoType === 'fanAway' ? tA : tB;
     title = reactingTeam + ' Fans ' + emotRaw + ' Reactions to ' + tA + ' ' + score + ' ' + tB + ' | ' + comp + ' Fan Reactions';
     desc = reactingTeam + ' fans react to ' + tA + ' ' + score + ' ' + tB + ' \u2014 every goal, every moment, every emotion. Watch die-hard ' + reactingTeam + ' supporters experience every goal, every near-miss, and every heart-stopping moment of this ' + comp + ' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n' + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n' + social;
     tags = [reactingTeam + ' Fan Reaction', reactingTeam + ' Fans React', tA + ' vs ' + tB, tA + ' ' + score + ' ' + tB, comp + ' Fan Reactions', 'Football Fan Reactions', reactingTeam + ' goal reaction', reactingTeam + ' watchalong', 'Premier League Fan Reactions', 'Champions League Fan Reactions', 'fan reactions football', reactingTeam + ' fans ' + emotPlain.toLowerCase(), otherTeam + ' fan reaction', 'fan reactions compilation', 'football reactions'];
+    hashtags = buildHashtags(tA, tB, comp);
   } else if (videoType === 'mixed') {
     title = tA + ' & ' + tB + ' Fans ' + emotRaw + ' Reactions to ' + tA + ' ' + score + ' ' + tB + ' | ' + comp + ' Fan Reactions';
     desc = tA + ' and ' + tB + ' fans react to ' + tA + ' ' + score + ' ' + tB + ' \u2014 every goal, every moment, every emotion from both sides. Watch die-hard supporters from both clubs experience every goal, every near-miss, and every heart-stopping moment of this ' + comp + ' match in real time. From pure ecstasy to absolute heartbreak \u2014 this is what football means to real fans.\n\n\u23F1\uFE0F TIMESTAMPS\n' + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe for fan reaction compilations posted the moment the final whistle blows \u2014 Premier League and Champions League every matchday.\n\n' + social;
     tags = [tA + ' Fan Reaction', tB + ' Fan Reaction', tA + ' ' + tB + ' Fans React', tA + ' vs ' + tB, tA + ' ' + score + ' ' + tB, comp + ' Fan Reactions', 'Football Fan Reactions', tA + ' goal reaction', tB + ' goal reaction', 'Premier League Fan Reactions', 'Champions League Fan Reactions', 'fan reactions football', 'mixed fan reactions', 'fan reactions compilation', 'football reactions'];
+    hashtags = buildHashtags(tA, tB, comp);
   } else if (videoType === 'rivals') {
     title = rival + ' Fans ' + emotRaw + ' Watching ' + tA + ' ' + score + ' ' + tB + ' | ' + comp + ' Rivals Reactions';
     desc = rival + ' fans react to ' + tB + "'s " + score + ' defeat \u2014 and they are absolutely loving every second of it. Watch rival supporters celebrate, mock, and revel in ' + tB + "'s misery as the goals go in. Pure schadenfreude. This is football at its most ruthless.\n\n\u23F1\uFE0F TIMESTAMPS\n" + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\nShow some love \u2014 subscribe to the creators who appear:\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe \u2014 new reaction compilations posted at full time, every Premier League and Champions League matchday.\n\n' + social;
     tags = [rival + ' Fans React', tB + ' Fan Reactions', 'Rivals React', 'Haters React', tA + ' ' + score + ' ' + tB, comp + ' Rivals Reactions', 'Football Schadenfreude', rival + ' reaction to ' + tB, 'Premier League Rivals Reactions', tB + ' fans ' + emotPlain.toLowerCase(), 'fan reactions', 'rivals and haters', 'football fan reactions', 'schadenfreude football', tA + ' ' + tB + ' reaction'];
+    hashtags = buildHashtags(rival, tB, comp);
   } else if (videoType === 'postmatch') {
     title = tA + ' & ' + tB + ' Fans ' + emotRaw + ' Post-Match Reactions | ' + tA + ' ' + score + ' ' + tB + ' | ' + comp;
     desc = tA + ' ' + score + ' ' + tB + ' \u2014 post-match fan reactions. Watch ' + tA + ' and ' + tB + ' fans process what just happened. The highs, the lows, the disbelief, the fury \u2014 unfiltered and in real time.\n\n\u23F1\uFE0F TIMESTAMPS\n' + tsBlock + '\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe \u2014 post-match reactions and fan compilation videos every Premier League and Champions League matchday.\n\n' + social;
     tags = [tA + ' Post Match Reaction', tB + ' Post Match Reaction', tA + ' ' + score + ' ' + tB, 'Post Match Fan Reactions', comp + ' Post Match', tA + ' fans', tB + ' fans', 'full time reaction', 'Football Fan Reactions', 'Premier League Post Match', 'Champions League Post Match', emotPlain.toLowerCase() + ' fans', tA + ' ' + tB + ' reaction', 'football fan reactions', 'post match reactions'];
+    hashtags = buildHashtags(tA, tB, comp);
   } else {
     var verb = tType === 'signing' ? 'SIGNS' : tType === 'sacking' ? 'SACKED' : 'LEAVES';
     var vd = tType === 'signing' ? 'joining' : tType === 'sacking' ? 'being sacked from' : 'leaving';
     title = tA + ' Fans ' + emotRaw + ' as ' + tName + ' ' + verb + ' | ' + comp + ' Fan Reactions';
     desc = tA + ' fans react to ' + tName + ' ' + vd + ' ' + tA + '. Every emotion, every take, unfiltered \u2014 this is what it means to be a football fan when the news breaks.\n\n\u{1F4FA} FAN CHANNELS IN THIS VIDEO\n' + chBlock + '\n\n\u2014\n\n' + PROMO_BLOCK + '\n\n\u{1F514} Subscribe \u2014 reaction compilations posted immediately as the news breaks.\n\n' + social;
     tags = [tA + ' Fan Reaction', tName + ' ' + tA, tA + ' ' + tType, tName + ' reaction', 'Football Transfer Reaction', comp + ' Transfer', tA + ' fans', tName + ' ' + verb.toLowerCase(), 'football fan reactions', 'Premier League transfer', tA + ' transfer news', 'fan reactions', tName, 'football news reaction'];
+    hashtags = buildHashtags(tA, tName, comp);
   }
+
+  // Repeat the title as the description's first line (keywords surfaced
+  // again right where YouTube weights them most), then close with exactly
+  // 3 hashtags — YouTube only pulls the first 3 in a description up into
+  // the title/search display, so more than that is wasted.
+  desc = title + '\n\n' + desc + '\n\n' + hashtags;
 
   var tagsStr = buildTags(tags);
   document.getElementById('outTitle').textContent = title;

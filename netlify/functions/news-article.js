@@ -39,9 +39,17 @@ function esc(s) {
 }
 
 // Same paragraph-splitting convention as newsBodyHTML() in js/app.js — body
-// is stored as plain text, not markdown/HTML.
+// is stored as plain text, not markdown/HTML. Same YouTube-embed regex too
+// — keep both in sync.
+const YOUTUBE_URL_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/;
+
 function bodyHtml(body) {
-  return body.split(/\n\s*\n/).map(p => `<p>${esc(p.trim())}</p>`).join('');
+  return body.split(/\n\s*\n/).map(p => {
+    const trimmed = p.trim();
+    const m = trimmed.match(YOUTUBE_URL_RE);
+    if (m) return `<div class="news-video-embed"><iframe src="https://www.youtube.com/embed/${m[1]}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+    return `<p>${esc(trimmed)}</p>`;
+  }).join('');
 }
 
 exports.handler = async (event) => {

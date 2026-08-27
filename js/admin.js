@@ -533,7 +533,11 @@ function openArticleForm(a) {
     '<div style="font-size:var(--fs-xs);color:var(--text-muted);margin:-8px 0 12px">URL: /news/<span id="af_slug_preview">' + escHtml(a?.slug || '') + '</span></div>' +
     formField('Dek (optional subtitle)', 'af_dek', a?.dek || '') +
     formField('Summary (used for the article card and search description)', 'af_summary', a?.summary || '', 'textarea') +
-    '<div class="admin-form-row"><label class="admin-form-label" for="af_body">Body</label><textarea class="admin-form-input" id="af_body" rows="14" style="resize:vertical;font-family:inherit">' + escHtml(a?.body || '') + '</textarea></div>' +
+    '<div class="admin-form-row"><label class="admin-form-label" for="af_body">Body</label>' +
+      '<div style="font-size:var(--fs-xs);color:var(--text-muted);margin-bottom:6px">Paste a YouTube link on its own line (with a blank line before and after) to embed the video there.</div>' +
+      '<textarea class="admin-form-input" id="af_body" rows="14" style="resize:vertical;font-family:inherit">' + escHtml(a?.body || '') + '</textarea>' +
+      '<button type="button" class="btn-admin btn-admin-ghost" style="margin-top:8px" onclick="Admin.insertYoutubeEmbed()">&#9654; Insert YouTube Video</button>' +
+    '</div>' +
     '<div class="admin-form-row">' +
       '<label class="admin-form-label">Cover Image <span style="font-weight:400;color:var(--text-muted)">— also used as the social share image (Facebook, X, Discord, etc.)</span></label>' +
       '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">' +
@@ -595,6 +599,29 @@ async function handleArticleCoverUpload(e, articleId) {
     msg.style.color = 'var(--red)';
     msg.textContent = 'Upload failed: ' + err.message;
   }
+}
+
+// YOUTUBE_URL_RE is declared in app.js (loaded before admin.js) — reused
+// here so "does this look like a video URL" stays in exactly one place.
+function insertYoutubeEmbed() {
+  var url = window.prompt('Paste the YouTube video URL:');
+  if (!url) return;
+  var trimmed = url.trim();
+  if (!YOUTUBE_URL_RE.test(trimmed)) { toast('That doesn\'t look like a YouTube video URL', 'error'); return; }
+
+  var textarea = document.getElementById('af_body');
+  var pos = textarea.selectionStart != null ? textarea.selectionStart : textarea.value.length;
+  var before = textarea.value.slice(0, pos);
+  var after = textarea.value.slice(pos);
+  var leadingGap = before.length === 0 ? '' : (before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n');
+  var trailingGap = after.length === 0 ? '' : (after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n');
+  var insertion = leadingGap + trimmed + trailingGap;
+
+  textarea.value = before + insertion + after;
+  textarea.focus();
+  var newPos = before.length + insertion.length;
+  textarea.setSelectionRange(newPos, newPos);
+  toast('Video embed inserted', 'success');
 }
 
 async function saveArticle(id, articleId) {
@@ -1501,6 +1528,7 @@ window.Admin = {
   rejectSubmission: rejectSubmission,
   openAddArticle: openAddArticle,
   editArticle: editArticle,
+  insertYoutubeEmbed: insertYoutubeEmbed,
   saveArticle: saveArticle,
   publishArticle: publishArticle,
   unpublishArticle: unpublishArticle,

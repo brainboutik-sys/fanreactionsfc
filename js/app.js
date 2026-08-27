@@ -2895,8 +2895,19 @@ function legalPageShell(eyebrow, title, bodyHtml) {
 const NEWS_PAGE_SIZE = 12;
 let newsOffset = 0;
 
+// A paragraph that's nothing but a YouTube URL (pasted on its own line,
+// blank line before/after — the same convention as any other paragraph)
+// renders as a responsive embed instead of link text. Same regex as
+// bodyHtml() in netlify/functions/news-article.js — keep both in sync.
+const YOUTUBE_URL_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/;
+
 function newsBodyHTML(body) {
-  return body.split(/\n\s*\n/).map(p => `<p>${escHtml(p.trim())}</p>`).join('');
+  return body.split(/\n\s*\n/).map(p => {
+    const trimmed = p.trim();
+    const m = trimmed.match(YOUTUBE_URL_RE);
+    if (m) return `<div class="news-video-embed"><iframe src="https://www.youtube.com/embed/${m[1]}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+    return `<p>${escHtml(trimmed)}</p>`;
+  }).join('');
 }
 
 function newsCardHTML(a) {

@@ -13,11 +13,13 @@ var allSubmissions = [];
 var allArticles = [];
 var allCandidates = [];
 var allUsers = [];
+var allRoles = [];
 var adminLog = [];
 var creatorSearch = '';
 var creatorSort = 'name';
 var creatorPage = 0;
 var PAGE_SIZE = 25;
+var currentPermissions = {}; // permission key -> true, for the signed-in user's role
 
 // ── Auth check ───────────────────────────────────────────────────────────────
 async function checkAdmin() {
@@ -25,6 +27,22 @@ async function checkAdmin() {
   adminRole = data?.role || null;
   return !!adminRole;
 }
+
+// Loads the signed-in user's own permission set. This is a cosmetic
+// convenience only — every permission-gated action is enforced server-side
+// (RLS policies via frfc_has_permission(), or a Netlify function checking
+// the same), so hiding a button here never IS the security boundary, it
+// just avoids showing controls that would fail anyway.
+async function loadPermissions() {
+  currentPermissions = {};
+  var roleRes = await sb.from('frfc_admin_roles').select('role').eq('user_id', currentUser.id).single();
+  adminRole = roleRes.data ? roleRes.data.role : null;
+  if (!adminRole) return;
+  var res = await sb.from('frfc_role_permissions').select('permission_key').eq('role_slug', adminRole);
+  (res.data || []).forEach(function(p) { currentPermissions[p.permission_key] = true; });
+}
+
+function can(permission) { return !!currentPermissions[permission]; }
 
 // ── Toast ────────────────────────────────────────────────────────────────────
 function toast(msg, type) {
@@ -43,50 +61,68 @@ async function logAction(action, entityType, entityId, details) {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadAdminData() {
-  var [creatorsRes, logRes, subsRes, articlesRes, candidatesRes] = await Promise.all([
+  var [creatorsRes, logRes, subsRes, articlesRes, candidatesRes, rolesRes] = await Promise.all([
     sb.from('frfc_streamers').select('*').order('name'),
     sb.from('frfc_admin_log').select('*').order('created_at', { ascending: false }).limit(50),
     sb.from('frfc_submissions').select('*').order('submitted_at', { ascending: false }),
     sb.from('frfc_articles').select('*').order('updated_at', { ascending: false }),
-    sb.from('frfc_story_candidates').select('*').order('created_at', { ascending: false }).limit(50)
+    sb.from('frfc_story_candidates').select('*').order('created_at', { ascending: false }).limit(50),
+    sb.from('frfc_roles').select('*').order('name')
   ]);
   allCreators = creatorsRes.data || [];
   adminLog = logRes.data || [];
   allSubmissions = subsRes.data || [];
   allArticles = articlesRes.data || [];
   allCandidates = candidatesRes.data || [];
+  allRoles = rolesRes.data || [];
 }
 
 // ── Render shell ─────────────────────────────────────────────────────────────
-function renderHTML() {
-  var navItems = [
+// Nav items with a required permission are hidden until loadPermissions()
+// has run — at renderHTML() time (before Admin.init()) currentPermissions
+// is still empty, so those tabs are absent on first paint and appear once
+// refreshNav() re-renders after permissions load. This is cosmetic only;
+// the actual gate for every one of these pages' actions is server-side.
+function navItems() {
+  return [
     { id: 'dashboard', icon: '&#9632;', label: 'Dashboard' },
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
     { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
     { id: 'news',      icon: '&#9998;', label: 'News', badge: allArticles.filter(function(a){return a.status==='draft'}).length || null },
-    { id: 'queue',     icon: '&#9873;', label: 'Editorial Queue', badge: allCandidates.filter(function(c){return c.status==='evidence_ready' || c.status==='review_ready'}).length || null },
-    { id: 'health',    icon: '&#9877;', label: 'Health' },
-    { id: 'users',     icon: '&#9823;', label: 'Users' },
-    { id: 'settings',  icon: '&#9881;', label: 'Settings' },
-    { id: 'logs',      icon: '&#9776;', label: 'Activity Log' }
-  ];
+    { id: 'queue',     icon: '&#9873;', label: 'Editorial Queue', badge: allCandidates.filter(function(c){return c.status==='evidence_ready' || c.status==='review_ready'}).length || null, permission: 'editorial_queue.manage' },
+    { id: 'health',    icon: '&#9877;', label: 'Health', permission: 'health.view' },
+    { id: 'users',     icon: '&#9823;', label: 'Users', permission: 'users.view' },
+    { id: 'roles',     icon: '&#9878;', label: 'Roles', permission: 'roles.view' },
+    { id: 'settings',  icon: '&#9881;', label: 'Settings', permission: 'settings.manage' },
+    { id: 'logs',      icon: '&#9776;', label: 'Activity Log', permission: 'logs.view' }
+  ].filter(function(n) { return !n.permission || can(n.permission); });
+}
 
+function renderNavHTML() {
+  return navItems().map(function(n) {
+    return '<button class="admin-nav-item' + (adminPage === n.id ? ' active' : '') + '" onclick="Admin.go(\'' + n.id + '\')">' +
+      '<span class="nav-icon">' + n.icon + '</span>' + n.label +
+      (n.badge ? '<span class="nav-badge">' + n.badge + '</span>' : '') +
+    '</button>';
+  }).join('') +
+  '<div class="admin-nav-sep"></div>' +
+  '<div class="admin-nav-back"><a href="/" class="admin-nav-item" onclick="event.preventDefault();navigate(\'/\')"><span class="nav-icon">&#8592;</span>Back to Site</a></div>';
+}
+
+// Re-renders the sidebar nav once permissions have loaded (see init()).
+function refreshNav() {
+  var nav = document.querySelector('.admin-nav');
+  if (nav) nav.innerHTML = renderNavHTML();
+}
+
+function renderHTML() {
   return '<div class="admin-layout">' +
     '<aside class="admin-sidebar" id="adminSidebar">' +
       '<div class="admin-sidebar-header">' +
         '<div class="admin-sidebar-title">Admin Panel</div>' +
         '<div class="admin-sidebar-user">' + escHtml(currentUser?.email || '') + '</div>' +
       '</div>' +
-      '<nav class="admin-nav">' +
-        navItems.map(function(n) {
-          return '<button class="admin-nav-item' + (adminPage === n.id ? ' active' : '') + '" onclick="Admin.go(\'' + n.id + '\')">' +
-            '<span class="nav-icon">' + n.icon + '</span>' + n.label +
-            (n.badge ? '<span class="nav-badge">' + n.badge + '</span>' : '') +
-          '</button>';
-        }).join('') +
-        '<div class="admin-nav-sep"></div>' +
-        '<div class="admin-nav-back"><a href="/" class="admin-nav-item" onclick="event.preventDefault();navigate(\'/\')"><span class="nav-icon">&#8592;</span>Back to Site</a></div>' +
-      '</nav>' +
+      '<nav class="admin-nav">' + renderNavHTML() + '</nav>' +
     '</aside>' +
     '<main class="admin-main" id="adminContent">' +
       '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>' +
@@ -109,16 +145,28 @@ function renderSidebar() {
   });
 }
 
+// Pages gated on a permission — if the current page requires one the user
+// doesn't have (e.g. reached via a stale bookmark or direct Admin.go()
+// call), show a plain access-denied message instead of attempting to load
+// data the server will reject anyway.
+var PAGE_PERMISSIONS = { queue: 'editorial_queue.manage', health: 'health.view', users: 'users.view', roles: 'roles.view', settings: 'settings.manage', logs: 'logs.view' };
+
 function renderPage() {
   var content = document.getElementById('adminContent');
   var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  var requiredPermission = PAGE_PERMISSIONS[adminPage];
+  if (requiredPermission && !can(requiredPermission)) {
+    content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Access Denied</h1><div class="admin-page-subtitle">Your role doesn\'t include the &ldquo;' + requiredPermission + '&rdquo; permission.</div></div></div>';
+    return;
+  }
   if (adminPage === 'dashboard')  content.innerHTML = toggle + renderDashboard();
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
   else if (adminPage === 'queue')    content.innerHTML = toggle + renderQueue();
   else if (adminPage === 'health')   { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Health</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderHealth(); }
-  else if (adminPage === 'users')    content.innerHTML = toggle + renderUsers();
+  else if (adminPage === 'users')    { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Users</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderUsers(); }
+  else if (adminPage === 'roles')    { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Roles</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderRoles(); }
   else if (adminPage === 'settings') content.innerHTML = toggle + renderSettings();
   else if (adminPage === 'logs')     content.innerHTML = toggle + renderLogs();
 }
@@ -188,7 +236,7 @@ function renderCreators() {
   var totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   var paged = filtered.slice(creatorPage * PAGE_SIZE, (creatorPage + 1) * PAGE_SIZE);
 
-  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Creators</h1><div class="admin-page-subtitle">' + allCreators.length + ' creators in database</div></div><div class="admin-page-actions"><button class="btn-admin btn-admin-primary" onclick="Admin.openAddCreator()">+ Add Creator</button></div></div>' +
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Creators</h1><div class="admin-page-subtitle">' + allCreators.length + ' creators in database</div></div><div class="admin-page-actions">' + (can('creators.create') ? '<button class="btn-admin btn-admin-primary" onclick="Admin.openAddCreator()">+ Add Creator</button>' : '') + '</div></div>' +
 
   '<div class="admin-table-wrap">' +
     '<div class="admin-table-toolbar">' +
@@ -206,7 +254,7 @@ function renderCreators() {
         '<td>' + formatNum(c.total_view_count || 0) + '</td>' +
         '<td>' + escHtml(c.upload_frequency || '—') + '</td>' +
         '<td>' + (c.verified ? '<span class="admin-badge admin-badge-green">Verified</span>' : '') + (c.is_live ? ' <span class="admin-badge admin-badge-red">LIVE</span>' : '') + (c.featured ? ' <span class="admin-badge admin-badge-yellow">Featured</span>' : '') + (!c.verified && !c.is_live && !c.featured ? '<span class="admin-badge admin-badge-dim">Standard</span>' : '') + '</td>' +
-        '<td><div class="row-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.editCreator(\'' + c.id + '\')">Edit</button><button class="btn-admin btn-admin-danger" onclick="Admin.deleteCreator(\'' + c.id + '\',\'' + jsAttrStr(c.name) + '\')">Del</button></div></td>' +
+        '<td><div class="row-actions">' + (can('creators.edit') ? '<button class="btn-admin btn-admin-ghost" onclick="Admin.editCreator(\'' + c.id + '\')">Edit</button>' : '') + (can('creators.delete') ? '<button class="btn-admin btn-admin-danger" onclick="Admin.deleteCreator(\'' + c.id + '\',\'' + jsAttrStr(c.name) + '\')">Del</button>' : '') + '</div></td>' +
       '</tr>';
     }).join('') +
     '</tbody></table>' +
@@ -381,9 +429,9 @@ function renderSubmissions() {
         '<td>' + escHtml(s.team) + '</td>' +
         '<td><span class="admin-badge admin-badge-dim">' + escHtml(s.league) + '</span></td>' +
         '<td class="row-dim">' + timeAgo(s.submitted_at) + '</td>' +
-        '<td><div class="row-actions">' +
+        '<td><div class="row-actions">' + (can('submissions.review') ?
           '<button class="btn-admin btn-admin-success" onclick="Admin.approveSubmission(\'' + s.id + '\')">Approve</button>' +
-          '<button class="btn-admin btn-admin-danger" onclick="Admin.rejectSubmission(\'' + s.id + '\')">Reject</button>' +
+          '<button class="btn-admin btn-admin-danger" onclick="Admin.rejectSubmission(\'' + s.id + '\')">Reject</button>' : '') +
         '</div></td></tr>';
     }).join('') +
   '</tbody></table></div></div>' : '<div class="admin-card"><div class="admin-card-body" style="text-align:center;color:var(--text-dim);padding:32px">No pending submissions</div></div>') +
@@ -440,7 +488,7 @@ function renderNews() {
   var published = allArticles.filter(function(a){return a.status==='published'});
 
   return '<div class="admin-page-header"><div><h1 class="admin-page-title">News</h1><div class="admin-page-subtitle">' + allArticles.length + ' articles &middot; ' + published.length + ' published</div></div>' +
-    '<button class="btn-admin btn-admin-primary" onclick="Admin.openAddArticle()">New Article</button></div>' +
+    (can('articles.create') ? '<button class="btn-admin btn-admin-primary" onclick="Admin.openAddArticle()">New Article</button>' : '') + '</div>' +
 
   (allArticles.length ? '<div class="admin-card"><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Title</th><th>Status</th><th>Tags</th><th>Updated</th><th>Actions</th></tr></thead><tbody>' +
     allArticles.map(function(a) {
@@ -450,11 +498,11 @@ function renderNews() {
         '<td style="font-size:var(--fs-sm);color:var(--text-dim)">' + (a.tags||[]).map(escHtml).join(', ') + '</td>' +
         '<td class="row-dim">' + timeAgo(a.updated_at) + '</td>' +
         '<td><div class="row-actions">' +
-          '<button class="btn-admin btn-admin-ghost" onclick="Admin.editArticle(\'' + a.id + '\')">Edit</button>' +
-          (a.status === 'published'
+          (can('articles.edit') ? '<button class="btn-admin btn-admin-ghost" onclick="Admin.editArticle(\'' + a.id + '\')">Edit</button>' : '') +
+          (can('articles.publish') ? (a.status === 'published'
             ? '<button class="btn-admin" onclick="Admin.unpublishArticle(\'' + a.id + '\')">Unpublish</button>'
-            : '<button class="btn-admin btn-admin-success" onclick="Admin.publishArticle(\'' + a.id + '\')">Publish</button>') +
-          '<button class="btn-admin btn-admin-danger" onclick="Admin.deleteArticle(\'' + a.id + '\',\'' + jsAttrStr(a.title) + '\')">Delete</button>' +
+            : '<button class="btn-admin btn-admin-success" onclick="Admin.publishArticle(\'' + a.id + '\')">Publish</button>') : '') +
+          (can('articles.delete') ? '<button class="btn-admin btn-admin-danger" onclick="Admin.deleteArticle(\'' + a.id + '\',\'' + jsAttrStr(a.title) + '\')">Delete</button>' : '') +
         '</div></td></tr>';
     }).join('') + '</tbody></table></div></div>'
   : '<div class="admin-card"><div class="admin-card-body" style="text-align:center;color:var(--text-dim);padding:32px">No articles yet &mdash; click &ldquo;New Article&rdquo; to write your first one.</div></div>');
@@ -604,7 +652,7 @@ function publishArticle(id) {
   var a = allArticles.find(function(x){return x.id===id});
   if (!a) return;
   confirmDialog('Publish "' + a.title + '"? It becomes publicly visible and indexable immediately.', async function() {
-    var res = await sb.from('frfc_articles').update({ status: 'published', published_at: a.published_at || new Date().toISOString() }).eq('id', id);
+    var res = await sb.rpc('frfc_set_article_status', { p_article_id: id, p_status: 'published' });
     if (res.error) { toast(res.error.message, 'error'); return; }
     await logAction('publish', 'article', id, { title: a.title });
     toast('Published', 'success');
@@ -617,7 +665,7 @@ function unpublishArticle(id) {
   var a = allArticles.find(function(x){return x.id===id});
   if (!a) return;
   confirmDialog('Unpublish "' + a.title + '"? It will no longer be publicly visible.', async function() {
-    var res = await sb.from('frfc_articles').update({ status: 'draft' }).eq('id', id);
+    var res = await sb.rpc('frfc_set_article_status', { p_article_id: id, p_status: 'draft' });
     if (res.error) { toast(res.error.message, 'error'); return; }
     await logAction('unpublish', 'article', id, { title: a.title });
     toast('Unpublished', 'info');
@@ -688,6 +736,7 @@ async function generateWeeklyRanking() {
     });
     var data = await res.json().catch(function() { return {}; });
     if (!res.ok) { toast(data.error || 'Failed to generate ranking', 'error'); return; }
+    await logAction('generate', 'story_candidate', data.candidateId, { workingTitle: data.workingTitle });
     toast('Ranking generated: ' + data.workingTitle, 'success');
     if (data.dataQualityNotes && data.dataQualityNotes.length) {
       data.dataQualityNotes.forEach(function(n) { toast(n, 'info'); });
@@ -795,6 +844,7 @@ async function generateRankingDraft(id) {
   var res = await sb.from('frfc_story_candidates').update({ payload: payload, status: 'review_ready' }).eq('id', id);
   if (res.error) { toast(res.error.message, 'error'); return; }
   await sb.from('frfc_candidate_status_log').insert({ candidate_id: id, old_status: c.status, new_status: 'review_ready', changed_by: currentUser.id, note: 'Templated draft generated' });
+  await logAction('generate_draft', 'story_candidate', id, { title: draft.title });
   toast('Draft generated', 'success');
   await loadAdminData();
   openCandidateDetail(id);
@@ -842,6 +892,7 @@ async function approveAndPublishCandidate(id) {
     var articleId = articleRes.data[0].id;
     await sb.from('frfc_story_candidates').update({ status: 'published', article_id: articleId }).eq('id', id);
     await sb.from('frfc_candidate_status_log').insert({ candidate_id: id, old_status: c.status, new_status: 'published', changed_by: currentUser.id, note: 'Published as article ' + articleId });
+    await logAction('publish', 'article', articleId, { title: draft.title, fromCandidate: id });
     toast('Published!', 'success');
     closeModal();
     await loadAdminData();
@@ -855,6 +906,7 @@ function rejectCandidate(id) {
   confirmDialog('Reject "' + c.working_title + '"?', async function() {
     await sb.from('frfc_story_candidates').update({ status: 'rejected' }).eq('id', id);
     await sb.from('frfc_candidate_status_log').insert({ candidate_id: id, old_status: c.status, new_status: 'rejected', changed_by: currentUser.id });
+    await logAction('reject', 'story_candidate', id, { title: c.working_title });
     toast('Rejected', 'info');
     closeModal();
     await loadAdminData();
@@ -905,16 +957,303 @@ async function loadAndRenderHealth() {
 }
 
 // ── Users page ───────────────────────────────────────────────────────────────
+// Everything here goes through netlify/functions/admin-users.js, the one
+// place in the app that talks to the Supabase Auth Admin API. Every action
+// it performs is permission-checked server-side (see ACTION_PERMISSIONS in
+// that file) — the can(...) checks below only decide what to show, never
+// what's actually allowed.
+async function callAdminUsers(action, payload) {
+  var session = (await sb.auth.getSession()).data.session;
+  var res = await fetch('/.netlify/functions/admin-users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify(Object.assign({ action: action }, payload)),
+  });
+  var data = await res.json().catch(function() { return {}; });
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+async function loadAndRenderUsers() {
+  var content = document.getElementById('adminContent');
+  var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  try {
+    var data = await callAdminUsers('list', {});
+    allUsers = data.users || [];
+  } catch (e) {
+    content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Users</h1></div></div><div class="admin-card"><div class="admin-card-body" style="color:var(--red)">Failed to load users: ' + escHtml(e.message) + '</div></div>';
+    return;
+  }
+  content.innerHTML = toggle + renderUsers();
+}
+
+function roleBadge(roleSlug) {
+  if (!roleSlug) return '<span class="admin-badge admin-badge-dim">No role</span>';
+  var r = allRoles.find(function(x) { return x.slug === roleSlug; });
+  return '<span class="admin-badge admin-badge-blue">' + escHtml(r ? r.name : roleSlug) + '</span>';
+}
+
+function userRowActions(u) {
+  var actions = [];
+  if (can('users.assign_role')) actions.push('<button class="btn-admin btn-admin-ghost" onclick="Admin.openEditUserRole(\'' + u.id + '\')">Role</button>');
+  if (can('users.deactivate')) {
+    actions.push(u.deactivated
+      ? '<button class="btn-admin btn-admin-ghost" onclick="Admin.reactivateUser(\'' + u.id + '\')">Reactivate</button>'
+      : '<button class="btn-admin btn-admin-ghost" onclick="Admin.deactivateUser(\'' + u.id + '\',\'' + jsAttrStr(u.email) + '\')">Deactivate</button>');
+  }
+  if (can('users.reset_password')) actions.push('<button class="btn-admin btn-admin-ghost" onclick="Admin.resetUserPassword(\'' + jsAttrStr(u.email) + '\')">Reset Password</button>');
+  if (can('users.delete') && can('database.destructive_actions')) actions.push('<button class="btn-admin btn-admin-danger" onclick="Admin.deleteUser(\'' + u.id + '\',\'' + jsAttrStr(u.email) + '\')">Delete</button>');
+  return '<div class="row-actions">' + (actions.join('') || '&mdash;') + '</div>';
+}
+
 function renderUsers() {
-  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Users</h1><div class="admin-page-subtitle">Registered users and favorites</div></div></div>' +
-  '<div class="admin-stats">' +
-    stat('Auth Provider', 'Supabase Auth', 'Email/password') +
-    stat('Admin Users', '1', 'super_admin role') +
+  var rows = allUsers.map(function(u) {
+    return '<tr>' +
+      '<td class="row-name">' + escHtml(u.email) + '</td>' +
+      '<td>' + roleBadge(u.role) + '</td>' +
+      '<td>' + (u.deactivated ? '<span class="admin-badge admin-badge-red">Deactivated</span>' : '<span class="admin-badge admin-badge-green">Active</span>') + '</td>' +
+      '<td class="row-dim">' + timeAgo(u.createdAt) + '</td>' +
+      '<td class="row-dim">' + (u.lastSignInAt ? timeAgo(u.lastSignInAt) : '&mdash;') + '</td>' +
+      '<td>' + userRowActions(u) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Users</h1><div class="admin-page-subtitle">' + allUsers.length + ' application user' + (allUsers.length === 1 ? '' : 's') + '</div></div>' +
+    (can('users.create') ? '<button class="btn-admin btn-admin-primary" onclick="Admin.openInviteUser()">+ Invite User</button>' : '') +
   '</div>' +
-  '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">User Management</span></div><div class="admin-card-body">' +
-    '<p style="color:var(--text-dim);font-size:var(--fs-base);margin-bottom:12px">User accounts are managed through Supabase Auth. Favorites are linked to auth.users via foreign keys.</p>' +
-    '<a href="https://supabase.com/dashboard/project/dsxijgrpxsfywxuffbmt/auth/users" target="_blank" rel="noopener" class="btn-admin btn-admin-primary">Open Supabase Auth Dashboard</a>' +
-  '</div></div>';
+  '<div class="admin-card"><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">No users found.</td></tr>') +
+  '</tbody></table></div></div>';
+}
+
+function roleOptionsHTML(selected) {
+  return allRoles.map(function(r) {
+    return '<option value="' + escHtml(r.slug) + '"' + (r.slug === selected ? ' selected' : '') + '>' + escHtml(r.name) + '</option>';
+  }).join('');
+}
+
+function openInviteUser() {
+  var modal = document.getElementById('adminModal');
+  modal.className = 'admin-modal';
+  modal.innerHTML =
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
+    '<div class="admin-modal-title">Invite User</div>' +
+    '<div class="admin-modal-sub">Sends a signup email — no password is set here.</div>' +
+    '<div class="admin-form-row"><label class="admin-form-label">Email</label><input type="email" id="iu_email" placeholder="name@example.com"></div>' +
+    '<div class="admin-form-row"><label class="admin-form-label">Role</label><select id="iu_role">' + roleOptionsHTML('editor') + '</select></div>' +
+    '<div class="admin-form-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button><button class="btn-admin btn-admin-primary" onclick="Admin.submitInviteUser()">Send Invite</button></div>';
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+}
+
+async function submitInviteUser() {
+  var email = document.getElementById('iu_email').value.trim();
+  var role = document.getElementById('iu_role').value;
+  if (!email) { toast('Email is required', 'error'); return; }
+  try {
+    await callAdminUsers('invite', { email: email, role: role });
+    toast('Invite sent to ' + email, 'success');
+    closeModal();
+    await loadAndRenderUsers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function openEditUserRole(userId) {
+  var u = allUsers.find(function(x) { return x.id === userId; });
+  if (!u) return;
+  var modal = document.getElementById('adminModal');
+  modal.className = 'admin-modal';
+  modal.innerHTML =
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
+    '<div class="admin-modal-title">Change Role</div>' +
+    '<div class="admin-modal-sub">' + escHtml(u.email) + '</div>' +
+    '<div class="admin-form-row"><label class="admin-form-label">Role</label><select id="eur_role">' + roleOptionsHTML(u.role) + '</select></div>' +
+    '<div class="admin-form-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button><button class="btn-admin btn-admin-primary" onclick="Admin.submitEditUserRole(\'' + userId + '\')">Save</button></div>';
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+}
+
+async function submitEditUserRole(userId) {
+  var role = document.getElementById('eur_role').value;
+  try {
+    await callAdminUsers('assign_role', { userId: userId, role: role });
+    toast('Role updated', 'success');
+    closeModal();
+    await loadAndRenderUsers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function deactivateUser(userId, email) {
+  confirmDialog('Deactivate "' + email + '"? They will immediately lose the ability to sign in.', async function() {
+    try {
+      await callAdminUsers('deactivate', { userId: userId });
+      toast('User deactivated', 'info');
+      await loadAndRenderUsers();
+    } catch (e) { toast(e.message, 'error'); }
+  }, { title: 'Deactivate user', confirmLabel: 'Deactivate' });
+}
+
+async function reactivateUser(userId) {
+  try {
+    await callAdminUsers('reactivate', { userId: userId });
+    toast('User reactivated', 'success');
+    await loadAndRenderUsers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function resetUserPassword(email) {
+  confirmDialog('Send a password-reset email to "' + email + '"?', async function() {
+    try {
+      await callAdminUsers('reset_password', { email: email });
+      toast('Password-reset email sent', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  }, { title: 'Reset password', confirmLabel: 'Send Email', danger: false });
+}
+
+function deleteUser(userId, email) {
+  confirmDialog('Permanently delete "' + email + '"? This cannot be undone.', async function() {
+    try {
+      await callAdminUsers('delete', { userId: userId });
+      toast('User deleted', 'success');
+      await loadAndRenderUsers();
+    } catch (e) { toast(e.message, 'error'); }
+  }, { title: 'Delete user', confirmLabel: 'Delete' });
+}
+
+// ── Roles page ───────────────────────────────────────────────────────────────
+// Roles are fully dynamic: the 3 seeded roles (Super Admin/Admin/Editor)
+// are just starting points, editable and deletable like any other except
+// for is_system-protected deletion. The catalog of checkable permissions
+// itself is fixed (frfc_permissions) — only role→permission mappings and
+// user→role assignments are dynamic.
+var allPermissionsCatalog = [];
+var allRolePermissions = [];
+
+async function loadAndRenderRoles() {
+  var content = document.getElementById('adminContent');
+  var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  var [permsRes, rolePermsRes] = await Promise.all([
+    sb.from('frfc_permissions').select('*').order('category'),
+    sb.from('frfc_role_permissions').select('*'),
+  ]);
+  allPermissionsCatalog = permsRes.data || [];
+  allRolePermissions = rolePermsRes.data || [];
+  content.innerHTML = toggle + renderRoles();
+}
+
+function rolePermissionKeys(slug) {
+  return allRolePermissions.filter(function(rp) { return rp.role_slug === slug; }).map(function(rp) { return rp.permission_key; });
+}
+
+function renderRoles() {
+  var rows = allRoles.map(function(r) {
+    var count = rolePermissionKeys(r.slug).length;
+    return '<tr>' +
+      '<td class="row-name">' + escHtml(r.name) + (r.is_system ? ' <span class="admin-badge admin-badge-dim">System</span>' : '') + '</td>' +
+      '<td class="row-dim">' + escHtml(r.description || '') + '</td>' +
+      '<td>' + count + ' / ' + allPermissionsCatalog.length + '</td>' +
+      '<td><div class="row-actions">' +
+        '<button class="btn-admin btn-admin-ghost" onclick="Admin.openRoleDetail(\'' + r.slug + '\')">' + (can('roles.manage') ? 'Edit' : 'View') + '</button>' +
+        (can('roles.manage') && !r.is_system ? '<button class="btn-admin btn-admin-danger" onclick="Admin.deleteRole(\'' + r.slug + '\',\'' + jsAttrStr(r.name) + '\')">Delete</button>' : '') +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Roles</h1><div class="admin-page-subtitle">' + allRoles.length + ' role' + (allRoles.length === 1 ? '' : 's') + '</div></div>' +
+    (can('roles.manage') ? '<button class="btn-admin btn-admin-primary" onclick="Admin.openNewRole()">+ New Role</button>' : '') +
+  '</div>' +
+  '<div class="admin-card"><div class="admin-card-body no-pad"><table class="admin-table"><thead><tr><th>Role</th><th>Description</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px">No roles found.</td></tr>') +
+  '</tbody></table></div></div>';
+}
+
+function openRoleDetail(slug) {
+  var role = allRoles.find(function(r) { return r.slug === slug; });
+  if (!role) return;
+  var granted = rolePermissionKeys(slug);
+  var editable = can('roles.manage');
+  var byCategory = {};
+  allPermissionsCatalog.forEach(function(p) { (byCategory[p.category] = byCategory[p.category] || []).push(p); });
+
+  var body = Object.keys(byCategory).map(function(cat) {
+    return '<div class="admin-form-label" style="margin:14px 0 6px">' + escHtml(cat) + '</div>' +
+      byCategory[cat].map(function(p) {
+        var checked = granted.indexOf(p.key) !== -1;
+        return '<label class="admin-form-check" style="display:block;margin-bottom:6px" title="' + escHtml(p.description || '') + '">' +
+          '<input type="checkbox" data-perm="' + escHtml(p.key) + '"' + (checked ? ' checked' : '') + (editable ? '' : ' disabled') + '> ' + escHtml(p.label) +
+        '</label>';
+      }).join('');
+  }).join('');
+
+  var modal = document.getElementById('adminModal');
+  modal.className = 'admin-modal admin-modal-wide';
+  modal.innerHTML =
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
+    '<div class="admin-modal-title">' + escHtml(role.name) + (role.is_system ? ' <span class="admin-badge admin-badge-dim">System</span>' : '') + '</div>' +
+    '<div class="admin-modal-sub">' + escHtml(role.description || '') + '</div>' +
+    '<div id="rolePermChecklist" style="max-height:50vh;overflow-y:auto;margin:16px 0">' + body + '</div>' +
+    (editable ? '<div class="admin-form-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button><button class="btn-admin btn-admin-primary" onclick="Admin.saveRolePermissions(\'' + slug + '\')">Save</button></div>' : '');
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+}
+
+async function saveRolePermissions(slug) {
+  var checked = [].slice.call(document.querySelectorAll('#rolePermChecklist input[type=checkbox]:checked')).map(function(el) { return el.getAttribute('data-perm'); });
+  var del = await sb.from('frfc_role_permissions').delete().eq('role_slug', slug);
+  if (del.error) { toast(del.error.message, 'error'); return; }
+  if (checked.length) {
+    var ins = await sb.from('frfc_role_permissions').insert(checked.map(function(k) { return { role_slug: slug, permission_key: k }; }));
+    if (ins.error) { toast(ins.error.message, 'error'); return; }
+  }
+  await logAction('update_permissions', 'role', slug, { permissions: checked });
+  toast('Permissions updated', 'success');
+  closeModal();
+  await loadAndRenderRoles();
+  if (slug === adminRole) await loadPermissions(); // editing your own role takes effect immediately
+}
+
+function openNewRole() {
+  var modal = document.getElementById('adminModal');
+  modal.className = 'admin-modal';
+  modal.innerHTML =
+    '<button class="admin-modal-close" onclick="Admin.closeModal()" aria-label="Close">&times;</button>' +
+    '<div class="admin-modal-title">New Role</div>' +
+    '<div class="admin-form-row"><label class="admin-form-label">Name</label><input type="text" id="nr_name" placeholder="e.g. Content Moderator"></div>' +
+    '<div class="admin-form-row"><label class="admin-form-label">Description</label><input type="text" id="nr_desc" placeholder="Optional"></div>' +
+    '<div class="admin-form-actions"><button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button><button class="btn-admin btn-admin-primary" onclick="Admin.submitNewRole()">Create</button></div>';
+  var overlay = document.getElementById('adminModalOverlay');
+  overlay.classList.add('open');
+  activateModalA11y(overlay, modal, closeModal);
+}
+
+async function submitNewRole() {
+  var name = document.getElementById('nr_name').value.trim();
+  var description = document.getElementById('nr_desc').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  var slug = slugify(name);
+  if (!slug) { toast('Name must contain letters or numbers', 'error'); return; }
+  var res = await sb.from('frfc_roles').insert({ slug: slug, name: name, description: description || null });
+  if (res.error) { toast(res.error.message, 'error'); return; }
+  await logAction('create', 'role', slug, { name: name });
+  toast('Role created', 'success');
+  closeModal();
+  await loadAdminData();
+  await loadAndRenderRoles();
+  openRoleDetail(slug); // jump straight to assigning its permissions
+}
+
+function deleteRole(slug, name) {
+  confirmDialog('Delete role "' + name + '"? Users currently assigned this role keep it until you delete or reassign them individually — the delete will fail while anyone still has it.', async function() {
+    var res = await sb.from('frfc_roles').delete().eq('slug', slug);
+    if (res.error) { toast(res.error.message, 'error'); return; }
+    await logAction('delete', 'role', slug, { name: name });
+    toast('Role deleted', 'info');
+    await loadAdminData();
+    await loadAndRenderRoles();
+  }, { title: 'Delete role', confirmLabel: 'Delete' });
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
@@ -1135,7 +1474,10 @@ function closeModal() {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  await loadPermissions();
+  refreshNav();
   await loadAdminData();
+  refreshNav(); // badges (e.g. pending submissions count) depend on loaded data too
   renderPage();
 }
 
@@ -1172,7 +1514,20 @@ window.Admin = {
   generateRankingDraft: generateRankingDraft,
   generateAiDraft: generateAiDraft,
   approveAndPublishCandidate: approveAndPublishCandidate,
-  rejectCandidate: rejectCandidate
+  rejectCandidate: rejectCandidate,
+  openInviteUser: openInviteUser,
+  submitInviteUser: submitInviteUser,
+  openEditUserRole: openEditUserRole,
+  submitEditUserRole: submitEditUserRole,
+  deactivateUser: deactivateUser,
+  reactivateUser: reactivateUser,
+  resetUserPassword: resetUserPassword,
+  deleteUser: deleteUser,
+  openRoleDetail: openRoleDetail,
+  saveRolePermissions: saveRolePermissions,
+  openNewRole: openNewRole,
+  submitNewRole: submitNewRole,
+  deleteRole: deleteRole
 };
 
 })();

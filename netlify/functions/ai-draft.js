@@ -38,9 +38,9 @@ exports.handler = async (event) => {
   const { id: userId } = await userRes.json();
   if (!userId) return res(401, { error: 'Could not identify user' });
 
-  const roleRes = await fetch(`${supabaseUrl}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${userId}`, { headers: sbHeaders });
-  const roles = roleRes.ok ? await roleRes.json() : [];
-  if (!roles.length) return res(403, { error: 'Admin access required' });
+  if (!(await hasPermission(supabaseUrl, sbHeaders, userId, 'editorial_queue.manage'))) {
+    return res(403, { error: 'Permission required: editorial_queue.manage' });
+  }
 
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return res(400, { error: 'Invalid JSON body' }); }
@@ -105,6 +105,7 @@ exports.handler = async (event) => {
       status: 'success', items_processed: 1, items_failed: 0,
       quota_used: usage.total_tokens || null,
     });
+    await logAdminAction(supabaseUrl, sbHeaders, userId, 'generate_ai_draft', 'story_candidate', candidateId, { model: OPENAI_MODEL, tokens: usage.total_tokens || null });
     return res(200, { ok: true, draft });
   } catch (e) {
     await finishJobRun(supabaseUrl, sbHeaders, jobRunId, { status: 'failed', items_processed: 0, items_failed: 1, error_summary: { message: e.message } });
@@ -191,6 +192,31 @@ async function logStatus(supabaseUrl, sbHeaders, candidateId, oldStatus, newStat
 
 function res(statusCode, body) {
   return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+// Calls the same frfc_has_permission() SQL function RLS policies use, via
+// RPC with an explicit user id — SECURITY DEFINER, doesn't depend on
+// auth.uid(), so it works correctly invoked with the service-role key.
+async function hasPermission(supabaseUrl, sbHeaders, userId, permission) {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/frfc_has_permission`, {
+      method: 'POST',
+      headers: sbHeaders,
+      body: JSON.stringify({ p_user_id: userId, p_permission: permission }),
+    });
+    if (!res.ok) return false;
+    return (await res.json()) === true;
+  } catch (e) { return false; }
+}
+
+async function logAdminAction(supabaseUrl, sbHeaders, userId, action, entityType, entityId, details) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_admin_log`, {
+      method: 'POST',
+      headers: { ...sbHeaders, Prefer: 'return=minimal' },
+      body: JSON.stringify({ user_id: userId, action, entity_type: entityType, entity_id: entityId, details: details || null }),
+    });
+  } catch (e) { /* non-critical */ }
 }
 
 module.exports.checkMonthlyCap = checkMonthlyCap;

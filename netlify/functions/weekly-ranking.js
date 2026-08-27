@@ -34,9 +34,9 @@ exports.handler = async (event) => {
   const { id: userId } = await userRes.json();
   if (!userId) return res(401, { error: 'Could not identify user' });
 
-  const roleRes = await fetch(`${supabaseUrl}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${userId}`, { headers: sbHeaders });
-  const roles = roleRes.ok ? await roleRes.json() : [];
-  if (!roles.length) return res(403, { error: 'Admin access required' });
+  if (!(await hasPermission(supabaseUrl, sbHeaders, userId, 'editorial_queue.manage'))) {
+    return res(403, { error: 'Permission required: editorial_queue.manage' });
+  }
 
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return res(400, { error: 'Invalid JSON body' }); }
@@ -118,12 +118,39 @@ exports.handler = async (event) => {
     }
 
     await finishJobRun(supabaseUrl, sbHeaders, jobRunId, { status: 'success', items_processed: growthRowsCount, items_failed: 0 });
+    await logAdminAction(supabaseUrl, sbHeaders, userId, 'generate', 'story_candidate', candidate.id, { workingTitle });
     return res(200, { ok: true, candidateId: candidate.id, workingTitle, dataQualityNotes });
   } catch (e) {
     await finishJobRun(supabaseUrl, sbHeaders, jobRunId, { status: 'failed', items_processed: 0, items_failed: 1, error_summary: { message: e.message } });
     return res(500, { error: e.message });
   }
 };
+
+// Calls the same frfc_has_permission() SQL function RLS policies use,
+// via RPC with an explicit user id — this function is SECURITY DEFINER
+// and doesn't depend on auth.uid(), so it works correctly when invoked
+// with the service-role key on the caller's behalf.
+async function hasPermission(supabaseUrl, sbHeaders, userId, permission) {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/frfc_has_permission`, {
+      method: 'POST',
+      headers: sbHeaders,
+      body: JSON.stringify({ p_user_id: userId, p_permission: permission }),
+    });
+    if (!res.ok) return false;
+    return (await res.json()) === true;
+  } catch (e) { return false; }
+}
+
+async function logAdminAction(supabaseUrl, sbHeaders, userId, action, entityType, entityId, details) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_admin_log`, {
+      method: 'POST',
+      headers: { ...sbHeaders, Prefer: 'return=minimal' },
+      body: JSON.stringify({ user_id: userId, action, entity_type: entityType, entity_id: entityId, details: details || null }),
+    });
+  } catch (e) { /* non-critical */ }
+}
 
 function rankEntry(creatorById, r) {
   const c = creatorById.get(r.creatorId);

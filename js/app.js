@@ -1103,6 +1103,10 @@ function renderHome() {
       </div>
     </div>` : ''}
 
+    <!-- Latest News — fetched after paint (see loadHomeLatestNews) so a
+         slow/failed query never delays the rest of the homepage. -->
+    <div id="homeLatestNews"></div>
+
     <!-- Creator Battle -->
     <div class="container battle-section">
       <div class="battle-wrap">
@@ -1293,8 +1297,41 @@ function renderHome() {
   // Async: populate the FRFC channel video cards after paint.
   loadFRFCVideos();
 
+  // Async: populate the Latest News strip after paint.
+  loadHomeLatestNews();
+
   // Init Creator Battle
   battleInit();
+}
+
+// Fetched after the homepage's main render so a slow/failed news query
+// never delays the Live Now / Creator Battle modules above and below it —
+// same pattern as loadClubRelatedNews() for club pages.
+async function loadHomeLatestNews() {
+  const el = document.getElementById('homeLatestNews');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('frfc_articles')
+      .select('slug,title,summary,cover_image_url,tags,published_at')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(3);
+    if (error || !data || !data.length) return;
+    // Bail if the user has already navigated away by the time this resolves.
+    if (currentRoute.page !== 'home') return;
+    el.innerHTML = `
+      <div class="container section-stack">
+        <div class="sc-card">
+          <div class="sc-head">
+            <div class="sc-head-title">&#128240; Latest News</div>
+            <a href="/news" class="sc-head-link" onclick="event.preventDefault();navigate('/news')">View all &rarr;</a>
+          </div>
+          <div class="sc-body">
+            <div class="news-grid">${data.map(newsCardHTML).join('')}</div>
+          </div>
+        </div>
+      </div>`;
+  } catch (e) { /* non-critical — silently skip */ }
 }
 
 // ── Creator Battle ──────────────────────────────────────────────────────────

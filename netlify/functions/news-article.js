@@ -38,6 +38,19 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+const COVER_CONTENT_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+
+// Supabase Storage's public object URLs carry `X-Robots-Tag: none`, which
+// makes X/Twitter refuse the image entirely — see article-cover.js for the
+// proxy this maps onto. Strips the ?t= cache-buster admin.js appends too;
+// crawlers should never see a cache-busted OG image URL. Returns null (not
+// the raw Supabase URL) when the stored URL doesn't match the expected
+// storage path, so the caller falls back to the site logo.
+function firstPartyCoverUrl(coverImageUrl) {
+  const m = coverImageUrl && coverImageUrl.match(/\/article-covers\/([^/]+\/[^/?]+)/);
+  return m ? `${SITE_URL}/article-covers/${m[1]}` : null;
+}
+
 // Same paragraph-splitting convention as newsBodyHTML() in js/app.js — body
 // is stored as plain text, not markdown/HTML. Same YouTube-embed regex too
 // — keep both in sync.
@@ -90,7 +103,10 @@ exports.handler = async (event) => {
 
   const title = `${article.title} | FanReactionsFC News`;
   const description = article.summary;
-  const image = article.cover_image_url || `${SITE_URL}/img/logo-wide.png`;
+  const firstPartyCover = firstPartyCoverUrl(article.cover_image_url);
+  const image = firstPartyCover || `${SITE_URL}/img/logo-wide.png`;
+  const imageExt = (image.split('.').pop() || '').toLowerCase();
+  const imageType = COVER_CONTENT_TYPES[imageExt] || 'image/png';
   const url = `${SITE_URL}/news/${article.slug}`;
   const publishedDate = article.published_at ? new Date(article.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
@@ -141,7 +157,25 @@ exports.handler = async (event) => {
   out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:type"[^>]*>/, `<meta property="og:type" content="article">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
-  out = out.replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(image)}">`);
+  // Two separate, single-match replacements — one per pre-existing tag in
+  // index.html — rather than one combined block, so there's no risk of an
+  // inserted tag colliding with (and being mistaken for) the original one
+  // it sits next to. Replacer is a function, not a string, so a literal $
+  // in the title/image can't be misread as a String.replace backreference.
+  const ogImageTags = [
+    `<meta property="og:image" content="${esc(image)}">`,
+    `<meta property="og:image:secure_url" content="${esc(image)}">`,
+    `<meta property="og:image:type" content="${imageType}">`,
+    firstPartyCover ? '<meta property="og:image:width" content="1200">' : '',
+    firstPartyCover ? '<meta property="og:image:height" content="630">' : '',
+  ].filter(Boolean).join('\n  ');
+  out = out.replace(/<meta property="og:image"[^>]*>/, () => ogImageTags);
+
+  const twitterImageTags = [
+    `<meta name="twitter:image" content="${esc(image)}">`,
+    `<meta name="twitter:image:alt" content="${esc(article.title)}">`,
+  ].join('\n  ');
+  out = out.replace(/<meta name="twitter:image"[^>]*>/, () => twitterImageTags);
   out = out.replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`);
   out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${articleHtml}</main>`);
   out = out.replace('</head>', `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script></head>`);

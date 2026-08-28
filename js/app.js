@@ -252,12 +252,34 @@ function updateNavActive(path) {
   });
 }
 
-function updatePageMeta(title, description) {
+const DEFAULT_OG_IMAGE = 'https://fanreactionsfc.com/img/logo-wide.png';
+
+// Same mapping as firstPartyCoverUrl() in netlify/functions/news-article.js
+// — keep both in sync. Supabase Storage's public object URLs carry
+// X-Robots-Tag: none, which social crawlers refuse; article-cover.js
+// proxies the same file under this origin instead.
+function firstPartyCoverUrl(coverImageUrl) {
+  const m = coverImageUrl && coverImageUrl.match(/\/article-covers\/([^/]+\/[^/?]+)/);
+  return m ? `https://fanreactionsfc.com/article-covers/${m[1]}` : null;
+}
+
+// image is optional — omit it (or pass a falsy value) to reset to the
+// default site logo, e.g. when navigating away from a news article to a
+// page with no image of its own. Only news articles pass one today (see
+// renderNewsArticle), matching news-article.js's server-rendered tags for
+// in-app shares — real crawlers never run this, they get news-article.js's
+// SSR output directly.
+function updatePageMeta(title, description, image) {
   document.title = title;
   let meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute('content', description);
   const canonical = document.getElementById('canonicalLink');
   if (canonical) canonical.setAttribute('href', 'https://fanreactionsfc.com' + location.pathname);
+  const resolvedImage = image || DEFAULT_OG_IMAGE;
+  const ogImage = document.querySelector('meta[property="og:image"]');
+  if (ogImage) ogImage.setAttribute('content', resolvedImage);
+  const twitterImage = document.querySelector('meta[name="twitter:image"]');
+  if (twitterImage) twitterImage.setAttribute('content', resolvedImage);
 }
 
 // Populate the header "N live now" chip whenever creator data is (re)loaded.
@@ -2982,7 +3004,7 @@ async function renderNewsArticle(slug) {
     return;
   }
 
-  updatePageMeta(`${article.title} | FanReactionsFC News`, article.summary);
+  updatePageMeta(`${article.title} | FanReactionsFC News`, article.summary, firstPartyCoverUrl(article.cover_image_url));
 
   sb.rpc('increment_article_view', { article_id: article.id }).then(() => {});
 

@@ -58,6 +58,14 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/club-og"
   status = 200
 
+# First-party proxy for article cover images (see article-cover.js) — X's
+# crawler refuses images served directly from Supabase Storage because of
+# the X-Robots-Tag: none header it sends on every object.
+[[redirects]]
+  from = "/article-covers/*"
+  to = "/.netlify/functions/article-cover"
+  status = 200
+
 # Server-rendered news articles — real body content + JSON-LD for crawlers,
 # not just meta tags (see news-article.js for why this goes further than
 # creator-og.js/club-og.js). /news itself (the listing) falls through

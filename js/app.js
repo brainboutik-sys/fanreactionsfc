@@ -1327,7 +1327,7 @@ async function loadHomeLatestNews() {
             <a href="/news" class="sc-head-link" onclick="event.preventDefault();navigate('/news')">View all &rarr;</a>
           </div>
           <div class="sc-body">
-            <div class="news-grid">${data.map(newsCardHTML).join('')}</div>
+            <div class="news-grid">${data.map(newsCardCompactHTML).join('')}</div>
           </div>
         </div>
       </div>`;
@@ -2978,6 +2978,19 @@ function newsCardHTML(a) {
         <div class="news-card-title">${escHtml(a.title)}</div>
         <div class="news-card-summary">${escHtml(a.summary)}</div>
         <div class="news-card-meta">${a.published_at ? timeAgo(a.published_at) : ''}</div>
+      </div>
+    </a>`;
+}
+
+// Cover + title only, no summary/tags/meta — used by the homepage's Latest
+// News strip, which is meant as a glanceable teaser, not the full listing
+// card. Reuses the same news-card classes so grid/hover styling matches.
+function newsCardCompactHTML(a) {
+  return `
+    <a href="/news/${escHtml(a.slug)}" class="news-card news-card-compact" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">
+      ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="" class="news-card-thumb" loading="lazy"></div>` : ''}
+      <div class="news-card-body">
+        <div class="news-card-title">${escHtml(a.title)}</div>
       </div>
     </a>`;
 }

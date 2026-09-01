@@ -65,11 +65,50 @@ function bodyHtml(body) {
   }).join('');
 }
 
+function metaDesc(s, max) {
+  const text = String(s || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > 80 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '') + '…';
+}
+
+const CLUB_SLUG_OVERRIDES = {
+  'Man United': 'manchester-united',
+  'Man City': 'manchester-city',
+  'Nottm Forest': 'nottingham-forest',
+  'Oxford Utd': 'oxford-united',
+  'Sheffield Utd': 'sheffield-united',
+  'Sheffield Wed': 'sheffield-wednesday',
+  'West Brom': 'west-bromwich-albion',
+  'Multi-Club / Other': 'multi-club',
+};
+function clubPath(team) {
+  const slug = CLUB_SLUG_OVERRIDES[team] || String(team).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return '/clubs/' + slug;
+}
+
+function creatorLinksHTML(links) {
+  if (!Array.isArray(links) || !links.length) return '';
+  const items = links.map(link => {
+    if (!link) return '';
+    if (typeof link === 'string') {
+      const slug = link.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      return slug ? `<a href="/creators/${esc(slug)}">${esc(link)}</a>` : '';
+    }
+    const slug = link.slug || (link.name ? String(link.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : '');
+    if (!slug) return '';
+    return `<a href="/creators/${esc(slug)}">${esc(link.name || slug)}</a>`;
+  }).filter(Boolean);
+  if (!items.length) return '';
+  return `<div class="news-article-related"><span>Creators</span> ${items.join(' ')}</div>`;
+}
+
 exports.handler = async (event) => {
   const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const rawPath = event.path || '';
+  const rawPath = (event.rawUrl ? (() => { try { return new URL(event.rawUrl).pathname; } catch { return event.path || ''; } })() : (event.path || ''));
   const match = rawPath.match(/^\/news\/([^\/\?]+)\/?$/);
   const slug = match ? decodeURIComponent(match[1]) : '';
 
@@ -78,31 +117,66 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: { 'Content-Type': 'text/plain' }, body: 'index.html not available' };
   }
 
-  // No slug means /news itself (the listing page) — fall through to the
-  // default SPA shell; the listing has no single canonical entity to
-  // server-render and isn't this function's job.
-  if (!slug || !sbKey) {
-    return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: html };
+  // /news and /news/ are the hub — news-hub.js owns that route. If this
+  // function still sees them (redirect order), send the crawler there.
+  if (!slug) {
+    return {
+      statusCode: 301,
+      headers: { Location: SITE_URL + '/news', 'Cache-Control': 'public, max-age=86400' },
+      body: '',
+    };
   }
+
+  if (rawPath.endsWith('/')) {
+    return {
+      statusCode: 301,
+      headers: { Location: SITE_URL + '/news/' + slug, 'Cache-Control': 'public, max-age=86400' },
+      body: '',
+    };
+  }
+
+  function article404() {
+    let out = html;
+    const body = `
+      <div class="container section-message">
+        <div class="empty-state">
+          <h1 class="es-title">Article not found</h1>
+          <p><a href="/news">Back to News</a></p>
+        </div>
+      </div>`;
+    out = out.replace(/<title>[^<]*<\/title>/, '<title>Article not found | FanReactionsFC</title>');
+    out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
+    out = out.replace(/<link rel="canonical"[^>]*>/, '<link rel="canonical" id="canonicalLink" href="">');
+    out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${body}</main>`);
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
+      body: out,
+    };
+  }
+
+  if (!sbKey) return article404();
 
   let article = null;
   try {
-    const res = await fetch(
-      `${supabaseUrl}/rest/v1/frfc_articles?select=title,dek,summary,body,cover_image_url,tags,related_team,published_at,updated_at,slug&slug=eq.${encodeURIComponent(slug)}&status=eq.published&limit=1`,
-      { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-    );
+    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+    const base = `${supabaseUrl}/rest/v1/frfc_articles?slug=eq.${encodeURIComponent(slug)}&status=eq.published&limit=1`;
+    // creator_links is optional — the column may not exist yet. Try it
+    // first, then fall back so a missing column cannot 500 the article.
+    let res = await fetch(base + '&select=title,dek,summary,body,cover_image_url,tags,related_team,published_at,updated_at,slug,creator_links', { headers });
+    if (!res.ok) {
+      res = await fetch(base + '&select=title,dek,summary,body,cover_image_url,tags,related_team,published_at,updated_at,slug', { headers });
+    }
     if (res.ok) {
       const rows = await res.json();
       article = rows[0] || null;
     }
-  } catch { /* fall through — 404s render via the client SPA's own not-found state */ }
+  } catch { /* unknown slug → real 404 below */ }
 
-  if (!article) {
-    return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: html };
-  }
+  if (!article) return article404();
 
   const title = `${article.title} | FanReactionsFC News`;
-  const description = article.summary;
+  const description = metaDesc(article.summary, 155);
   const firstPartyCover = firstPartyCoverUrl(article.cover_image_url);
   const image = firstPartyCover || `${SITE_URL}/img/logo-wide.png`;
   const imageExt = (image.split('.').pop() || '').toLowerCase();
@@ -140,13 +214,14 @@ exports.handler = async (event) => {
       </div>
     </div>
     <div class="container container-narrow section">
-      ${article.cover_image_url ? `<img src="${esc(article.cover_image_url)}" alt="" class="news-article-cover">` : ''}
+      ${firstPartyCover ? `<img src="${esc(firstPartyCover)}" alt="" class="news-article-cover">` : ''}
       <div class="news-article-body">${bodyHtml(article.body)}</div>
       ${article.related_team ? `
       <div class="news-article-related">
         <span>More on</span>
-        <a href="/clubs/${encodeURIComponent(article.related_team)}">${esc(article.related_team)}</a>
+        <a href="${clubPath(article.related_team)}">${esc(article.related_team)}</a>
       </div>` : ''}
+      ${creatorLinksHTML(article.creator_links)}
       <div style="margin-top:32px"><a href="/news" class="btn btn-secondary">&larr; Back to News</a></div>
     </div>`;
 

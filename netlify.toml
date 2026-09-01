@@ -18,6 +18,8 @@
   included_files = ["index.html"]
 [functions."become-a-creator"]
   included_files = ["index.html"]
+[functions."home"]
+  included_files = ["index.html"]
 [functions."not-found"]
   included_files = ["index.html"]
 
@@ -90,6 +92,16 @@ schedule = "0 5 * * *"
   from = "/account/"
   to = "/account"
   status = 301
+
+# Homepage — force = true so index.html in publish/ does not win
+# (same Asset pretty-URL trap that made GET /rankings 301 to itself).
+# Canonical is trailing-slash `/`. Do not 301 `/` to a slash-less host
+# path from this rule or from home.js (that loops).
+[[redirects]]
+  from = "/"
+  to = "/.netlify/functions/home"
+  status = 200
+  force = true
 
 # Prerendered index pages — unique head + visible body in raw HTML.
 # force = true so the rewrite beats Asset pretty URLs (without it, GET

@@ -10,6 +10,16 @@
   included_files = ["index.html"]
 [functions."news-article"]
   included_files = ["index.html"]
+[functions."rankings"]
+  included_files = ["index.html"]
+[functions."discover"]
+  included_files = ["index.html"]
+[functions."news"]
+  included_files = ["index.html"]
+[functions."become-a-creator"]
+  included_files = ["index.html"]
+[functions."not-found"]
+  included_files = ["index.html"]
 
 # ── Scheduled functions ──────────────────────────────────────────────────
 # Baseline live-check: every 30 minutes — safety net for anything the
@@ -43,20 +53,110 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/sitemap"
   status = 200
 
-# Per-creator OG cards — serve HTML with creator-specific meta tags
-# for social crawlers. Human users still get the SPA since the
-# function returns the same index.html structure with scripts intact.
+# Trailing-slash 301s for SPA-only routes. Do NOT add /rankings/ → /rankings
+# (and the other prerendered indexes) here: Asset pretty URLs plus those
+# 301s produced a self-redirect (301 Location: /rankings) that hid the
+# function rewrite. Trailing slashes on prerendered indexes are 301'd
+# inside the functions.
+[[redirects]]
+  from = "/submit/"
+  to = "/submit"
+  status = 301
+[[redirects]]
+  from = "/contact/"
+  to = "/contact"
+  status = 301
+[[redirects]]
+  from = "/privacy/"
+  to = "/privacy"
+  status = 301
+[[redirects]]
+  from = "/cookies/"
+  to = "/cookies"
+  status = 301
+[[redirects]]
+  from = "/terms/"
+  to = "/terms"
+  status = 301
+[[redirects]]
+  from = "/streamwall/"
+  to = "/streamwall"
+  status = 301
+[[redirects]]
+  from = "/tools/generator/"
+  to = "/tools/generator"
+  status = 301
+[[redirects]]
+  from = "/account/"
+  to = "/account"
+  status = 301
+
+# Prerendered index pages — unique head + visible body in raw HTML.
+# force = true so the rewrite beats Asset pretty URLs (without it, GET
+# /rankings 301'd to itself and crawlers never reached the function).
+# Trailing-slash variants also rewrite here so the function can 301.
+[[redirects]]
+  from = "/rankings"
+  to = "/.netlify/functions/rankings"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/rankings/"
+  to = "/.netlify/functions/rankings"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/discover"
+  to = "/.netlify/functions/discover"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/discover/"
+  to = "/.netlify/functions/discover"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/become-a-creator"
+  to = "/.netlify/functions/become-a-creator"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/become-a-creator/"
+  to = "/.netlify/functions/become-a-creator"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/news"
+  to = "/.netlify/functions/news"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/news/"
+  to = "/.netlify/functions/news"
+  status = 200
+  force = true
+
+# Per-creator SSR — unique H1/body/ProfilePage JSON-LD; trailing slash 301s
+# and unknown slugs 404 inside the function.
 [[redirects]]
   from = "/creators/*"
   to = "/.netlify/functions/creator-og"
   status = 200
+[[redirects]]
+  from = "/creators"
+  to = "/discover"
+  status = 301
 
-# Per-club OG cards — same idea as creators, for /clubs/:team. The function
-# itself no-ops (returns unmodified index.html) for /clubs/:team/videos.
+# Per-club SSR — hyphenated slugs, 301s from spaced/cased URLs, ItemList +
+# SportsTeam schema. Unknown clubs are HTTP 404.
 [[redirects]]
   from = "/clubs/*"
   to = "/.netlify/functions/club-og"
   status = 200
+[[redirects]]
+  from = "/clubs"
+  to = "/discover"
+  status = 301
 
 # First-party proxy for article cover images (see article-cover.js) — X's
 # crawler refuses images served directly from Supabase Storage because of
@@ -66,10 +166,7 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/article-cover"
   status = 200
 
-# Server-rendered news articles — real body content + JSON-LD for crawlers,
-# not just meta tags (see news-article.js for why this goes further than
-# creator-og.js/club-og.js). /news itself (the listing) falls through
-# unmodified since the function only acts on /news/:slug.
+# Server-rendered news articles. /news (the hub) is handled above.
 [[redirects]]
   from = "/news/*"
   to = "/.netlify/functions/news-article"
@@ -94,8 +191,64 @@ schedule = "0 5 * * *"
   status = 404
   force = true
 
-# SPA fallback — Netlify serves real files first, then falls back to index.html
+# Known client-only SPA routes — still 200 the shell so in-app navigation
+# and signed-in pages keep working. Everything else is a real HTTP 404
+# (see not-found.js). Files in publish/ are served first by Netlify.
+[[redirects]]
+  from = "/submit"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/contact"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/privacy"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/cookies"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/terms"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/streamwall"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/tools/generator"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/account"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/admin"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/admin/*"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/manage/*"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/community/features"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/community/features/*"
+  to = "/index.html"
+  status = 200
+
+# Unknown routes — HTTP 404, not 200 + homepage canonical.
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/not-found"
   status = 200

@@ -19,15 +19,33 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "FanReactionsFC",
-    "url": "https://fanreactionsfc.com",
-    "description": "The definitive database of football YouTubers. Rated by fans. Ranked daily.",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": "https://fanreactionsfc.com/discover?q={search_term_string}",
-      "query-input": "required name=search_term_string"
-    }
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://fanreactionsfc.com/#organization",
+        "name": "FanReactionsFC",
+        "url": "https://fanreactionsfc.com",
+        "logo": "https://fanreactionsfc.com/img/logo-wide.png",
+        "sameAs": [
+          "https://www.youtube.com/@fanreactionsfc",
+          "https://x.com/fanreactionsfc",
+          "https://www.instagram.com/fanreactionsfc/"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://fanreactionsfc.com/#website",
+        "name": "FanReactionsFC",
+        "url": "https://fanreactionsfc.com",
+        "description": "The definitive database of football YouTubers. Rated by fans. Ranked daily.",
+        "publisher": { "@id": "https://fanreactionsfc.com/#organization" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://fanreactionsfc.com/discover?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    ]
   }
   </script>
   <link rel="icon" href="/favicon.ico" sizes="any">
@@ -91,6 +109,7 @@
   <!-- Team/league reference data — must load before app.js/generator.js -->
   <script src="/js/data/teams.js" defer></script>
   <script src="/js/lib/slugify.js" defer></script>
+  <script src="/js/lib/club-slugs.js" defer></script>
   <script src="/js/app.js" defer></script>
   <!-- Community Feature Requests module — uses app.js core, loads after it -->
   <script src="/js/community.js" defer></script>

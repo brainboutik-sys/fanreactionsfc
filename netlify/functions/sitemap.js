@@ -1,83 +1,117 @@
 // Dynamic sitemap.xml — built from frfc_streamers and frfc_articles so
 // Google indexes every creator, club, and news page, not just the homepage.
 //
-// Served at /sitemap.xml via netlify.toml redirect.
+// lastmod is only emitted when we have a real content/update date.
+// Static URLs omit lastmod rather than stamping "today" on every row.
+//
+// This handler always returns 200 with a valid urlset. A Supabase blip
+// must not 500 the endpoint (it did once). Served at /sitemap.xml.
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SITE_URL = 'https://fanreactionsfc.com';
 
-exports.handler = async () => {
-  const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const CLUB_SLUG_OVERRIDES = {
+  'Man United': 'manchester-united',
+  'Man City': 'manchester-city',
+  'Nottm Forest': 'nottingham-forest',
+  'Oxford Utd': 'oxford-united',
+  'Sheffield Utd': 'sheffield-united',
+  'Sheffield Wed': 'sheffield-wednesday',
+  'West Brom': 'west-bromwich-albion',
+  'Multi-Club / Other': 'multi-club',
+};
 
+function slugify(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
+function clubSlug(team) { return CLUB_SLUG_OVERRIDES[team] || slugify(team); }
+
+function ymd(iso) {
+  if (!iso) return '';
+  const d = String(iso).split('T')[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
+function urlXml(u) {
+  return `  <url>
+    <loc>${u.loc}</loc>${u.lastmod ? `
+    <lastmod>${u.lastmod}</lastmod>` : ''}
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`;
+}
+
+function wrap(entries) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.map(urlXml).join('\n')}
+</urlset>`;
+}
+
+const STATIC_URLS = [
+  { loc: SITE_URL + '/', priority: '1.0', changefreq: 'daily' },
+  { loc: SITE_URL + '/discover', priority: '0.9', changefreq: 'daily' },
+  { loc: SITE_URL + '/rankings', priority: '0.8', changefreq: 'daily' },
+  { loc: SITE_URL + '/news', priority: '0.8', changefreq: 'daily' },
+  { loc: SITE_URL + '/become-a-creator', priority: '0.6', changefreq: 'monthly' },
+  { loc: SITE_URL + '/tools/generator', priority: '0.5', changefreq: 'monthly' },
+  { loc: SITE_URL + '/submit', priority: '0.3', changefreq: 'monthly' },
+];
+
+exports.handler = async () => {
   const headers = {
     'Content-Type': 'application/xml; charset=utf-8',
     'Cache-Control': 'public, max-age=3600, s-maxage=3600',
   };
 
-  if (!sbKey) {
-    return { statusCode: 500, headers: { 'Content-Type': 'text/plain' }, body: 'SUPABASE_SERVICE_ROLE_KEY not set' };
+  const fallback = () => ({ statusCode: 200, headers, body: wrap(STATIC_URLS) });
+
+  const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sbKey) return fallback();
+
+  let creators = [];
+  let articles = [];
+  try {
+    const [creatorsRes, articlesRes] = await Promise.all([
+      fetch(`${supabaseUrl}/rest/v1/frfc_streamers?select=slug,name,team,last_youtube_sync,updated_at`,
+        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }),
+      fetch(`${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at&status=eq.published`,
+        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }),
+    ]);
+    if (creatorsRes.ok) creators = await creatorsRes.json();
+    if (articlesRes.ok) articles = await articlesRes.json();
+  } catch {
+    return fallback();
   }
-
-  // Fetch all creators for their slugs and teams, and every published article.
-  const [creatorsRes, articlesRes] = await Promise.all([
-    fetch(`${supabaseUrl}/rest/v1/frfc_streamers?select=slug,name,team,last_youtube_sync`,
-      { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }),
-    fetch(`${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at&status=eq.published`,
-      { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }),
-  ]);
-  if (!creatorsRes.ok) {
-    return { statusCode: 502, headers: { 'Content-Type': 'text/plain' }, body: 'supabase select failed' };
-  }
-  const creators = await creatorsRes.json();
-  const articles = articlesRes.ok ? await articlesRes.json() : [];
-
-  const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const now = new Date().toISOString().split('T')[0];
-
-  // Static routes that always exist.
-  const staticUrls = [
-    { loc: '/', priority: '1.0', changefreq: 'daily' },
-    { loc: '/discover', priority: '0.9', changefreq: 'daily' },
-    { loc: '/rankings', priority: '0.8', changefreq: 'daily' },
-    { loc: '/news', priority: '0.8', changefreq: 'daily' },
-    { loc: '/tools/generator', priority: '0.5', changefreq: 'monthly' },
-    { loc: '/submit', priority: '0.3', changefreq: 'monthly' },
-  ];
 
   const clubs = [...new Set(creators.map(c => c.team).filter(t => t && t !== 'Multi-Club / Other'))];
+  const clubLastmod = {};
+  creators.forEach(c => {
+    if (!c.team) return;
+    const d = ymd(c.last_youtube_sync || c.updated_at);
+    if (d && (!clubLastmod[c.team] || d > clubLastmod[c.team])) clubLastmod[c.team] = d;
+  });
 
   const urlEntries = [
-    ...staticUrls.map(u => ({ loc: SITE_URL + u.loc, priority: u.priority, changefreq: u.changefreq, lastmod: now })),
+    ...STATIC_URLS,
     ...creators.map(c => ({
       loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
       priority: '0.7',
       changefreq: 'weekly',
-      lastmod: (c.last_youtube_sync || '').split('T')[0] || now,
+      lastmod: ymd(c.last_youtube_sync || c.updated_at) || undefined,
     })),
     ...clubs.map(team => ({
-      loc: `${SITE_URL}/clubs/${encodeURIComponent(team)}`,
+      loc: `${SITE_URL}/clubs/${clubSlug(team)}`,
       priority: '0.6',
       changefreq: 'weekly',
-      lastmod: now,
+      lastmod: clubLastmod[team] || undefined,
     })),
     ...articles.map(a => ({
       loc: `${SITE_URL}/news/${a.slug}`,
       priority: '0.6',
       changefreq: 'weekly',
-      lastmod: (a.updated_at || a.published_at || '').split('T')[0] || now,
+      lastmod: ymd(a.updated_at || a.published_at) || undefined,
     })),
   ];
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urlEntries.map(u => `  <url>
-    <loc>${u.loc}</loc>
-    <lastmod>${u.lastmod}</lastmod>
-    <changefreq>${u.changefreq}</changefreq>
-    <priority>${u.priority}</priority>
-  </url>`).join('\n')}
-</urlset>`;
-
-  return { statusCode: 200, headers, body: xml };
+  return { statusCode: 200, headers, body: wrap(urlEntries) };
 };

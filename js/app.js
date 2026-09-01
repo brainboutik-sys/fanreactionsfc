@@ -4,6 +4,8 @@
    ARCHITECTURE (no build step — plain classic <script>s sharing one global
    scope; load order is set in index.html):
      js/data/teams.js  → LEAGUES, TEAM_CRESTS, TEAM_TO_LEAGUE, TEAM_COLORS, CONTENT_TYPES
+     js/lib/slugify.js → slugify()
+     js/lib/club-slugs.js → clubSlug(), clubPath(), resolveClub()
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -312,26 +314,59 @@ function handleRoute() {
       currentRoute = { page: 'home' };
       updatePageMeta('FanReactionsFC — Discover the Best Football YouTubers', 'The definitive database of football YouTubers. Rated by fans. Ranked daily. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.');
       renderHome();
-    } else if (path === '/discover' || path.startsWith('/discover')) {
+    } else if (path === '/discover' || path === '/discover/' || path.startsWith('/discover')) {
+      if (path === '/discover/') history.replaceState(null, '', '/discover' + location.search);
       currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
       renderDiscover();
     } else if (path.startsWith('/creators/')) {
       const slug = path.split('/creators/')[1].replace(/\/$/, '');
-      currentRoute = { page: 'profile', slug };
-      renderProfile(slug);
-    } else if (path.startsWith('/clubs/')) {
-      const tail = path.split('/clubs/')[1].replace(/\/$/, '');
-      // /clubs/:team/videos -> team videos page; otherwise the club page
-      if (tail.endsWith('/videos')) {
-        const club = decodeURIComponent(tail.slice(0, -'/videos'.length));
-        currentRoute = { page: 'clubVideos', club };
-        renderClubVideos(club);
+      if (!slug) {
+        currentRoute = { page: 'notfound' };
+        updatePageMeta('Page Not Found | FanReactionsFC', 'The page you were looking for doesn\'t exist.');
+        app.innerHTML = `
+          <div class="container section-message">
+            <div class="empty-state">
+              <div class="es-title">Page not found</div>
+              <a href="/discover" class="btn btn-primary">Browse creators</a>
+            </div>
+          </div>
+          ${renderFooter()}`;
       } else {
-        const club = decodeURIComponent(tail);
-        currentRoute = { page: 'club', club };
-        renderClubPage(club);
+        if (path !== '/creators/' + slug) history.replaceState(null, '', '/creators/' + slug + location.search);
+        currentRoute = { page: 'profile', slug };
+        renderProfile(slug);
       }
-    } else if (path === '/rankings') {
+    } else if (path.startsWith('/clubs/')) {
+      const tail = path.split('/clubs/')[1] || '';
+      const isVideos = /\/videos\/?$/.test(tail);
+      const raw = tail.replace(/\/videos\/?$/, '').replace(/\/$/, '');
+      const extra = creators.map(c => c.team);
+      const club = resolveClub(raw, extra);
+      if (!club) {
+        currentRoute = { page: 'notfound' };
+        updatePageMeta('Page Not Found | FanReactionsFC', 'The page you were looking for doesn\'t exist.');
+        app.innerHTML = `
+          <div class="container section-message">
+            <div class="empty-state">
+              <div class="es-title">Page not found</div>
+              <p style="color:var(--text-dim);margin-bottom:16px">No club page at <code>${escHtml(path)}</code>.</p>
+              <a href="/discover" class="btn btn-primary">Browse creators</a>
+            </div>
+          </div>
+          ${renderFooter()}`;
+      } else {
+        const canonical = clubPath(club, isVideos ? '/videos' : '');
+        if (path !== canonical) history.replaceState(null, '', canonical + location.search);
+        if (isVideos) {
+          currentRoute = { page: 'clubVideos', club };
+          renderClubVideos(club);
+        } else {
+          currentRoute = { page: 'club', club };
+          renderClubPage(club);
+        }
+      }
+    } else if (path === '/rankings' || path === '/rankings/') {
+      if (path !== '/rankings') history.replaceState(null, '', '/rankings' + location.search);
       currentRoute = { page: 'rankings' };
       renderRankings();
     } else if (path === '/tools/generator') {
@@ -346,7 +381,8 @@ function handleRoute() {
       currentRoute = { page: 'contact' };
       updatePageMeta('Contact Us | FanReactionsFC', 'Get in touch with the FanReactionsFC team — questions, feedback, or partnership inquiries.');
       renderContact();
-    } else if (path === '/news') {
+    } else if (path === '/news' || path === '/news/') {
+      if (path !== '/news') history.replaceState(null, '', '/news');
       currentRoute = { page: 'news' };
       updatePageMeta('News | FanReactionsFC', 'Football creator news, rankings, and fan-culture coverage from FanReactionsFC.');
       renderNewsList();
@@ -375,7 +411,8 @@ function handleRoute() {
       currentRoute = { page: 'streamwall' };
       updatePageMeta('Streamwall — Watch Live Football Creators | FanReactionsFC', 'Watch multiple football creators streaming live on YouTube, all at once. Live watchalongs, reactions, and match day content.');
       renderStreamwall();
-    } else if (path === '/become-a-creator') {
+    } else if (path === '/become-a-creator' || path === '/become-a-creator/') {
+      if (path !== '/become-a-creator') history.replaceState(null, '', '/become-a-creator');
       currentRoute = { page: 'becomeCreator' };
       updatePageMeta('How to Start a Football Live Streaming Channel on YouTube | FanReactionsFC', 'Free step-by-step guide to setting up a professional football watchalong channel on YouTube using Prism Live Studio, Uno Overlays, and Canva. Start streaming for free.');
       renderBecomeCreator();
@@ -749,6 +786,7 @@ function avatarImg(c, cls = 'cc-avatar') {
   return `<img class="${cls}" src="${url}" alt="" loading="lazy" onerror="avatarOnerror(this,'${escHtml(c.name.replace(/'/g, "\\'"))}')">`;
 }
 function creatorLink(c) { return `/creators/${c.slug || slugify(c.name)}`; }
+function clubHref(team, suffix) { return clubPath(team, suffix); }
 
 function countryFlag(code) {
   if (!code || code.length !== 2) return '';
@@ -927,7 +965,7 @@ function renderSearchResults(q, input) {
   if (clubMatches.length) {
     html += '<div class="search-group-head">Clubs</div>';
     html += clubMatches.map(([team, count]) => `
-      <a href="/clubs/${encodeURIComponent(team)}" class="search-result">
+      <a href="${clubPath(team)}" class="search-result">
         <span class="cc-avatar search-crest-wrap">${crestImg(team, 'search-crest')}</span>
         <div class="sr-info">
           <div class="sr-name">${escHtml(team)}</div>
@@ -1203,7 +1241,7 @@ function renderHome() {
         <div class="sc-body">
           <div class="club-grid" id="topClubsGrid">
             ${allClubs.map(({ team, count, league }) => {
-              return `<a href="/clubs/${encodeURIComponent(team)}" class="club-tile" data-league="${escHtml(league || '')}">
+              return `<a href="${clubPath(team)}" class="club-tile" data-league="${escHtml(league || '')}">
                 ${crestImg(team)}
                 <div class="club-name">${escHtml(team)}</div>
                 <div class="club-meta"><strong>${count} creator${count !== 1 ? 's' : ''}</strong></div>
@@ -1708,7 +1746,7 @@ function renderDiscover() {
 
   const discoverIntro = discoverIntroText(filtered, leagueFilter, teamFilter, q, activeLeagues, teams);
   updatePageMeta(
-    (teamFilter ? `${teamFilter} Creators` : leagueFilter ? `${leagueFilter} Creators` : 'Discover Football Creators') + ' | FanReactionsFC',
+    (teamFilter ? `Discover ${teamFilter} Creators` : leagueFilter ? `Discover ${leagueFilter} Creators` : 'Discover Football Creators') + ' | FanReactionsFC',
     discoverIntro
   );
 
@@ -1717,8 +1755,8 @@ function renderDiscover() {
       <div class="container">
         <div class="page-hero-inner">
           <div class="page-hero-text">
-            <div class="page-hero-eyebrow">Database</div>
-            <h1 class="page-hero-title">Discover Creators</h1>
+            <div class="page-hero-eyebrow">Directory</div>
+            <h1 class="page-hero-title">Discover Football Creators</h1>
             <p class="page-hero-subtitle" style="max-width:640px">${escHtml(discoverIntro)}</p>
           </div>
           <a href="/submit" class="btn btn-accent btn-pill btn-lg">+ Suggest a Creator</a>
@@ -1979,7 +2017,7 @@ async function renderProfile(slug) {
         <div class="cp-section-card">
           <div class="cp-section-head">
             <span class="cp-section-label">${crestImg(c.team, 'crest-sm')} More ${escHtml(c.team)} Creators</span>
-            <a href="/clubs/${encodeURIComponent(c.team)}" class="cp-section-link">View all &rarr;</a>
+            <a href="${clubPath(c.team)}" class="cp-section-link">View all &rarr;</a>
           </div>
           <div class="card-grid">${similar.map(s => creatorCard(s)).join('')}</div>
         </div>` : ''}
@@ -2217,7 +2255,7 @@ function renderClubPage(club) {
 
   const clubLeague = getLeague(club);
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
-  const clubUrl = '/clubs/' + encodeURIComponent(club);
+  const clubUrl = clubPath(club);
 
   updatePageMeta(
     `${club} Football YouTubers | FanReactionsFC`,
@@ -2232,7 +2270,7 @@ function renderClubPage(club) {
           ${crestImg(club, 'page-hero-crest')}
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">${leagueInfo ? escHtml(clubLeague) : 'Football Club'}</div>
-            <h1 class="page-hero-title">${escHtml(club)}</h1>
+            <h1 class="page-hero-title">${escHtml(club)} Football YouTubers</h1>
             ${clubCreators.length ? `<p class="page-hero-subtitle" style="max-width:640px">${escHtml(clubIntroText(club, clubCreators, clubLeague))}</p>` : ''}
             <div class="page-hero-meta">
               <span class="page-hero-tag">${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</span>
@@ -2240,7 +2278,7 @@ function renderClubPage(club) {
             </div>
           </div>
           <div class="page-hero-actions">
-            <a href="/clubs/${encodeURIComponent(club)}/videos" class="btn btn-on-dark btn-sm">📺 Videos</a>
+            <a href="${clubPath(club, '/videos')}" class="btn btn-on-dark btn-sm">📺 Videos</a>
             <a href="/submit" class="btn btn-accent btn-pill btn-sm">+ Suggest</a>
           </div>
         </div>
@@ -2316,7 +2354,7 @@ function renderClubVideos(club) {
     .sort((a, b) => b.publishedAt - a.publishedAt);
 
   const clubLeague = getLeague(club);
-  const clubUrl = '/clubs/' + encodeURIComponent(club);
+  const clubUrl = clubPath(club);
 
   updatePageMeta(
     `Latest ${club} Videos | FanReactionsFC`,
@@ -2469,6 +2507,20 @@ function rkInitScrollFade() {
   rkUpdateScrollFade();
 }
 
+// Same rule as isFanRankingsChannel() in netlify/functions/rankings.js —
+// keep both in sync. Club-directory channels plus multi-club
+// watchalong/reaction rows; exclude celebrity streamers/journalists.
+const FAN_RANK_TYPES = ['Reactions', 'Watchalong', 'Match Review', 'Banter', 'Fan Cam', 'Compilation'];
+const NON_FAN_SLUGS = new Set(['live-djmariio', 'bydiegox10']);
+function isFanRankingsChannel(c) {
+  const slug = String(c.slug || '').toLowerCase();
+  if (slug && NON_FAN_SLUGS.has(slug)) return false;
+  const team = c.team || '';
+  if (team && team !== 'Multi-Club / Other') return true;
+  const types = c.contentTypes || c.content_types || [];
+  return types.some(t => FAN_RANK_TYPES.includes(t));
+}
+
 async function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
@@ -2476,7 +2528,7 @@ async function renderRankings() {
   const mode = params.get('mode') || 'subs';
   if (mode === 'voters') return renderVoterLeaderboard();
 
-  let ranked = [...creators].filter(c => c.subscriberCount > 0);
+  let ranked = [...creators].filter(c => c.subscriberCount > 0 && isFanRankingsChannel(c));
   if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
   if (teamFilter) ranked = ranked.filter(c => c.team === teamFilter);
   ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
@@ -2503,9 +2555,14 @@ async function renderRankings() {
   rkRanked = ranked;
 
   const rankingsIntro = rankingsIntroText(ranked, leagueFilter, teamFilter);
+  const rankingsH1 = teamFilter
+    ? `Best ${teamFilter} Fan YouTubers Ranked`
+    : leagueFilter
+      ? `Best ${leagueFilter} Fan YouTubers Ranked`
+      : 'Best Football Fan YouTubers Ranked';
   updatePageMeta(
-    (teamFilter ? `${teamFilter} Rankings` : leagueFilter ? `${leagueFilter} Rankings` : 'Creator Rankings') + ' | FanReactionsFC',
-    rankingsIntro || 'Football YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.'
+    rankingsH1 + ' | FanReactionsFC',
+    rankingsIntro || 'Football fan YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.'
   );
 
   document.getElementById('app').innerHTML = `
@@ -2514,7 +2571,7 @@ async function renderRankings() {
         <div class="page-hero-inner">
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">&#127942; Daily Rankings</div>
-            <h1 class="page-hero-title">Creator Rankings</h1>
+            <h1 class="page-hero-title">${escHtml(rankingsH1)}</h1>
             <p class="page-hero-subtitle" style="max-width:640px">${escHtml(rankingsIntro)}</p>
             <div class="rk-tabs-row">
               <div class="rk-tabs">
@@ -2969,6 +3026,31 @@ function newsBodyHTML(body) {
   }).join('');
 }
 
+function metaDescText(s, max) {
+  const text = String(s || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > 80 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '') + '…';
+}
+
+function creatorLinksHTML(links) {
+  if (!Array.isArray(links) || !links.length) return '';
+  const items = links.map(link => {
+    if (!link) return '';
+    if (typeof link === 'string') {
+      const c = creators.find(cr => cr.slug === link || slugify(cr.name) === slugify(link) || cr.name === link);
+      const href = c ? creatorLink(c) : '/creators/' + slugify(link);
+      return `<a href="${href}">${escHtml(c ? c.name : link)}</a>`;
+    }
+    const slug = link.slug || (link.name ? slugify(link.name) : '');
+    if (!slug) return '';
+    return `<a href="/creators/${escHtml(slug)}">${escHtml(link.name || slug)}</a>`;
+  }).filter(Boolean);
+  if (!items.length) return '';
+  return `<div class="news-article-related"><span>Creators</span> ${items.join(' ')}</div>`;
+}
+
 function newsCardHTML(a) {
   return `
     <a href="/news/${escHtml(a.slug)}" class="news-card" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">
@@ -3054,7 +3136,7 @@ async function renderNewsArticle(slug) {
     return;
   }
 
-  updatePageMeta(`${article.title} | FanReactionsFC News`, article.summary, firstPartyCoverUrl(article.cover_image_url));
+  updatePageMeta(`${article.title} | FanReactionsFC News`, metaDescText(article.summary, 155), firstPartyCoverUrl(article.cover_image_url));
 
   sb.rpc('increment_article_view', { article_id: article.id }).then(() => {});
 
@@ -3072,13 +3154,14 @@ async function renderNewsArticle(slug) {
       </div>
     </div>
     <div class="container container-narrow section">
-      ${article.cover_image_url ? `<img src="${escHtml(article.cover_image_url)}" alt="" class="news-article-cover">` : ''}
+      ${firstPartyCoverUrl(article.cover_image_url) ? `<img src="${escHtml(firstPartyCoverUrl(article.cover_image_url))}" alt="" class="news-article-cover">` : ''}
       <div class="news-article-body">${newsBodyHTML(article.body)}</div>
       ${article.related_team ? `
       <div class="news-article-related">
         <span>More on</span>
-        <a href="/clubs/${encodeURIComponent(article.related_team)}" onclick="event.preventDefault();navigate('/clubs/${encodeURIComponent(article.related_team)}')">${crestImg(article.related_team, 'crest-sm')} ${escHtml(article.related_team)}</a>
+        <a href="${clubPath(article.related_team)}" onclick="event.preventDefault();navigate('${clubPath(article.related_team)}')">${crestImg(article.related_team, 'crest-sm')} ${escHtml(article.related_team)}</a>
       </div>` : ''}
+      ${creatorLinksHTML(article.creator_links)}
       <div style="margin-top:32px"><a href="/news" class="btn btn-secondary" onclick="event.preventDefault();navigate('/news')">&larr; Back to News</a></div>
     </div>
     ${renderFooter()}
@@ -5036,10 +5119,18 @@ function renderFooter() {
             <h4>FanReactionsFC</h4>
             <a href="https://www.youtube.com/@fanreactionsfc" target="_blank" rel="noopener">YouTube Channel</a>
             <a href="https://x.com/fanreactionsfc" target="_blank" rel="noopener">X (Twitter)</a>
+            <a href="https://www.instagram.com/fanreactionsfc/" target="_blank" rel="noopener">Instagram</a>
             <a href="/streamwall">Streamwall</a>
             <a href="/contact">Contact Us</a>
           </div>
         </div>
+        ${getTeams().filter(t => t && t !== 'Multi-Club / Other').length ? `
+        <div class="footer-clubs">
+          <h4>Clubs</h4>
+          <div class="footer-club-links">
+            ${getTeams().filter(t => t && t !== 'Multi-Club / Other').map(t => `<a href="${clubPath(t)}">${escHtml(t)}</a>`).join('')}
+          </div>
+        </div>` : ''}
         <div class="footer-bottom">
           <span>&copy; ${new Date().getFullYear()} FanReactionsFC.com</span>
           <span>${creators.length} creators &bull; Community-powered</span>

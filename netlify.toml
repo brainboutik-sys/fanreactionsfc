@@ -53,24 +53,11 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/sitemap"
   status = 200
 
-# Trailing-slash 301s for the prerendered index routes (functions also
-# 301, but matching here keeps the request off the function when possible).
-[[redirects]]
-  from = "/rankings/"
-  to = "/rankings"
-  status = 301
-[[redirects]]
-  from = "/discover/"
-  to = "/discover"
-  status = 301
-[[redirects]]
-  from = "/news/"
-  to = "/news"
-  status = 301
-[[redirects]]
-  from = "/become-a-creator/"
-  to = "/become-a-creator"
-  status = 301
+# Trailing-slash 301s for SPA-only routes. Do NOT add /rankings/ → /rankings
+# (and the other prerendered indexes) here: Asset pretty URLs plus those
+# 301s produced a self-redirect (301 Location: /rankings) that hid the
+# function rewrite. Trailing slashes on prerendered indexes are 301'd
+# inside the functions.
 [[redirects]]
   from = "/submit/"
   to = "/submit"
@@ -105,22 +92,49 @@ schedule = "0 5 * * *"
   status = 301
 
 # Prerendered index pages — unique head + visible body in raw HTML.
+# force = true so the rewrite beats Asset pretty URLs (without it, GET
+# /rankings 301'd to itself and crawlers never reached the function).
+# Trailing-slash variants also rewrite here so the function can 301.
 [[redirects]]
   from = "/rankings"
   to = "/.netlify/functions/rankings"
   status = 200
+  force = true
+[[redirects]]
+  from = "/rankings/"
+  to = "/.netlify/functions/rankings"
+  status = 200
+  force = true
 [[redirects]]
   from = "/discover"
   to = "/.netlify/functions/discover"
   status = 200
+  force = true
+[[redirects]]
+  from = "/discover/"
+  to = "/.netlify/functions/discover"
+  status = 200
+  force = true
 [[redirects]]
   from = "/become-a-creator"
   to = "/.netlify/functions/become-a-creator"
   status = 200
+  force = true
+[[redirects]]
+  from = "/become-a-creator/"
+  to = "/.netlify/functions/become-a-creator"
+  status = 200
+  force = true
 [[redirects]]
   from = "/news"
   to = "/.netlify/functions/news-hub"
   status = 200
+  force = true
+[[redirects]]
+  from = "/news/"
+  to = "/.netlify/functions/news-hub"
+  status = 200
+  force = true
 
 # Per-creator SSR — unique H1/body/ProfilePage JSON-LD; trailing slash 301s
 # and unknown slugs 404 inside the function.

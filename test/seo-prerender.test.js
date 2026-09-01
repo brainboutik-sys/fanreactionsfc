@@ -39,7 +39,7 @@ test('club-og prerenders unique H1/canonical for /clubs/arsenal without homepage
   await withCwd(async () => {
     const res = await handler({ path: '/clubs/arsenal' });
     assert.equal(res.statusCode, 200);
-    assert.match(res.body, /<h1 class="page-hero-title">Arsenal<\/h1>/);
+    assert.match(res.body, /<h1 class="page-hero-title">Arsenal Football YouTubers<\/h1>/);
     assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/clubs\/arsenal"/);
     assert.match(res.body, /<title>Arsenal Football YouTubers/);
     assert.doesNotMatch(res.body, /Discover the best football/);
@@ -79,6 +79,17 @@ test('not-found returns HTTP 404 with unique H1 and no homepage canonical', asyn
   });
 });
 
+test('fan rankings filter keeps club channels and drops journalists/streamers', () => {
+  const { isFanRankingsChannel } = require('../netlify/functions/rankings.js');
+  assert.equal(isFanRankingsChannel({ slug: 'aftvmedia', team: 'Arsenal' }), true);
+  assert.equal(isFanRankingsChannel({ slug: 'unitedstand', team: 'Man United', content_types: ['News'] }), true);
+  assert.equal(isFanRankingsChannel({ slug: 'thatsfootball', team: 'Multi-Club / Other', content_types: ['Watchalong'] }), true);
+  assert.equal(isFanRankingsChannel({ slug: 'fabrizio-romano', team: 'Multi-Club / Other', content_types: [] }), false);
+  assert.equal(isFanRankingsChannel({ slug: 'thogden', team: 'Multi-Club / Other' }), false);
+  assert.equal(isFanRankingsChannel({ slug: 'live-djmariio', team: 'Real Madrid' }), false);
+  assert.equal(isFanRankingsChannel({ slug: 'bydiegox10', team: 'Real Madrid' }), false);
+});
+
 test('rankings prerender has unique H1, canonical, ItemList, and a table', async () => {
   const { handler } = require('../netlify/functions/rankings.js');
   await withCwd(async () => {
@@ -114,8 +125,8 @@ test('become-a-creator prerender includes the guide H1 and body', async () => {
   });
 });
 
-test('news-hub prerender has unique H1 and canonical', async () => {
-  const { handler } = require('../netlify/functions/news-hub.js');
+test('news hub prerender has unique H1 and canonical', async () => {
+  const { handler } = require('../netlify/functions/news.js');
   await withCwd(async () => {
     const res = await handler({ path: '/news' });
     assert.equal(res.statusCode, 200);

@@ -14,7 +14,7 @@
   included_files = ["index.html"]
 [functions."discover"]
   included_files = ["index.html"]
-[functions."news-hub"]
+[functions."news"]
   included_files = ["index.html"]
 [functions."become-a-creator"]
   included_files = ["index.html"]
@@ -127,12 +127,12 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/news"
-  to = "/.netlify/functions/news-hub"
+  to = "/.netlify/functions/news"
   status = 200
   force = true
 [[redirects]]
   from = "/news/"
-  to = "/.netlify/functions/news-hub"
+  to = "/.netlify/functions/news"
   status = 200
   force = true
 

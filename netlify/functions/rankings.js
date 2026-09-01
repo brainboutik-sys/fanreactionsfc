@@ -21,6 +21,21 @@ const CLUB_SLUG_OVERRIDES = {
 function slugify(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function clubPath(team) { return '/clubs/' + (CLUB_SLUG_OVERRIDES[team] || slugify(team)); }
 
+// Keep the "Best Football Fan YouTubers" table to club-directory fan
+// channels (and multi-club rows that are actually watchalong/reaction).
+// Journalists and celebrity streamers must not sit at #1 under that H1.
+const FAN_RANK_TYPES = ['Reactions', 'Watchalong', 'Match Review', 'Banter', 'Fan Cam', 'Compilation'];
+const NON_FAN_SLUGS = new Set(['live-djmariio', 'bydiegox10']);
+
+function isFanRankingsChannel(c) {
+  const slug = String(c.slug || '').toLowerCase();
+  if (slug && NON_FAN_SLUGS.has(slug)) return false;
+  const team = c.team || '';
+  if (team && team !== 'Multi-Club / Other') return true;
+  const types = c.content_types || c.contentTypes || [];
+  return types.some(t => FAN_RANK_TYPES.includes(t));
+}
+
 let indexHtmlCache = null;
 function readIndexHtml() {
   if (indexHtmlCache) return indexHtmlCache;
@@ -153,14 +168,14 @@ exports.handler = async (event) => {
   if (sbKey) {
     try {
       const res = await fetch(
-        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,league,subscriber_count,video_count,total_view_count,last_youtube_sync,updated_at&order=subscriber_count.desc.nullslast&limit=1000`,
+        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,league,subscriber_count,video_count,total_view_count,content_types,last_youtube_sync,updated_at&order=subscriber_count.desc.nullslast&limit=1000`,
         { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
       );
       if (res.ok) creators = await res.json();
     } catch { /* empty table still gets unique head/body */ }
   }
 
-  let ranked = creators.filter(c => (c.subscriber_count || 0) > 0);
+  let ranked = creators.filter(c => (c.subscriber_count || 0) > 0 && isFanRankingsChannel(c));
   if (leagueFilter) ranked = ranked.filter(c => (c.league || '') === leagueFilter);
   if (teamFilter) ranked = ranked.filter(c => c.team === teamFilter);
 
@@ -261,3 +276,5 @@ exports.handler = async (event) => {
     body: applyPage(html, { title, description, url, bodyHtml, jsonLd }),
   };
 };
+
+exports.isFanRankingsChannel = isFanRankingsChannel;

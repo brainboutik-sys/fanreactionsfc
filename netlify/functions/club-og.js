@@ -340,7 +340,7 @@ exports.handler = async (event) => {
         <div class="page-hero-inner">
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">Football Club</div>
-            <h1 class="page-hero-title">${esc(club)}</h1>
+            <h1 class="page-hero-title">${esc(club)} Football YouTubers</h1>
             <p class="page-hero-subtitle">${esc(description)}</p>
             <div class="page-hero-meta">
               <span class="page-hero-tag">${creators.length} creator${creators.length !== 1 ? 's' : ''}</span>

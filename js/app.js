@@ -2270,7 +2270,7 @@ function renderClubPage(club) {
           ${crestImg(club, 'page-hero-crest')}
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">${leagueInfo ? escHtml(clubLeague) : 'Football Club'}</div>
-            <h1 class="page-hero-title">${escHtml(club)}</h1>
+            <h1 class="page-hero-title">${escHtml(club)} Football YouTubers</h1>
             ${clubCreators.length ? `<p class="page-hero-subtitle" style="max-width:640px">${escHtml(clubIntroText(club, clubCreators, clubLeague))}</p>` : ''}
             <div class="page-hero-meta">
               <span class="page-hero-tag">${clubCreators.length} creator${clubCreators.length !== 1 ? 's' : ''}</span>
@@ -2507,6 +2507,20 @@ function rkInitScrollFade() {
   rkUpdateScrollFade();
 }
 
+// Same rule as isFanRankingsChannel() in netlify/functions/rankings.js —
+// keep both in sync. Club-directory channels plus multi-club
+// watchalong/reaction rows; exclude celebrity streamers/journalists.
+const FAN_RANK_TYPES = ['Reactions', 'Watchalong', 'Match Review', 'Banter', 'Fan Cam', 'Compilation'];
+const NON_FAN_SLUGS = new Set(['live-djmariio', 'bydiegox10']);
+function isFanRankingsChannel(c) {
+  const slug = String(c.slug || '').toLowerCase();
+  if (slug && NON_FAN_SLUGS.has(slug)) return false;
+  const team = c.team || '';
+  if (team && team !== 'Multi-Club / Other') return true;
+  const types = c.contentTypes || c.content_types || [];
+  return types.some(t => FAN_RANK_TYPES.includes(t));
+}
+
 async function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
@@ -2514,7 +2528,7 @@ async function renderRankings() {
   const mode = params.get('mode') || 'subs';
   if (mode === 'voters') return renderVoterLeaderboard();
 
-  let ranked = [...creators].filter(c => c.subscriberCount > 0);
+  let ranked = [...creators].filter(c => c.subscriberCount > 0 && isFanRankingsChannel(c));
   if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
   if (teamFilter) ranked = ranked.filter(c => c.team === teamFilter);
   ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);

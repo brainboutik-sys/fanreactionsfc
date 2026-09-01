@@ -117,7 +117,7 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: { 'Content-Type': 'text/plain' }, body: 'index.html not available' };
   }
 
-  // /news and /news/ are the hub — news-hub.js owns that route. If this
+  // /news and /news/ are the hub — news.js owns that route. If this
   // function still sees them (redirect order), send the crawler there.
   if (!slug) {
     return {

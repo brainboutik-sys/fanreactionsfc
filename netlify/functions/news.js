@@ -1,5 +1,5 @@
-// Server-renders the /news listing (the hub). Individual /news/:slug
-// articles stay in news-article.js.
+// Server-renders the /news listing (the hub) at /.netlify/functions/news.
+// Individual /news/:slug articles stay in news-article.js.
 
 const fs = require('fs');
 const path = require('path');

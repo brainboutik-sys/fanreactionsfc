@@ -3018,11 +3018,33 @@ let newsOffset = 0;
 const YOUTUBE_URL_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/;
 
 function newsBodyHTML(body) {
+  function isSafeHref(url) {
+    const u = String(url).trim();
+    return /^https?:\/\//i.test(u) || (/^\//.test(u) && !u.startsWith('//'));
+  }
+  function inline(text) {
+    const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = LINK_RE.exec(text)) !== null) {
+      out += escHtml(text.slice(last, m.index));
+      const href = m[2].trim();
+      if (isSafeHref(href)) out += `<a href="${escHtml(href)}">${escHtml(m[1])}</a>`;
+      else out += escHtml(m[0]);
+      last = m.index + m[0].length;
+    }
+    out += escHtml(text.slice(last));
+    return out;
+  }
   return body.split(/\n\s*\n/).map(p => {
     const trimmed = p.trim();
     const m = trimmed.match(YOUTUBE_URL_RE);
     if (m) return `<div class="news-video-embed"><iframe src="https://www.youtube.com/embed/${m[1]}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
-    return `<p>${escHtml(trimmed)}</p>`;
+    if (/^##[ \t]+/.test(trimmed) && !trimmed.includes('\n')) {
+      return `<h2>${inline(trimmed.replace(/^##[ \t]+/, '').trim())}</h2>`;
+    }
+    return `<p>${inline(trimmed)}</p>`;
   }).join('');
 }
 

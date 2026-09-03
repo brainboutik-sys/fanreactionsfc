@@ -36,6 +36,32 @@ function isFanRankingsChannel(c) {
   return types.some(t => FAN_RANK_TYPES.includes(t));
 }
 
+// Collapse duplicate ranking rows (e.g. Total Saints Podcast listed twice).
+// Identity is slug, then channel_url / channel, then name. Keep first.
+function rankingIdentity(c) {
+  const slug = String(c.slug || '').trim().toLowerCase();
+  if (slug) return 'slug:' + slug;
+  const url = String(c.channel_url || c.channel || '').trim().toLowerCase();
+  if (url) return 'url:' + url;
+  const name = String(c.name || '').trim().toLowerCase();
+  if (name) return 'name:' + name;
+  return '';
+}
+
+function dedupeRankedCreators(list) {
+  const seen = new Set();
+  const out = [];
+  for (const c of list || []) {
+    const key = rankingIdentity(c);
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(c);
+  }
+  return out;
+}
+
 let indexHtmlCache = null;
 function readIndexHtml() {
   if (indexHtmlCache) return indexHtmlCache;
@@ -178,6 +204,7 @@ exports.handler = async (event) => {
   let ranked = creators.filter(c => (c.subscriber_count || 0) > 0 && isFanRankingsChannel(c));
   if (leagueFilter) ranked = ranked.filter(c => (c.league || '') === leagueFilter);
   if (teamFilter) ranked = ranked.filter(c => c.team === teamFilter);
+  ranked = dedupeRankedCreators(ranked);
 
   const scope = teamFilter || leagueFilter || '';
   const h1 = scope ? `Best ${scope} Fan YouTubers Ranked` : 'Best Football Fan YouTubers Ranked';
@@ -256,7 +283,6 @@ exports.handler = async (event) => {
         isPartOf: { '@id': SITE_URL + '/#website' },
         mainEntity: itemList,
       }, dateModified ? { dateModified } : {}),
-      itemList,
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
@@ -278,3 +304,4 @@ exports.handler = async (event) => {
 };
 
 exports.isFanRankingsChannel = isFanRankingsChannel;
+exports.dedupeRankedCreators = dedupeRankedCreators;

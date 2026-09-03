@@ -1073,6 +1073,12 @@ function renderHome() {
             `<span class="chip" onclick="navigate('/discover?league=${encodeURIComponent(l.name)}')"><img src="${l.logo}" alt="" class="chip-league-logo" onerror="this.style.display='none'"> ${l.name}</span>`
           ).join('')}
         </div>
+        <p class="seo-more-links home-dir-links">
+          <a href="/rankings" onclick="event.preventDefault();navigate('/rankings')">Rankings</a> ·
+          <a href="/discover" onclick="event.preventDefault();navigate('/discover')">Discover</a> ·
+          <a href="/news" onclick="event.preventDefault();navigate('/news')">News</a> ·
+          <a href="/become-a-creator" onclick="event.preventDefault();navigate('/become-a-creator')">Become a Creator</a>
+        </p>
       </div>
     </section>
 
@@ -2521,6 +2527,31 @@ function isFanRankingsChannel(c) {
   return types.some(t => FAN_RANK_TYPES.includes(t));
 }
 
+// Same rule as dedupeRankedCreators() in netlify/functions/rankings.js —
+// keep both in sync. Slug first, then channel URL, then name.
+function rankingIdentity(c) {
+  const slug = String(c.slug || '').trim().toLowerCase();
+  if (slug) return 'slug:' + slug;
+  const url = String(c.channel || c.channel_url || '').trim().toLowerCase();
+  if (url) return 'url:' + url;
+  const name = String(c.name || '').trim().toLowerCase();
+  if (name) return 'name:' + name;
+  return '';
+}
+function dedupeRankedCreators(list) {
+  const seen = new Set();
+  const out = [];
+  for (const c of list || []) {
+    const key = rankingIdentity(c);
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(c);
+  }
+  return out;
+}
+
 async function renderRankings() {
   const params = new URLSearchParams(location.search);
   const leagueFilter = params.get('league') || '';
@@ -2531,6 +2562,7 @@ async function renderRankings() {
   let ranked = [...creators].filter(c => c.subscriberCount > 0 && isFanRankingsChannel(c));
   if (leagueFilter) ranked = ranked.filter(c => (c.league || getLeague(c.team)) === leagueFilter);
   if (teamFilter) ranked = ranked.filter(c => c.team === teamFilter);
+  ranked = dedupeRankedCreators(ranked);
   ranked.sort((a, b) => b.subscriberCount - a.subscriberCount);
 
   // Build team strip: show teams for the selected league, or all teams

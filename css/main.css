@@ -620,6 +620,9 @@ img.review-avatar{background:var(--bg-hover)}
 .seo-list{margin:0 0 20px;padding-left:20px;line-height:1.7}
 .seo-more-links,.seo-filter-links{margin:12px 0 20px;line-height:1.7}
 .seo-filter-links a{margin-right:4px}
+.hero .home-dir-links{margin:18px 0 0;color:rgba(255,255,255,.7)}
+.hero .home-dir-links a{color:#fff;font-weight:600}
+.hero .home-dir-links a:hover{color:var(--yellow)}
 
 /* ── Misc ──────────────────────────────────────────────────────────────── */
 .empty-state{text-align:center;padding:60px 20px;color:var(--text-dim)}

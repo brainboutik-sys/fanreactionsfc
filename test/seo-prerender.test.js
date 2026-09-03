@@ -102,6 +102,102 @@ test('rankings prerender has unique H1, canonical, ItemList, and a table', async
   });
 });
 
+test('rankings JSON-LD has ItemList only as CollectionPage.mainEntity, not twice in @graph', async () => {
+  const { handler } = require('../netlify/functions/rankings.js');
+  await withCwd(async () => {
+    const res = await handler({ path: '/rankings', queryStringParameters: {} });
+    const raw = res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    assert.ok(raw, 'json-ld script present');
+    const serialized = raw[1];
+    const itemListMarks = serialized.match(/"@type":"ItemList"/g) || [];
+    assert.equal(itemListMarks.length, 1, 'ItemList appears once in the serialized graph');
+    const jsonLd = JSON.parse(serialized);
+    const graph = jsonLd['@graph'] || [];
+    assert.equal(graph.filter(n => n && n['@type'] === 'ItemList').length, 0);
+    const page = graph.find(n => n && n['@type'] === 'CollectionPage');
+    assert.ok(page);
+    assert.equal(page.mainEntity && page.mainEntity['@type'], 'ItemList');
+  });
+});
+
+test('two ranking rows with the same slug collapse to one', () => {
+  const { dedupeRankedCreators } = require('../netlify/functions/rankings.js');
+  const rows = [
+    { name: 'Total Saints Podcast', slug: 'total-saints-podcast', team: 'Southampton', subscriber_count: 12000 },
+    { name: 'Total Saints Podcast', slug: 'total-saints-podcast', team: 'Southampton', subscriber_count: 11900 },
+    { name: 'AFTVmedia', slug: 'aftvmedia', team: 'Arsenal', subscriber_count: 1800000 },
+  ];
+  const out = dedupeRankedCreators(rows);
+  assert.equal(out.length, 2);
+  assert.equal(out.filter(c => c.slug === 'total-saints-podcast').length, 1);
+  assert.equal(out[0].subscriber_count, 12000);
+});
+
+test('ranking de-dupe falls back to channel_url then name', () => {
+  const { dedupeRankedCreators } = require('../netlify/functions/rankings.js');
+  const byUrl = dedupeRankedCreators([
+    { name: 'Total Saints Podcast', slug: '', channel_url: 'https://youtube.com/@totalsaints', team: 'Southampton' },
+    { name: 'Total Saints Podcast', slug: '', channel_url: 'https://youtube.com/@totalsaints', team: 'Southampton' },
+  ]);
+  assert.equal(byUrl.length, 1);
+  const byName = dedupeRankedCreators([
+    { name: 'Total Saints Podcast', slug: '', team: 'Southampton' },
+    { name: 'Total Saints Podcast', slug: '', team: 'Southampton' },
+  ]);
+  assert.equal(byName.length, 1);
+});
+
+test('rankings handler table lists a duplicate slug once', async () => {
+  const { handler } = require('../netlify/functions/rankings.js');
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [
+      { name: 'Total Saints Podcast', slug: 'total-saints-podcast', team: 'Southampton', league: 'Premier League', subscriber_count: 12000, video_count: 100, content_types: ['Watchalong'] },
+      { name: 'Total Saints Podcast', slug: 'total-saints-podcast', team: 'Southampton', league: 'Premier League', subscriber_count: 11900, video_count: 99, content_types: ['Watchalong'] },
+    ],
+  });
+  try {
+    await withCwd(async () => {
+      const res = await handler({ path: '/rankings', queryStringParameters: {} });
+      assert.equal(res.statusCode, 200);
+      const tableLinks = res.body.match(/href="\/creators\/total-saints-podcast"/g) || [];
+      assert.equal(tableLinks.length, 1);
+      const jsonLd = JSON.parse(res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+      const page = jsonLd['@graph'].find(n => n['@type'] === 'CollectionPage');
+      assert.equal(page.mainEntity.numberOfItems, 1);
+      assert.equal((jsonLd['@graph'] || []).filter(n => n['@type'] === 'ItemList').length, 0);
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+  }
+});
+
+test('homepage prerender has unique H1/canonical, directory links, and no Loading subtitle', async () => {
+  const { handler } = require('../netlify/functions/home.js');
+  await withCwd(async () => {
+    const res = await handler({ path: '/' });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers.Location, undefined);
+    assert.match(res.body, /<h1>Discover the best football/);
+    assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/"/);
+    assert.match(res.body, /<title>FanReactionsFC — Discover the Best Football YouTubers<\/title>/);
+    assert.match(res.body, /href="\/rankings"/);
+    assert.match(res.body, /href="\/discover"/);
+    assert.match(res.body, /href="\/news"/);
+    assert.match(res.body, /href="\/become-a-creator"/);
+    assert.match(res.body, /href="\/clubs\//);
+    assert.match(res.body, /href="\/creators\//);
+    assert.doesNotMatch(res.body, /<p class="subtitle">Loading(\.\.\.|…)<\/p>/);
+    assert.match(res.body, /<p class="subtitle">The definitive database of football YouTubers\. Ranked daily\.<\/p>/);
+    assert.match(res.body, /footer-club-links/);
+  });
+});
+
 test('discover prerender is an index, not a second rankings H1', async () => {
   const { handler } = require('../netlify/functions/discover.js');
   await withCwd(async () => {

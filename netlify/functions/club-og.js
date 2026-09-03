@@ -397,7 +397,6 @@ exports.handler = async (event) => {
         isPartOf: { '@id': SITE_URL + '/#website' },
         mainEntity: itemList,
       }, dateModified ? { dateModified } : {}),
-      itemList,
       {
         '@type': 'BreadcrumbList',
         itemListElement: [

@@ -49,6 +49,24 @@ test('club-og prerenders unique H1/canonical for /clubs/arsenal without homepage
   });
 });
 
+test('club-og JSON-LD has ItemList only as CollectionPage.mainEntity, not twice in @graph', async () => {
+  const { handler } = require('../netlify/functions/club-og.js');
+  await withCwd(async () => {
+    const res = await handler({ path: '/clubs/arsenal' });
+    const raw = res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    assert.ok(raw, 'json-ld script present');
+    const serialized = raw[1];
+    const itemListMarks = serialized.match(/"@type":"ItemList"/g) || [];
+    assert.equal(itemListMarks.length, 1, 'ItemList appears once in the serialized graph');
+    const jsonLd = JSON.parse(serialized);
+    const graph = jsonLd['@graph'] || [];
+    assert.equal(graph.filter(n => n && n['@type'] === 'ItemList').length, 0);
+    const page = graph.find(n => n && n['@type'] === 'CollectionPage');
+    assert.ok(page);
+    assert.equal(page.mainEntity && page.mainEntity['@type'], 'ItemList');
+  });
+});
+
 test('club-og 404s unknown clubs', async () => {
   const { handler } = require('../netlify/functions/club-og.js');
   await withCwd(async () => {
@@ -245,6 +263,40 @@ test('sitemap omits lastmod on static URLs and stays 200 without a service key',
     assert.match(res.body, /<urlset /);
   } finally {
     if (prev !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = prev;
+  }
+});
+
+test('sitemap omits lastmod for creators and clubs even when last_youtube_sync is set (not a trustworthy content-change signal)', async () => {
+  const { handler } = require('../netlify/functions/sitemap.js');
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async (url) => {
+    if (String(url).includes('frfc_streamers')) {
+      return { ok: true, json: async () => [
+        { slug: 'aftvmedia', name: 'AFTVmedia', team: 'Arsenal', last_youtube_sync: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z' },
+      ] };
+    }
+    if (String(url).includes('frfc_articles')) {
+      return { ok: true, json: async () => [
+        { slug: 'some-article', published_at: '2026-08-20T00:00:00Z', updated_at: '2026-08-21T00:00:00Z' },
+      ] };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    const res = await handler();
+    assert.equal(res.statusCode, 200);
+    const creatorUrl = res.body.match(/<url>\s*<loc>[^<]*\/creators\/aftvmedia<\/loc>[\s\S]*?<\/url>/)[0];
+    assert.doesNotMatch(creatorUrl, /<lastmod>/);
+    const clubUrl = res.body.match(/<url>\s*<loc>[^<]*\/clubs\/arsenal<\/loc>[\s\S]*?<\/url>/)[0];
+    assert.doesNotMatch(clubUrl, /<lastmod>/);
+    const articleUrl = res.body.match(/<url>\s*<loc>[^<]*\/news\/some-article<\/loc>[\s\S]*?<\/url>/)[0];
+    assert.match(articleUrl, /<lastmod>2026-08-21<\/lastmod>/);
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
   }
 });
 

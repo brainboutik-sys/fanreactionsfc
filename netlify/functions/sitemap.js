@@ -84,26 +84,25 @@ exports.handler = async () => {
   }
 
   const clubs = [...new Set(creators.map(c => c.team).filter(t => t && t !== 'Multi-Club / Other'))];
-  const clubLastmod = {};
-  creators.forEach(c => {
-    if (!c.team) return;
-    const d = ymd(c.last_youtube_sync || c.updated_at);
-    if (d && (!clubLastmod[c.team] || d > clubLastmod[c.team])) clubLastmod[c.team] = d;
-  });
 
+  // Creator and club lastmod are deliberately omitted, not computed from
+  // last_youtube_sync/updated_at: the daily sync job stamps those columns
+  // on nearly every creator every run regardless of whether anything
+  // actually changed (confirmed: 352/366 creators shared one sync-run
+  // date), so they're a "last checked" timestamp, not "last changed" —
+  // not a trustworthy lastmod signal. Article lastmod stays real below
+  // (published_at/updated_at there reflects an actual editorial action).
   const urlEntries = [
     ...STATIC_URLS,
     ...creators.map(c => ({
       loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
       priority: '0.7',
       changefreq: 'weekly',
-      lastmod: ymd(c.last_youtube_sync || c.updated_at) || undefined,
     })),
     ...clubs.map(team => ({
       loc: `${SITE_URL}/clubs/${clubSlug(team)}`,
       priority: '0.6',
       changefreq: 'weekly',
-      lastmod: clubLastmod[team] || undefined,
     })),
     ...articles.map(a => ({
       loc: `${SITE_URL}/news/${a.slug}`,

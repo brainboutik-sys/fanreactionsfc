@@ -198,6 +198,45 @@ test('homepage prerender has unique H1/canonical, directory links, and no Loadin
   });
 });
 
+test('streamwall prerender has unique H1/canonical and no Loading subtitle', async () => {
+  const { handler } = require('../netlify/functions/streamwall.js');
+  await withCwd(async () => {
+    const res = await handler({ path: '/streamwall' });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.body, /<h1 class="page-hero-title">Watch Live Football Creators<\/h1>/);
+    assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/streamwall"/);
+    assert.match(res.body, /<title>Streamwall — Watch Live Football Creators/);
+    assert.doesNotMatch(res.body, /Discover the best football/);
+    assert.doesNotMatch(res.body, /<p class="subtitle">Loading/);
+  });
+});
+
+test('tools-generator prerender has unique H1/canonical and no Loading subtitle', async () => {
+  const { handler } = require('../netlify/functions/tools-generator.js');
+  await withCwd(async () => {
+    const res = await handler({ path: '/tools/generator' });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.body, /<h1 class="page-hero-title">YouTube Description Generator/);
+    assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/tools\/generator"/);
+    assert.match(res.body, /<title>Description Generator \| FanReactionsFC<\/title>/);
+    assert.doesNotMatch(res.body, /Discover the best football/);
+    assert.doesNotMatch(res.body, /<p class="subtitle">Loading/);
+  });
+});
+
+test('community-features prerender has unique H1/canonical, not the homepage canonical', async () => {
+  const { handler } = require('../netlify/functions/community-features.js');
+  await withCwd(async () => {
+    const res = await handler({ path: '/community/features' });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.body, /<h1 class="page-hero-title">Feature Requests<\/h1>/);
+    assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/community\/features"/);
+    assert.doesNotMatch(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/"/);
+    assert.doesNotMatch(res.body, /Discover the best football/);
+    assert.doesNotMatch(res.body, /<p class="subtitle">Loading/);
+  });
+});
+
 test('discover prerender is an index, not a second rankings H1', async () => {
   const { handler } = require('../netlify/functions/discover.js');
   await withCwd(async () => {

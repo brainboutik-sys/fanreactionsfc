@@ -20,6 +20,12 @@
   included_files = ["index.html"]
 [functions."home"]
   included_files = ["index.html"]
+[functions."streamwall"]
+  included_files = ["index.html"]
+[functions."tools-generator"]
+  included_files = ["index.html"]
+[functions."community-features"]
+  included_files = ["index.html"]
 [functions."not-found"]
   included_files = ["index.html"]
 
@@ -206,38 +212,43 @@ schedule = "0 5 * * *"
 # Known client-only SPA routes — still 200 the shell so in-app navigation
 # and signed-in pages keep working. Everything else is a real HTTP 404
 # (see not-found.js). Files in publish/ are served first by Netlify.
+#
+# force = true on submit/contact/privacy/cookies/terms/account: confirmed
+# live these 6 routes (plus streamwall/tools/generator, now prerendered
+# below) all 301'd to themselves without it — the same Asset pretty-URL
+# trap /rankings had. /admin, /admin/*, /manage/*, and /community/features
+# did NOT self-redirect in production (confirmed via curl), so force=true
+# isn't added there — nothing showed it was needed.
 [[redirects]]
   from = "/submit"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/contact"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/privacy"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/cookies"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/terms"
   to = "/index.html"
   status = 200
-[[redirects]]
-  from = "/streamwall"
-  to = "/index.html"
-  status = 200
-[[redirects]]
-  from = "/tools/generator"
-  to = "/index.html"
-  status = 200
+  force = true
 [[redirects]]
   from = "/account"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/admin"
   to = "/index.html"
@@ -250,10 +261,33 @@ schedule = "0 5 * * *"
   from = "/manage/*"
   to = "/index.html"
   status = 200
+
+# Prerendered utility pages — same Asset pretty-URL trap as /rankings had
+# (confirmed live: both self-301'd without force=true). Real H1/canonical/
+# body for crawlers; the SPA still hydrates #app with the interactive tool.
+# Does NOT touch js/generator.js or the streamwall client rendering code —
+# this is a separate, read-only SSR snapshot alongside them.
+[[redirects]]
+  from = "/streamwall"
+  to = "/.netlify/functions/streamwall"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/tools/generator"
+  to = "/.netlify/functions/tools-generator"
+  status = 200
+  force = true
+
+# /community/features didn't self-redirect, but it fell through to the
+# raw homepage shell (wrong H1, "Loading..." subtitle, canonical pointing
+# at "/") since there was no dedicated rewrite — same fix as above, minus
+# the redirect-loop cause. /community/features/:id (individual requests)
+# keeps the plain SPA shell; only the list page is prerendered.
 [[redirects]]
   from = "/community/features"
-  to = "/index.html"
+  to = "/.netlify/functions/community-features"
   status = 200
+  force = true
 [[redirects]]
   from = "/community/features/*"
   to = "/index.html"

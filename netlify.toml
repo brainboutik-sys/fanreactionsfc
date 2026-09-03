@@ -61,43 +61,42 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/sitemap"
   status = 200
 
-# Trailing-slash 301s for SPA-only routes. Do NOT add /rankings/ → /rankings
-# (and the other prerendered indexes) here: Asset pretty URLs plus those
-# 301s produced a self-redirect (301 Location: /rankings) that hid the
-# function rewrite. Trailing slashes on prerendered indexes are 301'd
-# inside the functions.
+# Trailing-slash variants for SPA-only routes. These do NOT 301 to the
+# bare path: confirmed live (deploy preview for this exact change) that
+# a 301-to-self chain here — /submit/ → /submit, etc. — reproduces the
+# same self-redirect bug /rankings had. Same fix as /rankings/, /discover/,
+# /news/, /become-a-creator/ below: rewrite straight to the final target,
+# same as the bare path, with force=true.
 [[redirects]]
   from = "/submit/"
-  to = "/submit"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/contact/"
-  to = "/contact"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/privacy/"
-  to = "/privacy"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/cookies/"
-  to = "/cookies"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/terms/"
-  to = "/terms"
-  status = 301
-[[redirects]]
-  from = "/streamwall/"
-  to = "/streamwall"
-  status = 301
-[[redirects]]
-  from = "/tools/generator/"
-  to = "/tools/generator"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/account/"
-  to = "/account"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 
 # Homepage — force = true so index.html in publish/ does not win
 # (same Asset pretty-URL trap that made GET /rankings 301 to itself).
@@ -273,7 +272,17 @@ schedule = "0 5 * * *"
   status = 200
   force = true
 [[redirects]]
+  from = "/streamwall/"
+  to = "/.netlify/functions/streamwall"
+  status = 200
+  force = true
+[[redirects]]
   from = "/tools/generator"
+  to = "/.netlify/functions/tools-generator"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/tools/generator/"
   to = "/.netlify/functions/tools-generator"
   status = 200
   force = true

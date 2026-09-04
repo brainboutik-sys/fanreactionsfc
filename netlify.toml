@@ -20,6 +20,12 @@
   included_files = ["index.html"]
 [functions."home"]
   included_files = ["index.html"]
+[functions."streamwall"]
+  included_files = ["index.html"]
+[functions."tools-generator"]
+  included_files = ["index.html"]
+[functions."community-features"]
+  included_files = ["index.html"]
 [functions."not-found"]
   included_files = ["index.html"]
 
@@ -55,43 +61,42 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/sitemap"
   status = 200
 
-# Trailing-slash 301s for SPA-only routes. Do NOT add /rankings/ → /rankings
-# (and the other prerendered indexes) here: Asset pretty URLs plus those
-# 301s produced a self-redirect (301 Location: /rankings) that hid the
-# function rewrite. Trailing slashes on prerendered indexes are 301'd
-# inside the functions.
+# Trailing-slash variants for SPA-only routes. These do NOT 301 to the
+# bare path: confirmed live (deploy preview for this exact change) that
+# a 301-to-self chain here — /submit/ → /submit, etc. — reproduces the
+# same self-redirect bug /rankings had. Same fix as /rankings/, /discover/,
+# /news/, /become-a-creator/ below: rewrite straight to the final target,
+# same as the bare path, with force=true.
 [[redirects]]
   from = "/submit/"
-  to = "/submit"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/contact/"
-  to = "/contact"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/privacy/"
-  to = "/privacy"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/cookies/"
-  to = "/cookies"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/terms/"
-  to = "/terms"
-  status = 301
-[[redirects]]
-  from = "/streamwall/"
-  to = "/streamwall"
-  status = 301
-[[redirects]]
-  from = "/tools/generator/"
-  to = "/tools/generator"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 [[redirects]]
   from = "/account/"
-  to = "/account"
-  status = 301
+  to = "/index.html"
+  status = 200
+  force = true
 
 # Homepage — force = true so index.html in publish/ does not win
 # (same Asset pretty-URL trap that made GET /rankings 301 to itself).
@@ -206,38 +211,43 @@ schedule = "0 5 * * *"
 # Known client-only SPA routes — still 200 the shell so in-app navigation
 # and signed-in pages keep working. Everything else is a real HTTP 404
 # (see not-found.js). Files in publish/ are served first by Netlify.
+#
+# force = true on submit/contact/privacy/cookies/terms/account: confirmed
+# live these 6 routes (plus streamwall/tools/generator, now prerendered
+# below) all 301'd to themselves without it — the same Asset pretty-URL
+# trap /rankings had. /admin, /admin/*, /manage/*, and /community/features
+# did NOT self-redirect in production (confirmed via curl), so force=true
+# isn't added there — nothing showed it was needed.
 [[redirects]]
   from = "/submit"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/contact"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/privacy"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/cookies"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/terms"
   to = "/index.html"
   status = 200
-[[redirects]]
-  from = "/streamwall"
-  to = "/index.html"
-  status = 200
-[[redirects]]
-  from = "/tools/generator"
-  to = "/index.html"
-  status = 200
+  force = true
 [[redirects]]
   from = "/account"
   to = "/index.html"
   status = 200
+  force = true
 [[redirects]]
   from = "/admin"
   to = "/index.html"
@@ -250,10 +260,43 @@ schedule = "0 5 * * *"
   from = "/manage/*"
   to = "/index.html"
   status = 200
+
+# Prerendered utility pages — same Asset pretty-URL trap as /rankings had
+# (confirmed live: both self-301'd without force=true). Real H1/canonical/
+# body for crawlers; the SPA still hydrates #app with the interactive tool.
+# Does NOT touch js/generator.js or the streamwall client rendering code —
+# this is a separate, read-only SSR snapshot alongside them.
+[[redirects]]
+  from = "/streamwall"
+  to = "/.netlify/functions/streamwall"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/streamwall/"
+  to = "/.netlify/functions/streamwall"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/tools/generator"
+  to = "/.netlify/functions/tools-generator"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/tools/generator/"
+  to = "/.netlify/functions/tools-generator"
+  status = 200
+  force = true
+
+# /community/features didn't self-redirect, but it fell through to the
+# raw homepage shell (wrong H1, "Loading..." subtitle, canonical pointing
+# at "/") since there was no dedicated rewrite — same fix as above, minus
+# the redirect-loop cause. /community/features/:id (individual requests)
+# keeps the plain SPA shell; only the list page is prerendered.
 [[redirects]]
   from = "/community/features"
-  to = "/index.html"
+  to = "/.netlify/functions/community-features"
   status = 200
+  force = true
 [[redirects]]
   from = "/community/features/*"
   to = "/index.html"

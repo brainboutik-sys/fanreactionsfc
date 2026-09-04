@@ -1040,6 +1040,7 @@ img.review-avatar{background:var(--bg-hover)}
 .news-card-tag{font-size:var(--fs-xs);font-weight:600;letter-spacing:.02em;color:var(--navy);background:var(--accent-soft);padding:2px 8px;border-radius:100px}
 .news-card-title{font-size:var(--fs-lg);font-weight:700;line-height:1.3}
 .news-card-summary{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;flex:1}
+.news-card-summary-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .news-card-meta{font-size:var(--fs-xs);color:var(--text-muted);margin-top:4px}
 
 .news-article-meta{color:var(--text-muted);font-size:var(--fs-sm)}

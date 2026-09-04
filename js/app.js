@@ -3118,15 +3118,19 @@ function newsCardHTML(a) {
     </a>`;
 }
 
-// Cover + title only, no summary/tags/meta — used by the homepage's Latest
-// News strip, which is meant as a glanceable teaser, not the full listing
-// card. Reuses the same news-card classes so grid/hover styling matches.
+// Cover + title + a 3-line-clamped summary, no tags/meta — used by the
+// homepage's Latest News strip, which is meant as a glanceable teaser,
+// not the full listing card. Reuses the same news-card classes so
+// grid/hover styling matches; .news-card-summary-clamp caps the summary
+// to 3 lines via CSS rather than truncating the string server-side, so
+// it reflows correctly at any card width.
 function newsCardCompactHTML(a) {
   return `
     <a href="/news/${escHtml(a.slug)}" class="news-card news-card-compact" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">
       ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="" class="news-card-thumb" loading="lazy"></div>` : ''}
       <div class="news-card-body">
         <div class="news-card-title">${escHtml(a.title)}</div>
+        ${a.summary ? `<div class="news-card-summary news-card-summary-clamp">${escHtml(a.summary)}</div>` : ''}
       </div>
     </a>`;
 }

@@ -73,7 +73,15 @@ exports.handler = async (event) => {
   } catch { /* fall through and attempt an insert */ }
 
   const isSuppressed = existing && (existing.status === 'bounced' || existing.status === 'complained');
-  const needsFreshDoi = !existing || existing.status === 'unsubscribed';
+  // MailerLite's own docs describe status:'unconfirmed' on the subscribers
+  // call as how you *resend* a DOI email to a subscriber it already knows
+  // about — not the trigger for a brand-new subscriber's first one, which
+  // fires automatically from the account-level "Double opt-in for API and
+  // integrations" toggle as long as no status field is sent at all. Passing
+  // it on a first-time signup silently suppressed the send (confirmed live:
+  // two fresh test signups both showed "Emails sent: 0" in MailerLite until
+  // this was split out).
+  const isResubscribe = existing && existing.status === 'unsubscribed';
 
   if (!existing) {
     const insertRes = await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_subscribers`, {
@@ -118,9 +126,12 @@ exports.handler = async (event) => {
       const mlRes = await fetch(MAILERLITE_API, {
         method: 'POST',
         headers: { Authorization: `Bearer ${mlToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-        // Passing status:'unconfirmed' explicitly is what makes MailerLite (re-)send its
-        // double opt-in email even to a subscriber it already knows about (e.g. a resubscribe).
-        body: JSON.stringify({ email, groups, ...(needsFreshDoi ? { status: 'unconfirmed' } : {}) }),
+        // Omit status entirely for a first-time signup — the account-level DOI
+        // toggle sends the confirmation email automatically. Only pass
+        // status:'unconfirmed' explicitly for a resubscribe, which is the
+        // documented way to make MailerLite resend to a subscriber it
+        // already has on file as unsubscribed.
+        body: JSON.stringify({ email, groups, ...(isResubscribe ? { status: 'unconfirmed' } : {}) }),
       });
       if (!mlRes.ok) {
         const detail = await mlRes.text().catch(() => '');

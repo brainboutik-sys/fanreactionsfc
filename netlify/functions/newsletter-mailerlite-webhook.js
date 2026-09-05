@@ -68,11 +68,19 @@ exports.handler = async (event) => {
 
     const consentAction = CONSENT_ACTION_BY_EVENT[evt.event];
     if (consentAction) {
-      fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
-        method: 'POST',
-        headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ email, action: consentAction, notice_version: 'mailerlite_webhook', source: 'mailerlite_webhook' }),
-      }).catch(() => {});
+      // Must be awaited — an unawaited fetch can get cut off when Netlify
+      // freezes the function right after the handler returns (confirmed
+      // live: the subscriber PATCH above landed but this fire-and-forget
+      // version of this call never wrote a row).
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
+          method: 'POST',
+          headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ email, action: consentAction, notice_version: 'mailerlite_webhook', source: 'mailerlite_webhook' }),
+        });
+      } catch (e) {
+        console.error('newsletter webhook: consent log insert failed', evt.event, e);
+      }
     }
   }
 

@@ -610,17 +610,17 @@ img.review-avatar{background:var(--bg-hover)}
 .footer-legal a:hover{color:var(--text-dim);text-decoration:underline}
 .footer-clubs{margin-top:28px;padding-top:20px;border-top:1px solid var(--border)}
 
-/* ── Newsletter signup box ────────────────────────────────────────────── */
-.newsletter-box{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:22px 26px;margin-bottom:28px}
+/* ── Newsletter signup box — same yellow/navy treatment as .cta-band ───── */
+.newsletter-box{background:var(--yellow);border:none;border-radius:var(--radius);padding:26px 30px;margin-bottom:28px}
 .site-footer .newsletter-box{margin-bottom:32px}
-.newsletter-box-text h4{font-size:var(--fs-md);color:var(--text);margin-bottom:4px}
-.newsletter-box-text p{font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:14px}
+.newsletter-box-text h4{font-size:var(--fs-lg);font-weight:800;color:var(--navy);margin-bottom:4px;letter-spacing:-.01em}
+.newsletter-box-text p{font-size:var(--fs-base);color:rgba(6,26,93,.65);margin-bottom:14px}
 .newsletter-form{display:flex;gap:10px;flex-wrap:wrap}
-.newsletter-input{flex:1;min-width:200px;padding:10px 16px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:var(--fs-sm)}
-.newsletter-input:focus{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)}
-.newsletter-consent{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:var(--fs-xs);color:var(--text-muted);cursor:pointer}
+.newsletter-input{flex:1;min-width:200px;padding:10px 16px;border-radius:var(--radius-pill);border:1px solid rgba(6,26,93,.15);background:#fff;color:var(--navy);font-size:var(--fs-sm)}
+.newsletter-input:focus{outline:none;border-color:var(--navy);box-shadow:var(--focus-ring)}
+.newsletter-consent{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:var(--fs-xs);color:rgba(6,26,93,.75);cursor:pointer}
 .newsletter-consent input{margin-top:2px;flex-shrink:0}
-.newsletter-consent a{color:var(--text-dim)}
+.newsletter-consent a{color:var(--navy);text-decoration:underline}
 .newsletter-msg{font-size:var(--fs-xs);margin-top:8px;min-height:1em}
 .footer-clubs h4{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px}
 .footer-club-links{display:flex;flex-wrap:wrap;gap:6px 14px}

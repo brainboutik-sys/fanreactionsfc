@@ -36,14 +36,18 @@ exports.handler = async (event) => {
     console.error('newsletter-unsubscribe: subscriber update failed', e);
   }
 
-  fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
-    method: 'POST',
-    headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      email, action: 'opt_out', notice_version: 'n/a', source,
-      user_agent: String(event.headers['user-agent'] || '').slice(0, 300),
-    }),
-  }).catch(() => {});
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        email, action: 'opt_out', notice_version: 'n/a', source,
+        user_agent: String(event.headers['user-agent'] || '').slice(0, 300),
+      }),
+    });
+  } catch (e) {
+    console.error('newsletter-unsubscribe: consent log insert failed', e);
+  }
 
   const mlToken = process.env.MAILERLITE_API_TOKEN;
   if (mlToken) {

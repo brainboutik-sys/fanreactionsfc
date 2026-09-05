@@ -102,14 +102,21 @@ exports.handler = async (event) => {
 
   // Always record the consent event, even for an idempotent re-tick or a
   // suppressed address, so there's a full history of what was agreed to.
-  fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
-    method: 'POST',
-    headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      email, action: 'opt_in', notice_version: noticeVersion, source,
-      user_agent: String(event.headers['user-agent'] || '').slice(0, 300),
-    }),
-  }).catch(() => {});
+  // Awaited — an un-awaited fetch here can get cut off when Netlify freezes
+  // the function right after the handler returns (confirmed live in the
+  // webhook function's equivalent call, which silently lost rows this way).
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        email, action: 'opt_in', notice_version: noticeVersion, source,
+        user_agent: String(event.headers['user-agent'] || '').slice(0, 300),
+      }),
+    });
+  } catch (e) {
+    console.error('newsletter-subscribe: consent log insert failed', e);
+  }
 
   // Never push a bounced/complained address back to MailerLite from this
   // endpoint — respond as success either way so we don't leak suppression

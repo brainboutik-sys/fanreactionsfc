@@ -14,6 +14,10 @@ var allArticles = [];
 var allCandidates = [];
 var allUsers = [];
 var allRoles = [];
+var allNewsletterSubscribers = [];
+var allNewsletterWebhookErrors = [];
+var newsletterFilter = 'all';
+var newsletterSearch = '';
 var adminLog = [];
 var creatorSearch = '';
 var creatorSort = 'name';
@@ -89,6 +93,7 @@ function navItems() {
     { id: 'creators',  icon: '&#9733;', label: 'Creators', badge: allCreators.length },
     { id: 'submissions', icon: '&#9993;', label: 'Submissions', badge: allSubmissions.filter(function(s){return s.status==='pending'}).length || null },
     { id: 'news',      icon: '&#9998;', label: 'News', badge: allArticles.filter(function(a){return a.status==='draft'}).length || null },
+    { id: 'newsletter', icon: '&#128231;', label: 'Newsletter', permission: 'newsletter.manage' },
     { id: 'queue',     icon: '&#9873;', label: 'Editorial Queue', badge: allCandidates.filter(function(c){return c.status==='evidence_ready' || c.status==='review_ready'}).length || null, permission: 'editorial_queue.manage' },
     { id: 'health',    icon: '&#9877;', label: 'Health', permission: 'health.view' },
     { id: 'users',     icon: '&#9823;', label: 'Users', permission: 'users.view' },
@@ -149,7 +154,7 @@ function renderSidebar() {
 // doesn't have (e.g. reached via a stale bookmark or direct Admin.go()
 // call), show a plain access-denied message instead of attempting to load
 // data the server will reject anyway.
-var PAGE_PERMISSIONS = { queue: 'editorial_queue.manage', health: 'health.view', users: 'users.view', roles: 'roles.view', settings: 'settings.manage', logs: 'logs.view' };
+var PAGE_PERMISSIONS = { queue: 'editorial_queue.manage', health: 'health.view', users: 'users.view', roles: 'roles.view', settings: 'settings.manage', logs: 'logs.view', newsletter: 'newsletter.manage' };
 
 function renderPage() {
   var content = document.getElementById('adminContent');
@@ -163,6 +168,7 @@ function renderPage() {
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
+  else if (adminPage === 'newsletter') { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Newsletter</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderNewsletter(); }
   else if (adminPage === 'queue')    content.innerHTML = toggle + renderQueue();
   else if (adminPage === 'health')   { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Health</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderHealth(); }
   else if (adminPage === 'users')    { content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Users</h1><div class="admin-page-subtitle">Loading…</div></div></div>'; loadAndRenderUsers(); }
@@ -1283,6 +1289,189 @@ function deleteRole(slug, name) {
   }, { title: 'Delete role', confirmLabel: 'Delete' });
 }
 
+// ── Newsletter (P1.1) ────────────────────────────────────────────────────────
+// Reads go straight to Supabase (frfc_newsletter_subscribers/_consent_log/
+// _webhook_errors all have a newsletter.manage read policy). Writes
+// (suppress/resync) go through admin-newsletter.js, since the subscribers
+// table has no client-writable policy at all — same trust-root pattern as
+// frfc_admin_roles, enforced service-role-only.
+async function callAdminNewsletter(action, payload) {
+  var session = (await sb.auth.getSession()).data.session;
+  var res = await fetch('/.netlify/functions/admin-newsletter', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify(Object.assign({ action: action }, payload)),
+  });
+  var data = await res.json().catch(function() { return {}; });
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+async function loadAndRenderNewsletter() {
+  var content = document.getElementById('adminContent');
+  var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  var [subsRes, errRes] = await Promise.all([
+    sb.from('frfc_newsletter_subscribers').select('*').order('created_at', { ascending: false }).limit(500),
+    sb.from('frfc_newsletter_webhook_errors').select('*').order('created_at', { ascending: false }).limit(20),
+  ]);
+  allNewsletterSubscribers = subsRes.data || [];
+  allNewsletterWebhookErrors = errRes.data || [];
+  content.innerHTML = toggle + renderNewsletter();
+}
+
+function newsletterStatusBadge(status) {
+  var cls = { active: 'admin-badge-green', pending: 'admin-badge-yellow', unsubscribed: 'admin-badge-dim', bounced: 'admin-badge-red', complained: 'admin-badge-red' }[status] || 'admin-badge-dim';
+  return '<span class="admin-badge ' + cls + '">' + escHtml(status) + '</span>';
+}
+
+function filteredNewsletterSubscribers() {
+  var list = allNewsletterSubscribers;
+  if (newsletterFilter !== 'all') list = list.filter(function(s) { return s.status === newsletterFilter; });
+  if (newsletterSearch) {
+    var q = newsletterSearch.toLowerCase();
+    list = list.filter(function(s) { return s.email.toLowerCase().indexOf(q) !== -1; });
+  }
+  return list;
+}
+
+function newsletterRowActions(s) {
+  var actions = [];
+  if (s.status === 'pending' || s.status === 'active') {
+    actions.push('<button class="btn-admin btn-admin-ghost" onclick="Admin.suppressNewsletterSubscriber(\'' + jsAttrStr(s.email) + '\')">Suppress</button>');
+  }
+  if (s.status === 'active') {
+    actions.push('<button class="btn-admin btn-admin-ghost" onclick="Admin.resyncNewsletterSubscriber(\'' + jsAttrStr(s.email) + '\',' + (s.is_site_member ? 'true' : 'false') + ')">Resync</button>');
+  }
+  return '<div class="row-actions">' + (actions.join('') || '&mdash;') + '</div>';
+}
+
+function renderNewsletter() {
+  var all = allNewsletterSubscribers;
+  var counts = { active: 0, pending: 0, unsubscribed: 0, bounced: 0, complained: 0 };
+  all.forEach(function(s) { if (counts[s.status] !== undefined) counts[s.status]++; });
+  var filtered = filteredNewsletterSubscribers();
+
+  var rows = filtered.map(function(s) {
+    return '<tr>' +
+      '<td class="row-name">' + escHtml(s.email) + '</td>' +
+      '<td>' + newsletterStatusBadge(s.status) + '</td>' +
+      '<td class="row-dim">' + escHtml(s.source) + '</td>' +
+      '<td>' + (s.is_site_member ? '<span class="admin-badge admin-badge-blue">Member</span>' : '') + '</td>' +
+      '<td class="row-dim">' + timeAgo(s.created_at) + '</td>' +
+      '<td class="row-dim">' + (s.confirmed_at ? timeAgo(s.confirmed_at) : '&mdash;') + '</td>' +
+      '<td>' + newsletterRowActions(s) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var errorRows = allNewsletterWebhookErrors.map(function(e) {
+    return '<tr>' +
+      '<td class="row-dim">' + timeAgo(e.created_at) + '</td>' +
+      '<td>' + escHtml(e.event_type || '&mdash;') + '</td>' +
+      '<td class="row-dim">' + escHtml(e.email || '&mdash;') + '</td>' +
+      '<td class="row-dim" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(e.error_detail) + '">' + escHtml(e.error_detail) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="admin-page-header"><div><h1 class="admin-page-title">Newsletter</h1><div class="admin-page-subtitle">' + all.length + ' total subscriber' + (all.length === 1 ? '' : 's') + '</div></div>' +
+    '<div class="admin-page-actions">' +
+      '<button class="btn-admin btn-admin-ghost" onclick="Admin.exportNewsletterCsv()">Export CSV</button>' +
+      '<button class="btn-admin btn-admin-primary" onclick="Admin.resyncAllNewsletter()">Resync All Active</button>' +
+    '</div>' +
+  '</div>' +
+
+  '<div class="admin-stats">' +
+    stat('Active', counts.active, 'Confirmed') +
+    stat('Pending', counts.pending, 'Awaiting confirmation') +
+    stat('Unsubscribed', counts.unsubscribed, 'Opted out') +
+    stat('Bounced', counts.bounced, 'Undeliverable') +
+    stat('Complained', counts.complained, 'Marked as spam') +
+  '</div>' +
+
+  '<div class="admin-table-wrap">' +
+    '<div class="admin-table-toolbar">' +
+      '<input class="admin-table-search" placeholder="Search email..." value="' + escHtml(newsletterSearch) + '" oninput="Admin.searchNewsletter(this.value)">' +
+      '<select class="admin-table-filter" onchange="Admin.filterNewsletter(this.value)">' +
+        '<option value="all"' + (newsletterFilter==='all'?' selected':'') + '>All statuses</option>' +
+        '<option value="active"' + (newsletterFilter==='active'?' selected':'') + '>Active</option>' +
+        '<option value="pending"' + (newsletterFilter==='pending'?' selected':'') + '>Pending</option>' +
+        '<option value="unsubscribed"' + (newsletterFilter==='unsubscribed'?' selected':'') + '>Unsubscribed</option>' +
+        '<option value="bounced"' + (newsletterFilter==='bounced'?' selected':'') + '>Bounced</option>' +
+        '<option value="complained"' + (newsletterFilter==='complained'?' selected':'') + '>Complained</option>' +
+      '</select>' +
+    '</div>' +
+    '<table class="admin-table"><thead><tr><th>Email</th><th>Status</th><th>Source</th><th>Member?</th><th>Subscribed</th><th>Confirmed</th><th>Actions</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">No subscribers found.</td></tr>') +
+    '</tbody></table>' +
+    '<div class="admin-table-footer"><span>Showing ' + filtered.length + ' of ' + all.length + '</span></div>' +
+  '</div>' +
+
+  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Recent webhook errors</span></div><div class="admin-card-body no-pad">' +
+    '<table class="admin-table"><thead><tr><th>When</th><th>Event</th><th>Email</th><th>Error</th></tr></thead><tbody>' +
+    (errorRows || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px">No webhook errors recorded.</td></tr>') +
+    '</tbody></table>' +
+  '</div></div>';
+}
+
+function searchNewsletter(q) {
+  newsletterSearch = q;
+  var content = document.getElementById('adminContent');
+  var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  content.innerHTML = toggle + renderNewsletter();
+  var el = document.querySelector('.admin-table-search');
+  if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+
+function filterNewsletter(status) {
+  newsletterFilter = status;
+  var content = document.getElementById('adminContent');
+  var toggle = '<button class="admin-toggle-sidebar" onclick="document.getElementById(\'adminSidebar\').classList.toggle(\'open\')">&#9776;</button>';
+  content.innerHTML = toggle + renderNewsletter();
+}
+
+function suppressNewsletterSubscriber(email) {
+  confirmDialog('Suppress "' + email + '"? They will be marked unsubscribed and stop receiving newsletter emails.', async function() {
+    try {
+      await callAdminNewsletter('suppress', { email: email });
+      toast('Subscriber suppressed', 'info');
+      await loadAndRenderNewsletter();
+    } catch (e) { toast(e.message, 'error'); }
+  }, { title: 'Suppress subscriber', confirmLabel: 'Suppress' });
+}
+
+async function resyncNewsletterSubscriber(email, isSiteMember) {
+  try {
+    await callAdminNewsletter('resync', { email: email, isSiteMember: isSiteMember });
+    toast('Resynced to MailerLite', 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function resyncAllNewsletter() {
+  confirmDialog('Resync every active subscriber to MailerLite? Use this if group assignments may have drifted.', async function() {
+    try {
+      var data = await callAdminNewsletter('resync', { all: true });
+      toast('Resynced ' + data.ok + ' of ' + data.count + ' active subscribers' + (data.fail ? ' (' + data.fail + ' failed)' : ''), data.fail ? 'error' : 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  }, { title: 'Resync all active subscribers', confirmLabel: 'Resync All', danger: false });
+}
+
+function exportNewsletterCsv() {
+  var rows = filteredNewsletterSubscribers();
+  var header = ['email', 'status', 'source', 'is_site_member', 'created_at', 'confirmed_at', 'unsubscribed_at'];
+  var csvEscape = function(v) { v = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  var lines = [header.join(',')].concat(rows.map(function(s) {
+    return header.map(function(k) { return csvEscape(s[k]); }).join(',');
+  }));
+  var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'newsletter-subscribers-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 function renderSettings() {
   return '<div class="admin-page-header"><div><h1 class="admin-page-title">Settings</h1><div class="admin-page-subtitle">Platform configuration</div></div></div>' +
@@ -1555,7 +1744,13 @@ window.Admin = {
   saveRolePermissions: saveRolePermissions,
   openNewRole: openNewRole,
   submitNewRole: submitNewRole,
-  deleteRole: deleteRole
+  deleteRole: deleteRole,
+  searchNewsletter: searchNewsletter,
+  filterNewsletter: filterNewsletter,
+  suppressNewsletterSubscriber: suppressNewsletterSubscriber,
+  resyncNewsletterSubscriber: resyncNewsletterSubscriber,
+  resyncAllNewsletter: resyncAllNewsletter,
+  exportNewsletterCsv: exportNewsletterCsv
 };
 
 })();

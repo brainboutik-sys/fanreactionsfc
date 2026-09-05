@@ -27,6 +27,10 @@ const CONSENT_ACTION_BY_EVENT = {
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return res(405, { error: 'Method not allowed' });
 
+  const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sbKey) return res(500, { error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY missing' });
+
   const secret = process.env.MAILERLITE_WEBHOOK_SECRET;
   if (!secret) return res(500, { error: 'Server misconfigured: MAILERLITE_WEBHOOK_SECRET missing' });
 
@@ -35,17 +39,19 @@ exports.handler = async (event) => {
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   const sigOk = signature.length === expected.length &&
     crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  if (!sigOk) return res(401, { error: 'Invalid signature' });
+  if (!sigOk) {
+    await logWebhookError(supabaseUrl, sbKey, null, null, 'Invalid signature');
+    return res(401, { error: 'Invalid signature' });
+  }
 
   let payload;
-  try { payload = JSON.parse(rawBody); } catch { return res(400, { error: 'Invalid JSON body' }); }
+  try { payload = JSON.parse(rawBody); } catch {
+    await logWebhookError(supabaseUrl, sbKey, null, null, 'Invalid JSON body');
+    return res(400, { error: 'Invalid JSON body' });
+  }
 
   // MailerLite sends a single event object directly, or { events: [...] } when batched.
   const events = Array.isArray(payload.events) ? payload.events : [payload];
-
-  const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!sbKey) return res(500, { error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY missing' });
 
   for (const evt of events) {
     const email = String(evt.email || '').trim().toLowerCase();
@@ -57,13 +63,17 @@ exports.handler = async (event) => {
     if (newStatus === 'unsubscribed') patch.unsubscribed_at = new Date().toISOString();
 
     try {
-      await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_subscribers?email=eq.${encodeURIComponent(email)}`, {
+      const patchRes = await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_subscribers?email=eq.${encodeURIComponent(email)}`, {
         method: 'PATCH',
         headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify(patch),
       });
+      if (!patchRes.ok) {
+        const detail = await patchRes.text().catch(() => '');
+        await logWebhookError(supabaseUrl, sbKey, evt.event, email, `Subscriber update failed (${patchRes.status}): ${detail}`);
+      }
     } catch (e) {
-      console.error('newsletter webhook: subscriber update failed', evt.event, e);
+      await logWebhookError(supabaseUrl, sbKey, evt.event, email, `Subscriber update threw: ${e.message}`);
     }
 
     const consentAction = CONSENT_ACTION_BY_EVENT[evt.event];
@@ -73,19 +83,34 @@ exports.handler = async (event) => {
       // live: the subscriber PATCH above landed but this fire-and-forget
       // version of this call never wrote a row).
       try {
-        await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
+        const logRes = await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_consent_log`, {
           method: 'POST',
           headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
           body: JSON.stringify({ email, action: consentAction, notice_version: 'mailerlite_webhook', source: 'mailerlite_webhook' }),
         });
+        if (!logRes.ok) {
+          const detail = await logRes.text().catch(() => '');
+          await logWebhookError(supabaseUrl, sbKey, evt.event, email, `Consent log insert failed (${logRes.status}): ${detail}`);
+        }
       } catch (e) {
-        console.error('newsletter webhook: consent log insert failed', evt.event, e);
+        await logWebhookError(supabaseUrl, sbKey, evt.event, email, `Consent log insert threw: ${e.message}`);
       }
     }
   }
 
   return res(200, { ok: true });
 };
+
+// P1.1 admin panel surfaces these — see renderNewsletter() in js/admin.js.
+async function logWebhookError(supabaseUrl, sbKey, eventType, email, detail) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_newsletter_webhook_errors`, {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ event_type: eventType, email, error_detail: String(detail).slice(0, 2000) }),
+    });
+  } catch (e) { /* best-effort — don't let logging failure mask the original error */ }
+}
 
 function res(statusCode, body) {
   return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };

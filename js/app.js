@@ -3164,7 +3164,6 @@ async function renderNewsList() {
     <div class="container section">
       <div id="newsGrid" class="news-grid"><div class="empty-state" style="grid-column:1/-1"><div style="color:var(--text-dim)">Loading…</div></div></div>
       <div style="text-align:center;margin-top:24px"><button class="btn btn-secondary" id="newsLoadMore" style="display:none" onclick="loadMoreNews()">Load more</button></div>
-      ${newsletterSignupHTML('news_page')}
     </div>
     ${renderFooter()}
   `;

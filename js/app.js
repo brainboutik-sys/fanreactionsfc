@@ -256,6 +256,10 @@ function updateNavActive(path) {
 
 const DEFAULT_OG_IMAGE = 'https://fanreactionsfc.com/img/og-social-card.jpg';
 
+// Bump this whenever the newsletter opt-in copy changes materially — stored
+// with every consent_log row so we can always tell what a subscriber agreed to.
+const NEWSLETTER_NOTICE_VERSION = 'marketing_notice_v1';
+
 // Same mapping as firstPartyCoverUrl() in netlify/functions/news-article.js
 // — keep both in sync. Supabase Storage's public object URLs carry
 // X-Robots-Tag: none, which social crawlers refuse; article-cover.js
@@ -402,6 +406,14 @@ function handleRoute() {
       currentRoute = { page: 'terms' };
       updatePageMeta('Terms of Service | FanReactionsFC', 'The terms that govern your use of FanReactionsFC.');
       renderTermsOfService();
+    } else if (path === '/newsletter/preferences') {
+      currentRoute = { page: 'newsletterPreferences' };
+      updatePageMeta('Newsletter Preferences | FanReactionsFC', 'Manage or unsubscribe from FanReactionsFC email updates.');
+      renderNewsletterPreferences();
+    } else if (path === '/newsletter/unsubscribe') {
+      currentRoute = { page: 'newsletterUnsubscribe' };
+      updatePageMeta('Unsubscribe | FanReactionsFC', 'Unsubscribe from FanReactionsFC email updates.');
+      renderNewsletterUnsubscribe();
     } else if (path.startsWith('/manage/')) {
       const creatorId = path.split('/manage/')[1].replace(/\/$/, '');
       currentRoute = { page: 'manageChannel', creatorId };
@@ -3152,6 +3164,7 @@ async function renderNewsList() {
     <div class="container section">
       <div id="newsGrid" class="news-grid"><div class="empty-state" style="grid-column:1/-1"><div style="color:var(--text-dim)">Loading…</div></div></div>
       <div style="text-align:center;margin-top:24px"><button class="btn btn-secondary" id="newsLoadMore" style="display:none" onclick="loadMoreNews()">Load more</button></div>
+      ${newsletterSignupHTML('news_page')}
     </div>
     ${renderFooter()}
   `;
@@ -3220,6 +3233,7 @@ async function renderNewsArticle(slug) {
         <a href="${clubPath(article.related_team)}" onclick="event.preventDefault();navigate('${clubPath(article.related_team)}')">${crestImg(article.related_team, 'crest-sm')} ${escHtml(article.related_team)}</a>
       </div>` : ''}
       ${creatorLinksHTML(article.creator_links)}
+      ${newsletterSignupHTML('article')}
       <div style="margin-top:32px"><a href="/news" class="btn btn-secondary" onclick="event.preventDefault();navigate('/news')">&larr; Back to News</a></div>
     </div>
     ${renderFooter()}
@@ -3242,11 +3256,12 @@ function renderPrivacyPolicy() {
       <tr><td>Name, email, message subject/body</td><td>You submit the Contact form or report/claim a creator profile</td><td>To respond to your request</td></tr>
       <tr><td>Anonymous device identifier (random UUID, no personal info)</td><td>Automatically, stored in your browser</td><td>To prevent repeat voting abuse in Creator Battle</td></tr>
       <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
+      <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr>
     </table>
     <p>We do not collect payment information, government IDs, or sensitive categories of data (health, religion, etc.).</p>
 
     <h2>2. Legal basis for processing</h2>
-    <p>We process account and profile data under <strong>contract</strong> (to provide the service you signed up for), contact/report data under <strong>legitimate interest</strong> (responding to inquiries), and analytics cookies under your <strong>consent</strong>, which you can withdraw at any time via the cookie banner or the "Cookie preferences" link in the footer.</p>
+    <p>We process account and profile data under <strong>contract</strong> (to provide the service you signed up for), contact/report data under <strong>legitimate interest</strong> (responding to inquiries), and both analytics cookies and the email newsletter under your <strong>consent</strong>. Newsletter consent is separate from cookie consent: it requires its own explicit, unticked opt-in and a confirmation email (double opt-in) before we send anything, and you can withdraw either consent at any time — analytics via the cookie banner or the "Cookie preferences" link in the footer, the newsletter via the unsubscribe link in every email or the <a href="/newsletter/preferences">newsletter preferences</a> page.</p>
 
     <h2>3. Who we share data with (subprocessors)</h2>
     <table class="legal-table">
@@ -3254,16 +3269,17 @@ function renderPrivacyPolicy() {
       <tr><td>Supabase</td><td>Database, authentication, file storage</td></tr>
       <tr><td>Netlify</td><td>Website hosting, serverless functions</td></tr>
       <tr><td>Resend</td><td>Transactional email (notifications you trigger, e.g. contact replies)</td></tr>
+      <tr><td>MailerLite</td><td>Newsletter delivery and subscriber management (only if you opt in) — see <a href="https://www.mailerlite.com/legal/privacy-policy" target="_blank" rel="noopener">MailerLite's Privacy Policy</a></td></tr>
       <tr><td>Google (Sign-In, YouTube, Tag Manager/Analytics)</td><td>Authentication, video embeds, analytics (analytics only with consent)</td></tr>
       <tr><td>football-data.org</td><td>Match fixture data used to detect live streams</td></tr>
     </table>
-    <p>We do not sell your personal data.</p>
+    <p>We do not sell your personal data. MailerLite acts as our data processor for the newsletter under a signed data processing agreement.</p>
 
     <h2>4. International transfers</h2>
-    <p>Some of the providers above (Google, Resend, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
+    <p>Some of the providers above (Google, Resend, MailerLite, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. You can request earlier deletion at any time — see Section 10.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. You can request earlier deletion at any time — see Section 10.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>
@@ -3274,6 +3290,7 @@ function renderPrivacyPolicy() {
       <li>Update your profile directly from your <a href="/account">Account</a> page</li>
       <li>Request a copy or deletion of your data by contacting us (Section 10)</li>
       <li>Withdraw analytics consent at any time via the cookie banner</li>
+      <li>Unsubscribe from the newsletter at any time via the link in any newsletter email, or the <a href="/newsletter/preferences">newsletter preferences</a> page — no login required</li>
     </ul>
 
     <h2>8. California residents (CCPA/CPRA)</h2>
@@ -3347,6 +3364,95 @@ function renderTermsOfService() {
 
     <p class="legal-disclaimer">This page is provided for transparency and is not a substitute for legal advice.</p>
   `);
+}
+
+// ── Render: Newsletter preferences / unsubscribe (P0.5) ───────────────────
+// Self-serve, email-only, no login required. Both pages call the same
+// newsletter-unsubscribe.js function; it responds identically whether or not
+// the address is actually subscribed, so this can't be used to probe who is
+// on the list.
+
+function renderNewsletterPreferences() {
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">Newsletter</div>
+            <h1 class="page-hero-title">Newsletter Preferences</h1>
+            <p class="page-hero-subtitle">Manage your FanReactionsFC email subscription.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container container-narrow section">
+      <p style="color:var(--text-dim);margin-bottom:16px">Enter the email address you subscribed with to unsubscribe from FanReactionsFC newsletter emails. This does not affect your site account, if you have one.</p>
+      ${newsletterUnsubscribeFormHTML('preferences')}
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+function renderNewsletterUnsubscribe() {
+  const params = new URLSearchParams(location.search);
+  const prefillEmail = params.get('email') || '';
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">Newsletter</div>
+            <h1 class="page-hero-title">Unsubscribe</h1>
+            <p class="page-hero-subtitle">Sorry to see you go — one click and you're off the list.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container container-narrow section">
+      ${newsletterUnsubscribeFormHTML('unsubscribe', prefillEmail)}
+    </div>
+    ${renderFooter()}
+  `;
+  if (prefillEmail) submitNewsletterUnsubscribe('unsubscribe');
+}
+
+function newsletterUnsubscribeFormHTML(source, prefillEmail) {
+  return `
+    <div class="newsletter-box">
+      <form class="newsletter-form" onsubmit="event.preventDefault();submitNewsletterUnsubscribe('${source}')">
+        <input type="email" id="newsletterUnsubEmail-${source}" class="newsletter-input" placeholder="you@email.com" value="${escHtml(prefillEmail || '')}" autocomplete="email" required>
+        <button type="submit" class="btn btn-secondary">Unsubscribe</button>
+      </form>
+      <div class="newsletter-msg" id="newsletterUnsubMsg-${source}"></div>
+    </div>`;
+}
+
+async function submitNewsletterUnsubscribe(source) {
+  const emailEl = document.getElementById(`newsletterUnsubEmail-${source}`);
+  const msg = document.getElementById(`newsletterUnsubMsg-${source}`);
+  const email = (emailEl.value || '').trim();
+  if (!email) return;
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Unsubscribing…';
+  try {
+    const res = await fetch('/.netlify/functions/newsletter-unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, source: source === 'unsubscribe' ? 'unsubscribe_page' : 'preferences_page' }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    msg.style.color = 'var(--green)';
+    msg.textContent = "You're unsubscribed. You won't receive further newsletter emails from us.";
+    emailEl.disabled = true;
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error. Please try again.';
+  }
 }
 
 // ── Render: Account settings ──────────────────────────────────────────────
@@ -5149,10 +5255,79 @@ function renderBecomeCreator() {
 // admin panel). Loaded after app.js in index.html.
 
 // ── Footer ────────────────────────────────────────────────────────────────
+// Newsletter signup box — reused on the News hub, the bottom of every
+// article, and the site footer (see P0.3 in the MailerLite plan). `source`
+// namespaces element ids so more than one instance can render on the same
+// page (e.g. an article's own box plus the footer's) without colliding, and
+// is also what gets stored in frfc_newsletter_consent_log.source.
+function newsletterSignupHTML(source) {
+  const prefill = currentUser && currentUser.email ? escHtml(currentUser.email) : '';
+  return `
+    <div class="newsletter-box">
+      <div class="newsletter-box-text">
+        <h4>Get FanReactionsFC in your inbox</h4>
+        <p>Football creator news and rankings, roughly weekly. No spam, unsubscribe anytime.</p>
+      </div>
+      <form class="newsletter-form" onsubmit="event.preventDefault();submitNewsletterSignup('${source}')">
+        <input type="email" id="newsletterEmail-${source}" class="newsletter-input" placeholder="you@email.com" value="${prefill}" autocomplete="email" required>
+        <button type="submit" class="btn btn-primary">Subscribe</button>
+      </form>
+      <label class="newsletter-consent">
+        <input type="checkbox" id="newsletterConsent-${source}">
+        Email me news and roundups from FanReactionsFC. See our <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+      </label>
+      <div class="newsletter-msg" id="newsletterMsg-${source}"></div>
+    </div>`;
+}
+
+async function submitNewsletterSignup(source) {
+  const emailEl = document.getElementById(`newsletterEmail-${source}`);
+  const consentEl = document.getElementById(`newsletterConsent-${source}`);
+  const msg = document.getElementById(`newsletterMsg-${source}`);
+  const email = (emailEl.value || '').trim();
+  if (!email) return;
+  if (!consentEl.checked) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Please tick the box to confirm you want to receive emails from us.';
+    return;
+  }
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Subscribing…';
+  try {
+    let token = null;
+    if (currentUser) {
+      const { data: { session } } = await sb.auth.getSession();
+      token = session?.access_token || null;
+    }
+    const res = await fetch('/.netlify/functions/newsletter-subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ email, consent: true, source, notice_version: NEWSLETTER_NOTICE_VERSION }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Almost there — check your email to confirm your subscription.';
+    emailEl.disabled = true;
+    consentEl.disabled = true;
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error. Please try again.';
+  }
+}
+
 function renderFooter() {
   return `
     <footer class="site-footer">
       <div class="container">
+        ${newsletterSignupHTML('site_footer')}
         <div class="footer-grid">
           <div>
             <div class="footer-brand"><img src="/img/logo-wide.png" alt="FanReactionsFC" class="footer-logo"></div>

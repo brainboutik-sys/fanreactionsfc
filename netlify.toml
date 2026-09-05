@@ -97,6 +97,16 @@ schedule = "0 5 * * *"
   to = "/index.html"
   status = 200
   force = true
+[[redirects]]
+  from = "/newsletter/preferences/"
+  to = "/index.html"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/newsletter/unsubscribe/"
+  to = "/index.html"
+  status = 200
+  force = true
 
 # Homepage — force = true so index.html in publish/ does not win
 # (same Asset pretty-URL trap that made GET /rankings 301 to itself).
@@ -245,6 +255,16 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/account"
+  to = "/index.html"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/newsletter/preferences"
+  to = "/index.html"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/newsletter/unsubscribe"
   to = "/index.html"
   status = 200
   force = true

@@ -3967,7 +3967,11 @@ function openModal(type = 'signin', reason = '') {
     <input type="email" id="authEmail" placeholder="you@example.com">
     <label>Password</label>
     <input type="password" id="authPass" placeholder="${isSignIn ? 'Your password' : 'Choose a password'}">
-    ${isSignIn ? '<a href="#" class="forgot-link" onclick="event.preventDefault();openModal(\'reset\', _lastAuthReason)">Forgot your password?</a>' : ''}
+    ${isSignIn ? '<a href="#" class="forgot-link" onclick="event.preventDefault();openModal(\'reset\', _lastAuthReason)">Forgot your password?</a>' : `
+    <label class="newsletter-consent" style="margin:10px 0 4px">
+      <input type="checkbox" id="authNewsletterConsent">
+      Also email me news and roundups from FanReactionsFC. See our <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+    </label>`}
     <button class="btn btn-primary" onclick="handleAuth('${type}')">${isSignIn ? 'Sign In' : 'Create Account'}</button>
     <div class="auth-msg" id="authMsg"></div>
     <div class="switch-link">
@@ -4462,6 +4466,17 @@ async function handleAuth(type) {
     if (err) { msg.textContent = err; return; }
     msg.style.color = 'var(--green)';
     msg.textContent = 'Account created! Check your email to confirm, then sign in.';
+    const wantsNewsletter = document.getElementById('authNewsletterConsent')?.checked;
+    if (wantsNewsletter) {
+      // No session exists yet (email confirmation is still pending), so this
+      // goes through as an anonymous signup — same as the footer/article
+      // forms — rather than blocking on a token we don't have.
+      fetch('/.netlify/functions/newsletter-subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, consent: true, source: 'account', notice_version: NEWSLETTER_NOTICE_VERSION }),
+      }).catch(() => {});
+    }
   }
 }
 

@@ -254,7 +254,7 @@ function updateNavActive(path) {
   });
 }
 
-const DEFAULT_OG_IMAGE = 'https://fanreactionsfc.com/img/logo-wide.png';
+const DEFAULT_OG_IMAGE = 'https://fanreactionsfc.com/img/og-social-card.jpg';
 
 // Same mapping as firstPartyCoverUrl() in netlify/functions/news-article.js
 // — keep both in sync. Supabase Storage's public object URLs carry

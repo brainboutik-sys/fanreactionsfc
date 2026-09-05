@@ -200,7 +200,7 @@ exports.handler = async (event) => {
   const title = `${article.title} | FanReactionsFC News`;
   const description = metaDesc(article.summary, 155);
   const firstPartyCover = firstPartyCoverUrl(article.cover_image_url);
-  const image = firstPartyCover || `${SITE_URL}/img/logo-wide.png`;
+  const image = firstPartyCover || `${SITE_URL}/img/og-social-card.jpg`;
   const imageExt = (image.split('.').pop() || '').toLowerCase();
   const imageType = COVER_CONTENT_TYPES[imageExt] || 'image/png';
   const url = `${SITE_URL}/news/${article.slug}`;

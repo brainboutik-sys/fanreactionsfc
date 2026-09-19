@@ -444,10 +444,15 @@ function removeTs(id) {
 
 // ── Channel batch (quick-add by team + count) ────────────────────────────────
 function renderChannelBatch() {
+  chSearchMatches = []; chSearchActive = -1;
   var map = channelsByTeam();
   var teams = Object.keys(map).sort();
   var container = document.getElementById('chBatch');
   container.innerHTML =
+    '<div class="ch-search-wrap">' +
+      '<input type="text" id="chSearch" class="ch-search-input" placeholder="Search channels by name..." autocomplete="off" oninput="Gen.onChannelSearch(this.value)" onkeydown="Gen.onChannelSearchKey(event)" onblur="Gen.closeChannelSearch()">' +
+      '<div class="ch-search-results" id="chSearchResults" role="listbox"></div>' +
+    '</div>' +
     '<div class="ch-batch-row">' +
       '<select id="chBatchTeam" class="ch-batch-select"><option value="">Select team...</option>' +
         teams.map(function(t) { return '<option value="' + t + '">' + t + ' (' + map[t].length + ')</option>'; }).join('') +
@@ -473,6 +478,71 @@ function batchAddChannels() {
     chData.push({ id: id, preTeam: team, preUrl: ch.url });
     _appendChPrefilled(id, team, ch.url, ch.name);
   });
+}
+
+// ── Channel search (type a name, pick from suggestions) ──────────────────────
+// Suggestions come from the same creators list channelsByTeam() uses, so a
+// picked channel always exists in its team's dropdown and lands as a normal
+// prefilled row — generate() reads it exactly like a quick-added one.
+var chSearchMatches = [], chSearchActive = -1;
+
+function onChannelSearch(q) {
+  q = (q || '').trim().toLowerCase();
+  chSearchActive = -1;
+  if (!q) { chSearchMatches = []; renderChannelSearchResults(); return; }
+  var added = {};
+  chData.forEach(function(ch) { var u = chUrl(ch.id); if (u) added[u] = true; });
+  var hits = [];
+  creators.forEach(function(c) {
+    if (!c.team || !c.channel || added[c.channel]) return;
+    var pos = c.name.toLowerCase().indexOf(q);
+    if (pos !== -1) hits.push({ c: c, rank: pos === 0 ? 0 : 1 });
+  });
+  hits.sort(function(a, b) { return a.rank - b.rank || a.c.name.localeCompare(b.c.name); });
+  chSearchMatches = hits.slice(0, 8).map(function(h) { return h.c; });
+  renderChannelSearchResults();
+}
+
+function renderChannelSearchResults() {
+  var box = document.getElementById('chSearchResults');
+  if (!box) return;
+  var hasQuery = !!document.getElementById('chSearch').value.trim();
+  if (!chSearchMatches.length) {
+    box.innerHTML = hasQuery ? '<div class="ch-search-empty">No matching channels</div>' : '';
+    box.classList.toggle('open', hasQuery);
+    return;
+  }
+  box.innerHTML = chSearchMatches.map(function(c, i) {
+    return '<button type="button" class="ch-search-item' + (i === chSearchActive ? ' active' : '') + '" role="option" onmousedown="event.preventDefault();Gen.pickChannelSearch(' + i + ')">' +
+      '<span class="ch-search-name">' + escHtml(c.name) + '</span><span class="ch-search-team">' + escHtml(c.team) + '</span></button>';
+  }).join('');
+  box.classList.add('open');
+}
+
+function onChannelSearchKey(e) {
+  var n = chSearchMatches.length;
+  if (e.key === 'ArrowDown' && n) { e.preventDefault(); chSearchActive = (chSearchActive + 1) % n; renderChannelSearchResults(); }
+  else if (e.key === 'ArrowUp' && n) { e.preventDefault(); chSearchActive = (chSearchActive - 1 + n) % n; renderChannelSearchResults(); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (n) pickChannelSearch(chSearchActive >= 0 ? chSearchActive : 0); }
+  else if (e.key === 'Escape') { closeChannelSearch(); }
+}
+
+function pickChannelSearch(i) {
+  var c = chSearchMatches[i]; if (!c) return;
+  var id = ++counter;
+  chData.push({ id: id, preTeam: c.team, preUrl: c.channel });
+  _appendChPrefilled(id, c.team, c.channel, c.name);
+  var input = document.getElementById('chSearch');
+  input.value = '';
+  chSearchMatches = []; chSearchActive = -1;
+  renderChannelSearchResults();
+  input.focus();
+}
+
+function closeChannelSearch() {
+  chSearchMatches = []; chSearchActive = -1;
+  var box = document.getElementById('chSearchResults');
+  if (box) { box.innerHTML = ''; box.classList.remove('open'); }
 }
 
 function _appendChPrefilled(id, team, url, name) {
@@ -842,6 +912,10 @@ window.Gen = {
   onTeamChange: onTeamChange,
   onChanChange: onChanChange,
   batchAddChannels: batchAddChannels,
+  onChannelSearch: onChannelSearch,
+  onChannelSearchKey: onChannelSearchKey,
+  pickChannelSearch: pickChannelSearch,
+  closeChannelSearch: closeChannelSearch,
   generate: generate,
   confirmReset: confirmReset,
   scrollToOutput: scrollToOutput,

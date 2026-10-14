@@ -52,6 +52,24 @@ Server-side YouTube sync writes with the service-role key and bypasses these
 policies; the admin panel's manual sync runs as the admin user and passes.
 Trigger: `frfc_streamers_updated_at` (BEFORE UPDATE) bumps `updated_at`.
 
+#### `frfc_club_sponsorships` — one sponsored featured creator per club hub
+Migration `supabase/migrations/20261014090000_frfc_club_sponsorships.sql`.
+**Not applied to production by the app deploy** — run that file in the
+Supabase SQL editor when the slot should go live.
+
+`club_slug` (canonical hub slug, unique), `creator_id` → `frfc_streamers`,
+optional `starts_at` / `ends_at`. Active when `starts_at` is null or `<= now()`
+and `ends_at` is null or `> now()`. The creator is still ranked organically;
+this row only fills the separate sponsored card.
+
+| Op | Role | Rule |
+|----|------|------|
+| SELECT | anon, authenticated | `true` |
+| INSERT / UPDATE / DELETE | anon, authenticated | no policy (revoked) |
+
+Writes are the SQL editor or the service role. See the migration file for
+`insert` / `update` / `delete` examples.
+
 #### `frfc_subscriber_history` — subscriber time series (~3,375 rows)
 One row per creator per sync (`creator_id`, `subscriber_count`, `recorded_at`). Powers
 the profile sparkline. RLS: public SELECT; INSERT admin-only (server sync uses the

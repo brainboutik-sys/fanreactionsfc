@@ -64,6 +64,7 @@ const STATIC_URLS = [
   { loc: SITE_URL + '/rankings', priority: '0.8', changefreq: 'daily' },
   { loc: SITE_URL + '/news', priority: '0.8', changefreq: 'daily' },
   { loc: SITE_URL + '/become-a-creator', priority: '0.6', changefreq: 'monthly' },
+  { loc: SITE_URL + '/tools', priority: '0.5', changefreq: 'monthly' },
   { loc: SITE_URL + '/tools/generator', priority: '0.5', changefreq: 'monthly' },
   { loc: SITE_URL + '/submit', priority: '0.3', changefreq: 'monthly' },
 ];

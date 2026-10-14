@@ -628,6 +628,26 @@ img.review-avatar{background:var(--bg-hover)}
 .footer-club-links{display:flex;flex-wrap:wrap;gap:6px 14px}
 .footer-club-links a{color:var(--text-dim);font-size:var(--fs-sm)}
 .footer-club-links a:hover{color:var(--text)}
+/* Paid club-hub slot. Sits in its own box above the organic list.
+   Labels stay visible (not hover-only) and the card is not a rank row. */
+.sponsored-slot{background:#fffdf5;border:2px solid var(--yellow);border-radius:var(--radius);padding:16px 18px;margin:0 0 20px}
+.sponsored-slot-labels{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.sponsored-badge{display:inline-flex;align-items:center;background:var(--navy);color:var(--yellow);font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:4px}
+.sponsored-badge-featured{background:var(--yellow);color:var(--navy)}
+.sponsored-slot-heading{font-size:var(--fs-md);font-weight:800;color:var(--navy);margin:0 0 12px;line-height:1.3}
+.sponsored-slot-body{display:flex;gap:14px;align-items:flex-start}
+.sponsored-slot-copy{min-width:0}
+.sponsored-slot-avatar,.sponsored-slot-fallback{width:64px;height:64px;border-radius:50%;flex-shrink:0}
+.sponsored-slot-avatar{object-fit:cover;background:var(--bg-hover)}
+.sponsored-slot-fallback{display:flex;align-items:center;justify-content:center;background:var(--navy);color:var(--yellow);font-weight:800}
+.sponsored-slot-name{font-weight:800;color:var(--navy);text-decoration:none;font-size:var(--fs-lg)}
+.sponsored-slot-name:hover{text-decoration:underline}
+.sponsored-slot-subs,.sponsored-slot-blurb{margin:4px 0 0;color:var(--text-dim);font-size:var(--fs-sm);line-height:1.45}
+.sponsored-slot-yt{display:inline-block;margin-top:8px;font-size:var(--fs-sm);font-weight:700;color:var(--navy)}
+@media(max-width:600px){
+  .sponsored-slot{padding:14px}
+  .sponsored-slot-avatar,.sponsored-slot-fallback{width:48px;height:48px}
+}
 .seo-table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:var(--fs-sm)}
 .seo-table th,.seo-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
 .seo-table th{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)}
@@ -1309,11 +1329,11 @@ body.sww-dragging .sww-iframe-overlay{display:block}
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 /* ── Verified tier ───────────────────────────────────────────────────────
-   The club pin is .club-verified-slot. A Sponsored featured slot, if added,
-   is a sibling .club-sponsored-slot inside .club-feature-slots — not a
-   restyle of this box. */
-.club-feature-slots:not(:has(.club-verified-slot, .club-sponsored-slot)){display:none}
+   .sponsored-slot (featured placement) and .club-verified-slot (Verified
+   pin) are siblings inside .club-feature-slots, above the organic ranking. */
+.club-feature-slots:not(:has(.club-verified-slot, .sponsored-slot)){display:none}
 .club-feature-slots{display:flex;flex-direction:column;gap:16px;margin-bottom:20px}
+.club-feature-slots .sponsored-slot{margin:0}
 .club-verified-slot{border:1px solid rgba(246,190,6,.55);background:linear-gradient(180deg,rgba(246,190,6,.16),rgba(246,190,6,.05));border-radius:var(--radius);padding:16px 18px 18px}
 .club-verified-kicker{font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#8a6a00;margin-bottom:4px}
 .club-verified-slot h2{font-size:var(--fs-lg);font-weight:800;margin:0 0 6px;letter-spacing:-.01em}

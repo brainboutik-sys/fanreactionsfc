@@ -1,8 +1,8 @@
 -- Paid Verified creator tier (CHF 4/month).
 --
--- This file is the migration. It is NOT applied by the app, by CI, or by
--- this pull request. Run it manually in the Supabase SQL editor (project
--- ref dsxijgrpxsfywxuffbmt) when the columns should exist in production.
+-- This file is the migration. It is NOT applied by the app or by CI.
+-- The columns were applied to production (project ref dsxijgrpxsfywxuffbmt)
+-- separately. `add column if not exists` keeps a re-run safe.
 --
 -- A creator counts as verified in the product when:
 --   is_verified is true

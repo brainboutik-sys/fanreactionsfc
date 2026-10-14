@@ -334,6 +334,13 @@ function handleRoute() {
       currentRoute = { page: 'home' };
       updatePageMeta('FanReactionsFC — Discover the Best Football YouTubers', 'The definitive database of football YouTubers. Rated by fans. Ranked daily. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.');
       renderHome();
+    } else if (path === '/directory' || path === '/directory/') {
+      // Legacy URL. Netlify 301s /directory → /discover on a full page load.
+      // In-app links and static previews land here and follow the same target.
+      history.replaceState(null, '', '/discover' + location.search);
+      updateNavActive('/discover');
+      currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
+      renderDiscover();
     } else if (path === '/discover' || path === '/discover/' || path.startsWith('/discover')) {
       if (path === '/discover/') history.replaceState(null, '', '/discover' + location.search);
       currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
@@ -396,11 +403,17 @@ function handleRoute() {
       if (path !== '/rankings') history.replaceState(null, '', '/rankings' + location.search);
       currentRoute = { page: 'rankings' };
       renderRankings();
+    } else if (path === '/tools' || path === '/tools/') {
+      if (path !== '/tools') history.replaceState(null, '', '/tools');
+      currentRoute = { page: 'tools' };
+      updatePageMeta('Tools | FanReactionsFC', 'Free tools for football creators and fans: generate a YouTube description, or watch live creators on Streamwall.');
+      renderTools();
     } else if (path === '/tools/generator') {
       currentRoute = { page: 'generator' };
       updatePageMeta('Description Generator | FanReactionsFC', 'Generate a polished YouTube channel description for your football content in seconds.');
       renderGenerator();
-    } else if (path === '/submit') {
+    } else if (path === '/submit' || path === '/submit/') {
+      if (path !== '/submit') history.replaceState(null, '', '/submit');
       currentRoute = { page: 'submit' };
       updatePageMeta('Submit a Creator | FanReactionsFC', 'Know a great football YouTuber? Suggest them for the FanReactionsFC database — submissions are reviewed within 24 hours.');
       renderSubmit();
@@ -929,6 +942,7 @@ const SITE_PAGES = [
   { name: 'Creator Battle', path: '/', icon: '/img/icons/creator-battle.png', keywords: ['battle', 'vote', 'vs'] },
   { name: 'Streamwall', path: '/streamwall', icon: '/img/icons/live-now.png', keywords: ['live', 'watch', 'stream'] },
   { name: 'Become a Creator', path: '/become-a-creator', icon: '/img/icons/become-a-creator.png', keywords: ['start', 'stream', 'guide', 'tutorial'] },
+  { name: 'Tools', path: '/tools', icon: '🛠', keywords: ['generator', 'streamwall', 'description', 'tool'] },
   { name: 'Description Generator', path: '/tools/generator', icon: '📝', keywords: ['title', 'tags', 'description'] },
   { name: 'Submit a Creator', path: '/submit', icon: '➕', keywords: ['add', 'suggest', 'new channel'] },
 ];
@@ -2529,10 +2543,11 @@ function renderClubPage(club) {
     </div>
 
     <div class="container section">
-      <!-- club-feature-slots: Verified pin is .club-verified-slot.
-           A Sponsored featured slot belongs in a sibling .club-sponsored-slot,
-           not inside the Verified box, and must not reorder #club-organic-ranking. -->
+      <!-- club-feature-slots: .sponsored-slot (paid featured placement) and
+           .club-verified-slot (paid Verified pin) are siblings. Neither
+           reorders #club-organic-ranking. -->
       <div class="club-feature-slots">
+        <div id="clubSponsoredSlot"></div>
         ${verifiedPinned.length ? `
         <section class="club-verified-slot" aria-labelledby="club-verified-heading">
           <div class="club-verified-kicker">Pinned</div>
@@ -2574,6 +2589,39 @@ function renderClubPage(club) {
   `;
 
   loadClubRelatedNews(club);
+  loadClubSponsorship(club);
+}
+
+// Paid card above the organic grid. A missing table, an error, or an
+// inactive window removes the placeholder. The creator grid is already
+// rendered and is not sorted or filtered again here.
+async function loadClubSponsorship(club) {
+  const el = document.getElementById('clubSponsoredSlot');
+  if (!el) return;
+  if (typeof sb === 'undefined' || !sb || typeof isSponsorshipActive !== 'function' || typeof sponsoredSlotHtml !== 'function') {
+    el.remove();
+    return;
+  }
+  try {
+    const { data, error } = await sb.from('frfc_club_sponsorships')
+      .select('creator_id,starts_at,ends_at,club_slug')
+      .eq('club_slug', clubSlug(club))
+      .maybeSingle();
+    if (error || !data || !isSponsorshipActive(data, new Date())) {
+      el.remove();
+      return;
+    }
+    if (currentRoute.page !== 'club' || currentRoute.club !== club) return;
+    const creator = creators.find(c => c.id === data.creator_id);
+    if (!creator) {
+      el.remove();
+      return;
+    }
+    el.outerHTML = sponsoredSlotHtml(club, creator);
+  } catch (e) {
+    const slot = document.getElementById('clubSponsoredSlot');
+    if (slot) slot.remove();
+  }
 }
 
 // Fetched after the main club page renders so a slow/failed news query never
@@ -2990,6 +3038,43 @@ async function renderVoterLeaderboard() {
         </div>
       </div>
     </div>`;
+}
+
+// ── Render: Tools hub ────────────────────────────────────────────────────
+function renderTools() {
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">Free Tools</div>
+            <h1 class="page-hero-title">Tools</h1>
+            <p class="page-hero-subtitle">Free tools for football creators and fans: generate a YouTube description, or watch live creators on Streamwall.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container section">
+      <div class="home-promo-row">
+        <a href="/tools/generator" class="home-promo-card">
+          <span class="home-promo-icon">&#128221;</span>
+          <div>
+            <div class="home-promo-title">Description Generator</div>
+            <p class="home-promo-sub">Write a YouTube title, description, and tags for a fan-reaction or watchalong video.</p>
+          </div>
+          <span class="home-promo-arrow">&rarr;</span>
+        </a>
+        <a href="/streamwall" class="home-promo-card">
+          <span class="home-promo-icon"><img src="/img/icons/live-now.png" alt=""></span>
+          <div>
+            <div class="home-promo-title">Streamwall</div>
+            <p class="home-promo-sub">Watch live football creators side by side — watchalongs, reactions, and match-day streams.</p>
+          </div>
+          <span class="home-promo-arrow">&rarr;</span>
+        </a>
+      </div>
+    </div>
+    ${renderFooter()}`;
 }
 
 // ── Render: Generator ────────────────────────────────────────────────────
@@ -5595,6 +5680,7 @@ function renderFooter() {
           </div>
           <div class="footer-col">
             <h4>Community</h4>
+            <a href="/tools">Tools</a>
             <a href="/tools/generator">Description Generator</a>
             <a href="/submit">Submit a Creator</a>
             <a href="/become-a-creator">Become a Creator</a>

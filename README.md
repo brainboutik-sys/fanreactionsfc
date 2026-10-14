@@ -173,7 +173,7 @@ fired a live-check for, so each kickoff only triggers once.
   (via the `get_battle_all_stats` RPC), not stored.
 - **Verified tier** (`is_verified`, `verified_until` on `frfc_streamers`) is
   defined in `supabase/migrations/20261014120000_verified_creator_tier.sql`.
-  That SQL is not applied automatically. A creator is verified when
+  Those columns are already on production. CI does not re-run the file. A creator is verified when
   `is_verified` is true and `verified_until` is null or in the future.
   Turn it on with the `UPDATE` examples in that file. The admin checkbox
   still writes the legacy `verified` column and does not grant the tier.

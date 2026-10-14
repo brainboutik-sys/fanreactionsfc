@@ -166,8 +166,7 @@ test('club pin and streamwall order do not rewrite organic ranking', async () =>
       assert.equal(res.statusCode, 200);
       assert.match(res.body, /class="club-verified-slot"/);
       assert.match(res.body, /id="club-verified-heading">Verified creators/);
-      assert.match(res.body, /club-sponsored-slot/);
-      assert.doesNotMatch(res.body, /<section class="club-sponsored-slot"/);
+      assert.doesNotMatch(res.body, /class="sponsored-slot"/);
       const raw = res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       const jsonLd = JSON.parse(raw[1]);
       const page = jsonLd['@graph'].find(n => n && n['@type'] === 'CollectionPage');

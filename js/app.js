@@ -6,6 +6,8 @@
      js/data/teams.js  → LEAGUES, TEAM_CRESTS, TEAM_TO_LEAGUE, TEAM_COLORS, CONTENT_TYPES
      js/lib/slugify.js → slugify()
      js/lib/club-slugs.js → clubSlug(), clubPath(), resolveClub()
+     js/lib/html.js    → escHtml(), safeUrl()
+     js/lib/claim-ui.js → renderClaimModalHtml()
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -190,8 +192,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // the auth round-trip. If a user turns out to be signed in, re-render
     // the current route once so auth-dependent UI (account/admin pages,
     // favourite hearts, feature-vote state) reflects the session.
-    refreshAuth().then(() => { if (currentUser) handleRoute(); }).catch(() => {});
-    sb.auth.onAuthStateChange(() => refreshAuth());
+    refreshAuth().then(() => {
+      if (!currentUser) return;
+      if (!consumeClaimReturn()) handleRoute();
+    }).catch(() => {});
+    sb.auth.onAuthStateChange(() => {
+      refreshAuth().then(() => { if (currentUser) consumeClaimReturn(); }).catch(() => {});
+    });
   } catch (e) {
     console.error('Init failed:', e);
     document.getElementById('app').innerHTML = '<div class="container section-message"><h2>Something went wrong</h2><p style="color:var(--text-dim)">' + e.message + '</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>';
@@ -576,6 +583,53 @@ async function signInWithGoogle() {
   if (error && msg) { msg.textContent = error.message; msg.style.color = 'var(--red)'; }
 }
 
+// Email magic link. Creates the account if the address is new
+// (shouldCreateUser). From a creator page, remember the path so a redirect
+// that lands on the site root can come back to the same profile.
+async function signInWithMagicLink() {
+  const email = (document.getElementById('authEmail') && document.getElementById('authEmail').value || '').trim();
+  const msg = document.getElementById('authMsg');
+  if (!msg) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Enter a valid email address.';
+    return;
+  }
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = 'Sending a sign-in link…';
+  try {
+    const path = window.location.pathname + window.location.search;
+    if (/^\/creators\/[a-z0-9-]+\/?$/.test(window.location.pathname)) {
+      sessionStorage.setItem('frfc_claim_return', window.location.pathname);
+    }
+    const redirectTo = window.location.origin + (/^\/creators\/[a-z0-9-]+\/?$/.test(window.location.pathname) ? path : '/');
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
+    });
+    if (error) {
+      msg.style.color = 'var(--red)';
+      msg.textContent = error.message;
+      return;
+    }
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Check your email for a sign-in link. Open it on this device.';
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Could not send the sign-in link. Please try again.';
+  }
+}
+
+function consumeClaimReturn() {
+  let path = '';
+  try { path = sessionStorage.getItem('frfc_claim_return') || ''; } catch (e) { return false; }
+  try { sessionStorage.removeItem('frfc_claim_return'); } catch (e) {}
+  if (!/^\/creators\/[a-z0-9-]+\/?$/.test(path)) return false;
+  if (window.location.pathname === path) return false;
+  navigate(path);
+  return true;
+}
+
 async function signUp(email, password) {
   const { error } = await sb.auth.signUp({ email, password });
   if (error) return error.message;
@@ -722,9 +776,8 @@ async function toggleFavorite(id) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// slugify() lives in js/lib/slugify.js (loaded before this script — see
-// index.html) so it can be unit tested with a plain require(), no DOM.
-function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// slugify(), escHtml(), and safeUrl() live in js/lib (loaded before this
+// script — see index.html) so they can be unit tested with require().
 // Safe to embed as a single-quoted JS string literal inside a double-quoted
 // HTML onclick="..." attribute — e.g. onclick="fn('${jsAttrStr(name)}')".
 // JSON.stringify() is NOT safe here: it always wraps the value in literal
@@ -739,7 +792,6 @@ function jsAttrStr(s) {
     .replace(/"/g, '&quot;');
 }
 function safeId(s) { return (s || '').replace(/[^A-Za-z0-9_-]/g, ''); }
-function safeUrl(s) { try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
 
 // ── YouTube click-to-load facade ────────────────────────────────────────
 // No request to Google/YouTube fires until the visitor actually clicks play
@@ -3922,7 +3974,7 @@ const AUTH_MODAL_REASONS = {
   comment: 'Sign in to join the discussion.',
   like: 'Sign in to like this comment.',
   submitFeature: 'Sign in to suggest a feature.',
-  claim: 'Sign in to claim this channel.',
+  claim: 'Sign in with an email link to claim this channel.',
   follow: 'Sign in to follow this request and get status updates by email.',
 };
 let _lastAuthReason = null;
@@ -3964,7 +4016,9 @@ function openModal(type = 'signin', reason = '') {
     </button>
     <div class="auth-divider"><span>or</span></div>
     <label>Email</label>
-    <input type="email" id="authEmail" placeholder="you@example.com">
+    <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+    ${isSignIn ? `<button type="button" class="btn btn-primary" onclick="signInWithMagicLink()">Email me a sign-in link</button>
+    <div class="auth-divider"><span>or use a password</span></div>` : ''}
     <label>Password</label>
     <input type="password" id="authPass" placeholder="${isSignIn ? 'Your password' : 'Choose a password'}">
     ${isSignIn ? '<a href="#" class="forgot-link" onclick="event.preventDefault();openModal(\'reset\', _lastAuthReason)">Forgot your password?</a>' : `
@@ -4046,64 +4100,106 @@ async function submitReport(creatorId) {
 }
 
 // ── Claim-a-channel modal ────────────────────────────────────────────────
-// Verifies ownership by asking the creator to paste a short code into
-// their YouTube channel description, then calling the claim-creator
-// Netlify function which checks it server-side via the YouTube API.
-function openClaimModal(creatorId, creatorName) {
+// The code is random, stored only as a hash, and checked server-side.
+// Markup comes from renderClaimModalHtml(), which escapes the name and code.
+
+function formatClaimExpiry(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'in 24 hours';
+  try {
+    return 'at ' + d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch (e) {
+    return 'in 24 hours';
+  }
+}
+
+async function claimApi(body) {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session && session.access_token;
+  if (!token) return { ok: false, error: 'Please sign in again.' };
+  const res = await fetch('/.netlify/functions/claim-creator', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: (data && data.error) || 'Verification failed.' };
+  return Object.assign({ ok: true }, data);
+}
+
+function showClaimMessage(text, color) {
+  const msg = document.getElementById('claimMsg');
+  if (!msg) return;
+  msg.style.color = color || 'var(--text-dim)';
+  msg.textContent = String(text || '').slice(0, 300);
+}
+
+async function openClaimModal(creatorId, creatorName) {
   if (!currentUser) { openModal('signin', 'claim'); return; }
+  if (!/^[0-9a-f-]{36}$/i.test(String(creatorId || ''))) return;
   const overlay = document.getElementById('authOverlay');
   const modal = document.getElementById('authModal');
   if (!overlay || !modal) return;
-  const code = 'FRFC-' + currentUser.id.replace(/-/g, '').slice(0, 8).toUpperCase();
-  modal.innerHTML = `
-    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
-    <h2>Claim this channel</h2>
-    <p class="modal-sub">Verify you run <strong>${escHtml(creatorName)}</strong> to manage this profile.</p>
-    <ol style="font-size:var(--fs-base);color:var(--text-dim);line-height:1.7;padding-left:20px;margin-bottom:14px">
-      <li>Open your channel's <strong>About</strong> section on YouTube.</li>
-      <li>Add this code anywhere in the description: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-weight:700;color:var(--text)">${code}</code></li>
-      <li>Save, then click Verify below.</li>
-    </ol>
-    <button class="btn btn-primary" style="width:100%" onclick="submitClaim('${creatorId}')">Verify</button>
-    <div class="auth-msg" id="claimMsg"></div>`;
+  modal.innerHTML = renderClaimModalHtml({ state: 'loading', creatorName });
   overlay.classList.add('open');
   activateModalA11y(overlay, modal, closeModal);
+
+  const issued = await claimApi({ action: 'issue', creatorId });
+  if (!overlay.classList.contains('open')) return;
+  if (!issued.ok || !issued.code) {
+    modal.innerHTML = renderClaimModalHtml({ state: 'error', creatorName });
+    activateModalA11y(overlay, modal, closeModal);
+    showClaimMessage(issued.error || 'Could not create a verification code.', 'var(--red)');
+    return;
+  }
+
+  modal.innerHTML = renderClaimModalHtml({
+    state: 'ready',
+    creatorName,
+    code: issued.code,
+    expiresLabel: formatClaimExpiry(issued.expiresAt),
+  });
+  activateModalA11y(overlay, modal, closeModal);
+  const copyBtn = document.getElementById('claimCopyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(issued.code);
+        showClaimMessage('Code copied.', 'var(--green)');
+      } catch (e) {
+        showClaimMessage('Select the code above and copy it.', 'var(--text-dim)');
+      }
+    });
+  }
+  const verifyBtn = document.getElementById('claimVerifyBtn');
+  if (verifyBtn) verifyBtn.addEventListener('click', () => submitClaim(creatorId, issued.code));
 }
 
-async function submitClaim(creatorId) {
-  const msg = document.getElementById('claimMsg');
-  msg.style.color = 'var(--text-dim)';
-  msg.textContent = 'Checking your channel description…';
+async function submitClaim(creatorId, code) {
+  const btn = document.getElementById('claimVerifyBtn');
+  if (btn) btn.disabled = true;
+  showClaimMessage('Checking your channel description…', 'var(--text-dim)');
   try {
-    const { data: { session } } = await sb.auth.getSession();
-    const token = session?.access_token;
-    if (!token) { msg.style.color = 'var(--red)'; msg.textContent = 'Please sign in again.'; return; }
-    const res = await fetch('/.netlify/functions/claim-creator', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ creatorId }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { msg.style.color = 'var(--red)'; msg.textContent = data.error || 'Verification failed.'; return; }
-    msg.style.color = 'var(--green)';
-    msg.textContent = data.message || 'Verified!';
+    const result = await claimApi({ action: 'verify', creatorId, code });
+    if (!result.ok) {
+      showClaimMessage(result.error || 'Verification failed.', 'var(--red)');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    showClaimMessage(result.message || 'Verified!', 'var(--green)');
     const c = creators.find(cr => cr.id === creatorId);
-    if (c) c.claimedBy = currentUser.id;
+    if (c && currentUser) c.claimedBy = currentUser.id;
     setTimeout(() => { closeModal(); handleRoute(); }, 1200);
   } catch (e) {
-    msg.style.color = 'var(--red)';
-    msg.textContent = 'Network error. Please try again.';
+    showClaimMessage('Network error. Please try again.', 'var(--red)');
+    if (btn) btn.disabled = false;
   }
 }
 
 // ── Manage Channel panel ─────────────────────────────────────────────────
-// Self-service editing for a claimed creator's own profile. Every write
-// goes through the manage-channel Netlify function, which re-verifies
-// ownership server-side and appends to frfc_creator_edit_log — this page
-// only ever sends a diff of what actually changed. League/team are
-// deliberately not editable here (see manage-channel.js for why).
-let mcOriginal = null; // snapshot of editable fields, to diff on save
-let mcFeaturedPick = null; // pending featured-video selection, if changed
+// Owners may edit a short bio and http(s) social links. The manage-channel
+// function and frfc_owner_update_profile reject every other field.
+let mcOriginal = null;
 
 function renderManageChannel(creatorId) {
   if (!currentUser) return renderAuthRequired('manage your channel');
@@ -4119,20 +4215,12 @@ function renderManageChannel(creatorId) {
 
   mcOriginal = {
     description: c.description || '',
-    content_types: [...c.contentTypes],
     social_x: c.socialX || '',
     social_twitch: c.socialTwitch || '',
     social_discord: c.socialDiscord || '',
     social_tiktok: c.socialTiktok || '',
     social_instagram: c.socialInstagram || '',
   };
-  mcFeaturedPick = c.featuredVideoId || null;
-
-  const contentTypeChecks = CONTENT_TYPES.map(t => `
-    <label class="acct-check">
-      <input type="checkbox" class="mc-content-type" value="${escHtml(t)}" ${c.contentTypes.includes(t) ? 'checked' : ''}>
-      ${escHtml(t)}
-    </label>`).join('');
 
   document.getElementById('app').innerHTML = `
     <div class="page-hero">
@@ -4141,7 +4229,7 @@ function renderManageChannel(creatorId) {
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">Manage Channel</div>
             <h1 class="page-hero-title">${escHtml(c.name)}</h1>
-            <p class="page-hero-subtitle">Edits here appear on your public profile immediately. Want to change your club or league? <a href="/contact">Contact us</a> — that one goes through review since it affects rankings.</p>
+            <p class="page-hero-subtitle">You can update your short bio and social links. Verification, subscriber stats, club, league, and the page address stay with FanReactionsFC. <a href="/contact">Contact us</a> to change those.</p>
           </div>
         </div>
       </div>
@@ -4149,34 +4237,10 @@ function renderManageChannel(creatorId) {
 
     <div class="container container-mid section">
       <div class="sc-card" style="margin-bottom:16px">
-        <div class="sc-head"><div class="sc-head-title">Profile picture</div></div>
+        <div class="sc-head"><div class="sc-head-title">Short bio</div></div>
         <div class="sc-body">
-          <div class="acct-avatar-row">
-            <div id="mcAvatarPreview" class="acct-avatar">${c.avatar ? `<img src="${escHtml(c.avatar)}" alt="">` : `<div class="avatar-fallback">${escHtml(avatarInitials(c.name))}</div>`}</div>
-            <div>
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-                <label for="mcAvatarFile" class="btn btn-secondary btn-sm" style="cursor:pointer">Upload new photo</label>
-                <input type="file" id="mcAvatarFile" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
-                <span id="mcAvatarMsg" style="font-size:var(--fs-sm);color:var(--text-muted)"></span>
-              </div>
-              <div style="font-size:var(--fs-xs);color:var(--text-muted)">JPG, PNG, WebP or GIF — up to 2MB. ${c.avatarCustom ? 'Currently a custom photo — the automatic YouTube sync won\'t override it.' : 'Currently synced from YouTube automatically.'}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="sc-card" style="margin-bottom:16px">
-        <div class="sc-head"><div class="sc-head-title">Channel description</div></div>
-        <div class="sc-body">
-          <textarea id="mcDescription" class="admin-form-input" style="min-height:100px;resize:vertical" maxlength="1000" placeholder="Tell fans what your channel is about...">${escHtml(c.description || '')}</textarea>
-          <div style="text-align:right;font-size:var(--fs-xs);color:var(--text-muted);margin-top:4px">Shown on your profile instead of the auto-generated summary.</div>
-        </div>
-      </div>
-
-      <div class="sc-card" style="margin-bottom:16px">
-        <div class="sc-head"><div class="sc-head-title">Content type</div></div>
-        <div class="sc-body">
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${contentTypeChecks}</div>
+          <textarea id="mcDescription" class="admin-form-input" style="min-height:100px;resize:vertical" maxlength="280" placeholder="A short bio for your profile…">${escHtml(c.description || '')}</textarea>
+          <div style="text-align:right;font-size:var(--fs-xs);color:var(--text-muted);margin-top:4px">Up to 280 characters. Shown on your public profile.</div>
         </div>
       </div>
 
@@ -4190,20 +4254,12 @@ function renderManageChannel(creatorId) {
             <div><label class="field-label">Discord</label><input id="mcSocialDiscord" class="admin-form-input" placeholder="https://discord.gg/..." value="${escHtml(c.socialDiscord || '')}"></div>
             <div><label class="field-label">TikTok</label><input id="mcSocialTiktok" class="admin-form-input" placeholder="https://tiktok.com/@..." value="${escHtml(c.socialTiktok || '')}"></div>
           </div>
-        </div>
-      </div>
-
-      <div class="sc-card" style="margin-bottom:16px">
-        <div class="sc-head"><div class="sc-head-title">Featured video</div></div>
-        <div class="sc-body">
-          <p style="font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:12px">Pin a specific video to show above your latest upload. Optional.</p>
-          <div id="mcFeaturedGrid"><div style="font-size:var(--fs-sm);color:var(--text-muted)">Loading your videos…</div></div>
-          ${c.featuredVideoId ? '<button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="mcClearFeatured()">Clear featured video</button>' : ''}
+          <div style="font-size:var(--fs-xs);color:var(--text-muted);margin-top:8px">http:// and https:// links only.</div>
         </div>
       </div>
 
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-        <button class="btn btn-primary" onclick="saveManageChannel('${creatorId}')">Save changes</button>
+        <button class="btn btn-primary" onclick="saveManageChannel('${c.id}')">Save changes</button>
         <a href="${creatorLink(c)}" class="btn btn-ghost" onclick="event.preventDefault();navigate('${creatorLink(c)}')">Back to profile</a>
         <span id="mcSaveMsg" style="font-size:var(--fs-sm)"></span>
       </div>
@@ -4218,59 +4274,15 @@ function renderManageChannel(creatorId) {
       <div class="sc-card" style="border-color:rgba(230,57,70,.25)">
         <div class="sc-head"><div class="sc-head-title" style="color:var(--red)">Danger zone</div></div>
         <div class="sc-body">
-          <p style="font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:12px">Un-claiming removes your ownership of this profile. Anyone will be able to claim it again by re-verifying the same YouTube channel.</p>
-          <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="confirmUnclaimChannel('${creatorId}')">Un-claim this channel</button>
+          <p style="font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:12px">Un-claiming removes your ownership of this profile. Someone else can claim it by verifying the YouTube channel.</p>
+          <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="confirmUnclaimChannel('${c.id}')">Un-claim this channel</button>
         </div>
       </div>
     </div>
     ${renderFooter()}
   `;
 
-  const fileInput = document.getElementById('mcAvatarFile');
-  if (fileInput) fileInput.addEventListener('change', e => handleManageAvatarUpload(e, creatorId));
-
-  mcLoadFeaturedVideos(c);
   mcLoadHistory(creatorId);
-}
-
-async function mcLoadFeaturedVideos(c) {
-  const grid = document.getElementById('mcFeaturedGrid');
-  if (!grid) return;
-  if (!c.youtubeChannelId) { grid.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">No YouTube channel on file yet — check back after the next sync.</div>'; return; }
-  try {
-    const detRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=channels&part=contentDetails&id=${c.youtubeChannelId}`);
-    const detData = await detRes.json();
-    const uploadsId = detData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    if (!uploadsId) throw new Error('no uploads playlist');
-    const plRes = await fetch(`/.netlify/functions/youtube-proxy?endpoint=playlistItems&part=snippet&playlistId=${uploadsId}&maxResults=12`);
-    const plData = await plRes.json();
-    const videos = (plData.items || []).map(item => ({
-      id: item.snippet.resourceId.videoId,
-      title: item.snippet.title,
-      thumb: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
-    })).filter(v => v.id);
-    if (!videos.length) { grid.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">No videos found.</div>'; return; }
-    grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
-      ${videos.map(v => `
-        <div class="mc-video-pick${mcFeaturedPick === v.id ? ' active' : ''}" data-video-id="${escHtml(v.id)}" onclick="mcSelectFeatured(this)" title="${escHtml(v.title)}">
-          <img src="${escHtml(v.thumb || '')}" alt="" loading="lazy">
-        </div>`).join('')}
-    </div>`;
-  } catch (e) {
-    grid.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted)">Couldn\'t load your videos right now.</div>';
-  }
-}
-
-function mcSelectFeatured(el) {
-  document.querySelectorAll('.mc-video-pick.active').forEach(x => x.classList.remove('active'));
-  el.classList.add('active');
-  mcFeaturedPick = el.getAttribute('data-video-id');
-}
-
-function mcClearFeatured() {
-  mcFeaturedPick = null;
-  document.querySelectorAll('.mc-video-pick.active').forEach(x => x.classList.remove('active'));
-  swShowToast('Featured video will be cleared on save.');
 }
 
 async function mcLoadHistory(creatorId) {
@@ -4293,50 +4305,13 @@ async function mcLoadHistory(creatorId) {
   }
 }
 
-async function handleManageAvatarUpload(e, creatorId) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  const msg = document.getElementById('mcAvatarMsg');
-  msg.textContent = 'Uploading…';
-  msg.style.color = 'var(--text-dim)';
-  if (file.size > 2 * 1024 * 1024) { msg.style.color = 'var(--red)'; msg.textContent = 'Too large — max 2MB.'; return; }
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const path = `${currentUser.id}/creator-${creatorId}.${ext}`;
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { msg.textContent = 'Please sign in again.'; msg.style.color = 'var(--red)'; return; }
-    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/avatars/${path}`, {
-      method: 'POST',
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session.access_token}`, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
-      body: file,
-    });
-    if (!uploadRes.ok) { msg.style.color = 'var(--red)'; msg.textContent = 'Upload failed.'; return; }
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
-    const patchRes = await mcPatch(creatorId, { avatar_url: publicUrl });
-    if (!patchRes.ok) { msg.style.color = 'var(--red)'; msg.textContent = patchRes.error || 'Save failed.'; return; }
-    const c = creators.find(cr => cr.id === creatorId);
-    if (c) { c.avatar = publicUrl; c.avatarCustom = true; }
-    document.getElementById('mcAvatarPreview').innerHTML = `<img src="${publicUrl}" alt="">`;
-    msg.style.color = 'var(--green)';
-    msg.textContent = 'Uploaded!';
-  } catch (e) {
-    msg.style.color = 'var(--red)';
-    msg.textContent = 'Network error.';
-  }
-}
-
-// Sends only the fields whose value actually differs from mcOriginal — the
-// server diffs again independently, but doing it here too keeps "No
-// changes" saves from writing a no-op edit-log row for nothing.
 async function saveManageChannel(creatorId) {
   const msg = document.getElementById('mcSaveMsg');
   msg.style.color = 'var(--text-dim)';
   msg.textContent = 'Saving…';
 
-  const contentTypes = [...document.querySelectorAll('.mc-content-type:checked')].map(el => el.value);
   const current = {
     description: document.getElementById('mcDescription').value.trim(),
-    content_types: contentTypes,
     social_x: document.getElementById('mcSocialX').value.trim(),
     social_twitch: document.getElementById('mcSocialTwitch').value.trim(),
     social_discord: document.getElementById('mcSocialDiscord').value.trim(),
@@ -4346,28 +4321,31 @@ async function saveManageChannel(creatorId) {
 
   const patch = {};
   for (const [key, value] of Object.entries(current)) {
-    const before = mcOriginal[key];
-    const same = Array.isArray(before) ? JSON.stringify(before) === JSON.stringify(value) : before === value;
-    if (!same) patch[key] = value;
+    if (mcOriginal[key] !== value) patch[key] = value;
   }
-  const c = creators.find(cr => cr.id === creatorId);
-  if (mcFeaturedPick !== (c.featuredVideoId || null)) patch.featured_video_id = mcFeaturedPick;
-
-  if (!Object.keys(patch).length) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'No changes to save.'; return; }
+  if (!Object.keys(patch).length) {
+    msg.style.color = 'var(--text-dim)';
+    msg.textContent = 'No changes to save.';
+    return;
+  }
 
   const result = await mcPatch(creatorId, patch);
-  if (!result.ok) { msg.style.color = 'var(--red)'; msg.textContent = result.error || 'Save failed.'; return; }
+  if (!result.ok) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = String(result.error || 'Save failed.').slice(0, 300);
+    return;
+  }
 
+  const c = creators.find(cr => cr.id === creatorId);
   if (c) {
     if ('description' in patch) c.description = patch.description;
-    if ('content_types' in patch) c.contentTypes = patch.content_types;
     if ('social_x' in patch) c.socialX = patch.social_x;
     if ('social_twitch' in patch) c.socialTwitch = patch.social_twitch;
     if ('social_discord' in patch) c.socialDiscord = patch.social_discord;
     if ('social_tiktok' in patch) c.socialTiktok = patch.social_tiktok;
     if ('social_instagram' in patch) c.socialInstagram = patch.social_instagram;
-    if ('featured_video_id' in patch) c.featuredVideoId = patch.featured_video_id || '';
   }
+  mcOriginal = Object.assign({}, mcOriginal, current);
   msg.style.color = 'var(--green)';
   msg.textContent = 'Saved!';
   mcLoadHistory(creatorId);
@@ -4398,6 +4376,7 @@ function confirmUnclaimChannel(creatorId) {
 async function unclaimChannel(creatorId) {
   try {
     const { data: { session } } = await sb.auth.getSession();
+    if (!session) { swShowToast('Please sign in again.'); return; }
     const res = await fetch('/.netlify/functions/manage-channel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
@@ -4412,6 +4391,7 @@ async function unclaimChannel(creatorId) {
     swShowToast('Network error — please try again.');
   }
 }
+
 
 // ── Custom confirm dialog (replaces window.confirm) ──────────────────────
 // Reuses the auth modal overlay. Resolves nothing itself — callers pass a

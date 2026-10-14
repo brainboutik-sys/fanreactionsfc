@@ -288,6 +288,69 @@ test('news hub prerender has unique H1 and canonical', async () => {
   });
 });
 
+test('tools hub prerender links to the generator and streamwall', async () => {
+  const { handler } = require('../netlify/functions/tools.js');
+  await withCwd(async () => {
+    const slash = await handler({ path: '/tools/' });
+    assert.equal(slash.statusCode, 301);
+    assert.equal(slash.headers.Location, 'https://fanreactionsfc.com/tools');
+
+    const res = await handler({ path: '/tools' });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.body, /<h1 class="page-hero-title">Tools<\/h1>/);
+    assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/tools"/);
+    assert.match(res.body, /<title>Tools \| FanReactionsFC<\/title>/);
+    assert.match(res.body, /href="\/tools\/generator"/);
+    assert.match(res.body, /href="\/streamwall"/);
+    assert.match(res.body, /Description Generator/);
+    assert.match(res.body, /Streamwall/);
+    assert.doesNotMatch(res.body, /Discover the best football/);
+    assert.doesNotMatch(res.body, /<p class="subtitle">Loading/);
+  });
+});
+
+test('submit prerender is the creator form, not the homepage shell', async () => {
+  const { handler } = require('../netlify/functions/submit.js');
+  await withCwd(async () => {
+    const slash = await handler({ path: '/submit/' });
+    assert.equal(slash.statusCode, 301);
+    assert.equal(slash.headers.Location, 'https://fanreactionsfc.com/submit');
+
+    const res = await handler({ path: '/submit' });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.body, /<h1 class="page-hero-title">Submit a Creator<\/h1>/);
+    assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/submit"/);
+    assert.match(res.body, /<title>Submit a Creator \| FanReactionsFC<\/title>/);
+    assert.match(res.body, /id="sub_channel"/);
+    assert.match(res.body, /id="sub_league"/);
+    assert.match(res.body, /id="sub_team"/);
+    assert.match(res.body, /Submit for Review/);
+    assert.match(res.body, /Arsenal/);
+    assert.doesNotMatch(res.body, /Discover the best football/);
+    assert.doesNotMatch(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/"/);
+    assert.doesNotMatch(res.body, /<p class="subtitle">Loading/);
+  });
+});
+
+test('netlify.toml 301s /directory to /discover and prerenders /tools and /submit', () => {
+  const toml = fs.readFileSync(path.join(__dirname, '..', 'netlify.toml'), 'utf8');
+  assert.match(toml, /from = "\/directory"\s+to = "\/discover"\s+status = 301/);
+  assert.match(toml, /from = "\/directory\/"\s+to = "\/discover"\s+status = 301/);
+  assert.match(toml, /from = "\/tools"\s+to = "\/\.netlify\/functions\/tools"\s+status = 200\s+force = true/);
+  assert.match(toml, /from = "\/submit"\s+to = "\/\.netlify\/functions\/submit"\s+status = 200\s+force = true/);
+  assert.doesNotMatch(toml, /from = "\/submit"\s+to = "\/index.html"/);
+  assert.doesNotMatch(toml, /from = "\/tools"\s+to = "\/index.html"/);
+});
+
+test('client router renders the tools hub, submit form, and directory alias', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  assert.match(app, /path === '\/tools' \|\| path === '\/tools\/'/);
+  assert.match(app, /function renderTools\(/);
+  assert.match(app, /path === '\/submit' \|\| path === '\/submit\/'/);
+  assert.match(app, /function renderSubmit\(/);
+  assert.match(app, /path === '\/directory' \|\| path === '\/directory\/'/);
+});
+
 test('sitemap omits lastmod on static URLs and stays 200 without a service key', async () => {
   const { handler } = require('../netlify/functions/sitemap.js');
   const prev = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -297,6 +360,11 @@ test('sitemap omits lastmod on static URLs and stays 200 without a service key',
     assert.equal(res.statusCode, 200);
     assert.match(res.body, /<loc>https:\/\/fanreactionsfc.com\/become-a-creator<\/loc>/);
     assert.match(res.body, /<loc>https:\/\/fanreactionsfc.com\/rankings<\/loc>/);
+    assert.match(res.body, /<loc>https:\/\/fanreactionsfc.com\/tools<\/loc>/);
+    assert.match(res.body, /<loc>https:\/\/fanreactionsfc.com\/tools\/generator<\/loc>/);
+    assert.match(res.body, /<loc>https:\/\/fanreactionsfc.com\/submit<\/loc>/);
+    assert.doesNotMatch(res.body, /<loc>https:\/\/fanreactionsfc.com\/directory<\/loc>/);
+    assert.doesNotMatch(res.body, /<loc>https:\/\/fanreactionsfc.com\/tools\/<\/loc>/);
     const staticBlock = res.body.split('<url>')[1];
     assert.doesNotMatch(res.body.split('</urlset>')[0].match(/<url>[\s\S]*?<\/url>/)[0], /<lastmod>/);
     assert.match(res.body, /<urlset /);

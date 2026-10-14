@@ -2318,6 +2318,7 @@ function renderClubPage(club) {
     </div>
 
     <div class="container section">
+      <div id="clubSponsoredSlot"></div>
       <div class="sc-card">
         <div class="sc-head">
           <div class="sc-head-title">${crestImg(club, 'crest-sm')} Creators</div>
@@ -2349,6 +2350,39 @@ function renderClubPage(club) {
   `;
 
   loadClubRelatedNews(club);
+  loadClubSponsorship(club);
+}
+
+// Paid card above the organic grid. A missing table, an error, or an
+// inactive window removes the placeholder. The creator grid is already
+// rendered and is not sorted or filtered again here.
+async function loadClubSponsorship(club) {
+  const el = document.getElementById('clubSponsoredSlot');
+  if (!el) return;
+  if (typeof sb === 'undefined' || !sb || typeof isSponsorshipActive !== 'function' || typeof sponsoredSlotHtml !== 'function') {
+    el.remove();
+    return;
+  }
+  try {
+    const { data, error } = await sb.from('frfc_club_sponsorships')
+      .select('creator_id,starts_at,ends_at,club_slug')
+      .eq('club_slug', clubSlug(club))
+      .maybeSingle();
+    if (error || !data || !isSponsorshipActive(data, new Date())) {
+      el.remove();
+      return;
+    }
+    if (currentRoute.page !== 'club' || currentRoute.club !== club) return;
+    const creator = creators.find(c => c.id === data.creator_id);
+    if (!creator) {
+      el.remove();
+      return;
+    }
+    el.outerHTML = sponsoredSlotHtml(club, creator);
+  } catch (e) {
+    const slot = document.getElementById('clubSponsoredSlot');
+    if (slot) slot.remove();
+  }
 }
 
 // Fetched after the main club page renders so a slow/failed news query never

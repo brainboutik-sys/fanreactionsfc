@@ -36,8 +36,14 @@ Key columns: `id` (uuid PK), `name`, `team`, `league` (default `Premier League`)
 `slug`, `channel_url`, `live_url`, `avatar_url`, `description`, `content_types` (text[]).
 YouTube-synced: `youtube_channel_id`, `subscriber_count`, `total_view_count`,
 `video_count`, `latest_video_*`, `upcoming_video_*`, `is_live`, `live_video_id`,
-`upload_frequency`, `channel_country`, `last_youtube_sync`. Flags: `verified`,
-`featured`, `claimed_by` (→ auth.users). Ranking snapshot: `subscriber_count_prev`,
+`upload_frequency`, `channel_country`, `last_youtube_sync`. Flags: legacy
+`verified` (admin checkbox only — not the paid tier), `featured`,
+`claimed_by` (→ auth.users). Paid tier (migration
+`supabase/migrations/20261014120000_verified_creator_tier.sql`, already
+applied on production): `is_verified` (boolean, default false), `verified_until`
+(timestamptz, null means no expiry). A creator counts as verified when
+`is_verified` is true and `verified_until` is null or in the future.
+Ranking snapshot: `subscriber_count_prev`,
 `avg_rating_prev`, `rank_snapshot_at`. Audit: `created_by`, `created_at`, `updated_at`.
 
 | Op | Role | Rule |
@@ -51,6 +57,24 @@ Writes are admin-only (hardened 2026-07-08; anon UPDATE was previously open).
 Server-side YouTube sync writes with the service-role key and bypasses these
 policies; the admin panel's manual sync runs as the admin user and passes.
 Trigger: `frfc_streamers_updated_at` (BEFORE UPDATE) bumps `updated_at`.
+
+#### `frfc_club_sponsorships` — one sponsored featured creator per club hub
+Migration `supabase/migrations/20261014090000_frfc_club_sponsorships.sql`.
+**Not applied to production by the app deploy** — run that file in the
+Supabase SQL editor when the slot should go live.
+
+`club_slug` (canonical hub slug, unique), `creator_id` → `frfc_streamers`,
+optional `starts_at` / `ends_at`. Active when `starts_at` is null or `<= now()`
+and `ends_at` is null or `> now()`. The creator is still ranked organically;
+this row only fills the separate sponsored card.
+
+| Op | Role | Rule |
+|----|------|------|
+| SELECT | anon, authenticated | `true` |
+| INSERT / UPDATE / DELETE | anon, authenticated | no policy (revoked) |
+
+Writes are the SQL editor or the service role. See the migration file for
+`insert` / `update` / `delete` examples.
 
 #### `frfc_subscriber_history` — subscriber time series (~3,375 rows)
 One row per creator per sync (`creator_id`, `subscriber_count`, `recorded_at`). Powers

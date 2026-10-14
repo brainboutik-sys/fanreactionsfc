@@ -24,6 +24,10 @@
   included_files = ["index.html"]
 [functions."tools-generator"]
   included_files = ["index.html"]
+[functions."tools"]
+  included_files = ["index.html"]
+[functions."submit"]
+  included_files = ["index.html"]
 [functions."community-features"]
   included_files = ["index.html"]
 [functions."not-found"]
@@ -63,15 +67,10 @@ schedule = "0 5 * * *"
 
 # Trailing-slash variants for SPA-only routes. These do NOT 301 to the
 # bare path: confirmed live (deploy preview for this exact change) that
-# a 301-to-self chain here — /submit/ → /submit, etc. — reproduces the
+# a 301-to-self chain here — /contact/ → /contact, etc. — reproduces the
 # same self-redirect bug /rankings had. Same fix as /rankings/, /discover/,
 # /news/, /become-a-creator/ below: rewrite straight to the final target,
 # same as the bare path, with force=true.
-[[redirects]]
-  from = "/submit/"
-  to = "/index.html"
-  status = 200
-  force = true
 [[redirects]]
   from = "/contact/"
   to = "/index.html"
@@ -163,6 +162,20 @@ schedule = "0 5 * * *"
   status = 200
   force = true
 
+# Monthly Verified stats card. Must sit above the /creators/* splat or
+# /creators/:slug/stats is swallowed by creator-og.
+[functions."creator-stats"]
+  included_files = ["index.html", "js/lib/verified.js"]
+
+[[redirects]]
+  from = "/creators/*/stats"
+  to = "/.netlify/functions/creator-stats"
+  status = 200
+[[redirects]]
+  from = "/creators/*/stats/"
+  to = "/.netlify/functions/creator-stats"
+  status = 200
+
 # Per-creator SSR — unique H1/body/ProfilePage JSON-LD; trailing slash 301s
 # and unknown slugs 404 inside the function.
 [[redirects]]
@@ -184,6 +197,19 @@ schedule = "0 5 * * *"
   from = "/clubs"
   to = "/discover"
   status = 301
+
+# Legacy directory URL. The creator index is /discover. force = true so
+# this wins over the unknown-route 404 below.
+[[redirects]]
+  from = "/directory"
+  to = "/discover"
+  status = 301
+  force = true
+[[redirects]]
+  from = "/directory/"
+  to = "/discover"
+  status = 301
+  force = true
 
 # First-party proxy for article cover images (see article-cover.js) — X's
 # crawler refuses images served directly from Supabase Storage because of
@@ -222,17 +248,13 @@ schedule = "0 5 * * *"
 # and signed-in pages keep working. Everything else is a real HTTP 404
 # (see not-found.js). Files in publish/ are served first by Netlify.
 #
-# force = true on submit/contact/privacy/cookies/terms/account: confirmed
-# live these 6 routes (plus streamwall/tools/generator, now prerendered
+# force = true on contact/privacy/cookies/terms/account: confirmed
+# live these routes (plus streamwall/tools/generator, now prerendered
 # below) all 301'd to themselves without it — the same Asset pretty-URL
-# trap /rankings had. /admin, /admin/*, /manage/*, and /community/features
+# trap /rankings had. /submit is prerendered further down, same as
+# /tools. /admin, /admin/*, /manage/*, and /community/features
 # did NOT self-redirect in production (confirmed via curl), so force=true
 # isn't added there — nothing showed it was needed.
-[[redirects]]
-  from = "/submit"
-  to = "/index.html"
-  status = 200
-  force = true
 [[redirects]]
   from = "/contact"
   to = "/index.html"
@@ -304,6 +326,34 @@ schedule = "0 5 * * *"
 [[redirects]]
   from = "/tools/generator/"
   to = "/.netlify/functions/tools-generator"
+  status = 200
+  force = true
+
+# /tools is the index for the description generator and Streamwall.
+# Same Asset pretty-URL trap as /tools/generator, so force = true.
+# Trailing slash rewrites here so tools.js can 301 to /tools.
+[[redirects]]
+  from = "/tools"
+  to = "/.netlify/functions/tools"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/tools/"
+  to = "/.netlify/functions/tools"
+  status = 200
+  force = true
+
+# Creator submission form. Previously rewritten to index.html, so the
+# response was the homepage shell (home H1 + canonical /) until JS ran.
+# submit.js renders the form; the SPA still hydrates the interactive one.
+[[redirects]]
+  from = "/submit"
+  to = "/.netlify/functions/submit"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/submit/"
+  to = "/.netlify/functions/submit"
   status = 200
   force = true
 

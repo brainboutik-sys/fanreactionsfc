@@ -171,6 +171,14 @@ fired a live-check for, so each kickoff only triggers once.
   takes the voter id from the session, and rate-limits per fingerprint.
 - Win % on `/rankings` is computed client-side from `frfc_battles` win/loss counts
   (via the `get_battle_all_stats` RPC), not stored.
+- **Verified tier** (`is_verified`, `verified_until` on `frfc_streamers`) is
+  defined in `supabase/migrations/20261014120000_verified_creator_tier.sql`.
+  Those columns are already on production. CI does not re-run the file. A creator is verified when
+  `is_verified` is true and `verified_until` is null or in the future.
+  Turn it on with the `UPDATE` examples in that file. The admin checkbox
+  still writes the legacy `verified` column and does not grant the tier.
+  The "Get Verified" button uses `VERIFIED_STRIPE_PAYMENT_LINK` in
+  `js/lib/verified.js` (placeholder, no Stripe webhook).
 - `frfc_contact_messages` and `frfc_creator_reports` allow public INSERT only — no
   public SELECT policy, so submissions are only readable via the Supabase dashboard,
   the `/admin` panel, or the email a trigger sends (see Edge Functions above).

@@ -12,7 +12,7 @@
 //          the stored hash AND appear in the description. On success the
 //          service role records one verified owner (frfc_creator_claims)
 //          and sets frfc_streamers.claimed_by. The browser cannot write
-//          either of those; see supabase/migrations/20261014120000_frfc_creator_claims.sql.
+//          either of those; see supabase/migrations/20261014130000_frfc_creator_claims.sql.
 //
 // The plaintext code is never logged and never written to the database.
 

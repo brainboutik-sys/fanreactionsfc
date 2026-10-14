@@ -94,6 +94,34 @@ function formatNum(n) {
   return String(n);
 }
 
+// Paid Verified tier. Keep in sync with js/lib/verified.js.
+// The legacy `verified` column is not this flag.
+function isCurrentlyVerified(row, now) {
+  if (!row) return false;
+  const flag = row.isVerified !== undefined ? row.isVerified : row.is_verified;
+  if (flag !== true) return false;
+  const until = row.verifiedUntil !== undefined ? row.verifiedUntil : row.verified_until;
+  if (until == null || until === '') return true;
+  const ts = new Date(until).getTime();
+  const clock = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : Date.now());
+  return Number.isFinite(ts) && ts > clock;
+}
+
+async function fetchAllStreamers(supabaseUrl, sbKey) {
+  const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+  const order = '&order=subscriber_count.desc.nullslast&limit=1000';
+  const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
+  const withTier = 'id,name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description,is_verified,verified_until';
+  const legacy = 'id,name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description';
+  // Production already has is_verified and verified_until. Retry without
+  // them only if this database is older, so a club page still renders.
+  let res = await fetch(base + withTier + order, { headers });
+  if (!res.ok) res = await fetch(base + legacy + order, { headers });
+  if (!res.ok) return [];
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
 function eventPathname(event) {
   if (event.rawUrl) {
     try { return new URL(event.rawUrl).pathname; } catch {}
@@ -189,6 +217,104 @@ function notFoundHtml(html, reqPath) {
   });
 }
 
+// Duplicated from js/lib/club-sponsorship.js — this function file cannot
+// require a shared module. Keep the two copies in sync.
+function isSponsorshipActive(row, now) {
+  if (!row || !row.creator_id) return false;
+  const t = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  if (Number.isNaN(t)) return false;
+  if (row.starts_at) {
+    const start = new Date(row.starts_at).getTime();
+    if (Number.isNaN(start) || start > t) return false;
+  }
+  if (row.ends_at) {
+    const end = new Date(row.ends_at).getTime();
+    if (Number.isNaN(end) || end <= t) return false;
+  }
+  return true;
+}
+
+function sponsorshipEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sponsorshipSlug(name, slug) {
+  const ready = String(slug || '').trim();
+  if (ready) return ready;
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function sponsorshipBlurb(description) {
+  const text = String(description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  const sentenceMatch = text.match(/^.*?[.!?](\s|$)/);
+  const sentence = (sentenceMatch ? sentenceMatch[0] : text).trim();
+  if (sentence.length <= 180) return sentence;
+  const clipped = sentence.slice(0, 177);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return ((lastSpace > 80 ? clipped.slice(0, lastSpace) : clipped).trim()) + '…';
+}
+
+function sponsorshipSubs(n) {
+  n = Number(n) || 0;
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function sponsorshipHttpUrl(url) {
+  const value = String(url || '').trim();
+  if (!/^https?:\/\//i.test(value)) return '';
+  return value;
+}
+
+function sponsorshipInitials(name) {
+  return (String(name || '?').trim().split(/\s+/).map(w => w[0]).join('').substring(0, 2) || '?').toUpperCase();
+}
+
+function sponsoredSlotHtml(clubName, creator) {
+  const name = creator && creator.name ? String(creator.name) : '';
+  if (!clubName || !name) return '';
+  const subs = creator.subscriberCount != null ? creator.subscriberCount : creator.subscriber_count;
+  const slug = sponsorshipSlug(name, creator.slug);
+  const profile = slug ? '/creators/' + encodeURIComponent(slug).replace(/%2F/gi, '') : '';
+  const youtube = sponsorshipHttpUrl(creator.channel || creator.channel_url);
+  const avatar = sponsorshipHttpUrl(creator.avatar || creator.avatar_url);
+  const blurb = sponsorshipBlurb(creator.description);
+  const alt = name + ' – ' + clubName + ' fan YouTuber';
+  const portrait = avatar
+    ? `<img class="sponsored-slot-avatar" src="${sponsorshipEscape(avatar)}" alt="${sponsorshipEscape(alt)}" loading="lazy">`
+    : `<div class="sponsored-slot-fallback" aria-hidden="true">${sponsorshipEscape(sponsorshipInitials(name))}</div>`;
+  const subsLine = Number(subs) > 0
+    ? `<p class="sponsored-slot-subs">${sponsorshipEscape(sponsorshipSubs(subs))} subscribers</p>`
+    : '';
+  const blurbLine = blurb ? `<p class="sponsored-slot-blurb">${sponsorshipEscape(blurb)}</p>` : '';
+  const youtubeLink = youtube
+    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener">Watch on YouTube</a>`
+    : '';
+  return `<section class="sponsored-slot" aria-label="Sponsored">
+  <div class="sponsored-slot-labels">
+    <span class="sponsored-badge">Sponsored</span>
+    <span class="sponsored-badge sponsored-badge-featured">Featured</span>
+  </div>
+  <p class="sponsored-slot-heading">Sponsored: Featured ${sponsorshipEscape(clubName)} creator</p>
+  <div class="sponsored-slot-body">
+    ${portrait}
+    <div class="sponsored-slot-copy">
+      ${profile ? `<a class="sponsored-slot-name" href="${sponsorshipEscape(profile)}" rel="sponsored noopener">${sponsorshipEscape(name)}</a>` : `<span class="sponsored-slot-name">${sponsorshipEscape(name)}</span>`}
+      ${subsLine}
+      ${blurbLine}
+      ${youtubeLink}
+    </div>
+  </div>
+</section>`;
+}
+
 function siteGraph() {
   return [
     {
@@ -244,19 +370,15 @@ exports.handler = async (event) => {
 
   let extraTeams = [];
   let creators = [];
+  let directory = [];
   if (sbKey) {
     try {
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,description&order=subscriber_count.desc.nullslast&limit=1000`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-      );
-      if (res.ok) {
-        const rows = await res.json();
-        extraTeams = [...new Set(rows.map(r => r.team).filter(Boolean))];
-        // resolve first, then filter — team name must be the display name
-        const maybe = resolveClub(rawSeg, extraTeams);
-        if (maybe) creators = rows.filter(r => r.team === maybe);
-      }
+      const rows = await fetchAllStreamers(supabaseUrl, sbKey);
+      directory = rows;
+      extraTeams = [...new Set(rows.map(r => r.team).filter(Boolean))];
+      // resolve first, then filter — team name must be the display name
+      const maybe = resolveClub(rawSeg, extraTeams);
+      if (maybe) creators = rows.filter(r => r.team === maybe);
     } catch { /* resolve against the static list below */ }
   }
 
@@ -273,7 +395,17 @@ exports.handler = async (event) => {
     return redirect301(canonicalPath + qs);
   }
 
+  // Organic order is subscriber count only. The Verified pin box below
+  // is a separate HTML section filtered from this array. Do not sort
+  // verified creators to the front of `creators` — ItemList JSON-LD is
+  // built from this same order.
   creators.sort((a, b) => (b.subscriber_count || 0) - (a.subscriber_count || 0));
+  // Paid slot only. Failure, a missing table, or an inactive window hides
+  // the card. This never reorders `creators` and never adds a row to it.
+  let sponsoredCreator = null;
+  if (sbKey && !isVideos) {
+    sponsoredCreator = await fetchActiveSponsorship(supabaseUrl, sbKey, clubSlug(club), directory);
+  }
   const url = SITE_URL + canonicalPath;
   const otherClubs = extraTeams.filter(t => t && t !== club && t !== 'Multi-Club / Other').sort();
   const dateModified = creators
@@ -326,10 +458,21 @@ exports.handler = async (event) => {
     ? `${creators.length} ${club} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary.${top ? ` The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.` : ''}`
     : `FanReactionsFC club page for ${club} YouTube creators — watchalongs, reactions, and fan commentary.`;
 
+  const verifiedPinned = creators.filter(c => isCurrentlyVerified(c));
+  const verifiedBox = verifiedPinned.length ? `
+      <section class="club-verified-slot" aria-labelledby="club-verified-heading">
+        <div class="club-verified-kicker">Pinned</div>
+        <h2 id="club-verified-heading">Verified creators</h2>
+        <p class="club-verified-note">Paid Verified tier. This box sits above the club ranking and does not change the order below.</p>
+        <ul class="seo-list">
+          ${verifiedPinned.map(c => `<li><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a> <span class="badge badge-verified">Verified</span>${c.subscriber_count ? ` · ${formatNum(c.subscriber_count)} subscribers` : ''}</li>`).join('')}
+        </ul>
+      </section>` : '';
+
   const tableRows = creators.map((c, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a></td>
+      <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}</td>
       <td>${c.subscriber_count ? formatNum(c.subscriber_count) : '—'}</td>
     </tr>`).join('');
 
@@ -350,6 +493,12 @@ exports.handler = async (event) => {
       </div>
     </div>
     <div class="container section">
+      <!-- Featured sponsorship and the Verified pin are sibling boxes
+           above the organic table. Neither is a ListItem. -->
+      <div class="club-feature-slots">
+        ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator) : ''}
+        ${verifiedBox}
+      </div>
       ${creators.length ? `
       <table class="seo-table">
         <thead><tr><th>#</th><th>Creator</th><th>Subscribers</th></tr></thead>
@@ -363,6 +512,8 @@ exports.handler = async (event) => {
     </div>
     ${ssrFooter(otherClubs)}`;
 
+  // Organic ranking only. The sponsored card is not a ListItem, is not
+  // inserted at position 1, and does not change numberOfItems.
   const itemList = {
     '@type': 'ItemList',
     name: `${club} football YouTubers`,
@@ -410,3 +561,35 @@ exports.handler = async (event) => {
 
   return htmlResponse(200, applyPage(html, { title, description, url, bodyHtml, jsonLd }));
 };
+
+async function fetchActiveSponsorship(supabaseUrl, sbKey, clubSlugValue, directory) {
+  try {
+    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}`, Accept: 'application/json' };
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_club_sponsorships?club_slug=eq.${encodeURIComponent(clubSlugValue)}&select=creator_id,starts_at,ends_at&limit=1`,
+      { headers }
+    );
+    if (!res.ok) return null;
+    const payload = await res.json();
+    const row = (Array.isArray(payload) ? payload : [])[0];
+    if (!isSponsorshipActive(row, new Date())) return null;
+    let creator = (directory || []).find(r => r && r.id === row.creator_id);
+    if (!creator) {
+      const one = await fetch(
+        `${supabaseUrl}/rest/v1/frfc_streamers?id=eq.${encodeURIComponent(row.creator_id)}&select=id,name,slug,team,subscriber_count,channel_url,avatar_url,description&limit=1`,
+        { headers }
+      );
+      if (one.ok) {
+        const found = await one.json();
+        creator = Array.isArray(found) ? found[0] : null;
+      }
+    }
+    if (!creator || !creator.name) return null;
+    return creator;
+  } catch {
+    return null;
+  }
+}
+
+exports.isSponsorshipActive = isSponsorshipActive;
+exports.sponsoredSlotHtml = sponsoredSlotHtml;

@@ -421,7 +421,7 @@ test('user content is escaped and only http(s) URLs are kept for rendering', () 
 
 test('the claims migration encodes the security model and is not applied from code', () => {
   const sql = fs.readFileSync(
-    path.join(__dirname, '../supabase/migrations/20261014120000_frfc_creator_claims.sql'),
+    path.join(__dirname, '../supabase/migrations/20261014130000_frfc_creator_claims.sql'),
     'utf8'
   );
   assert.match(sql, /create table public\.frfc_creator_claims/i);

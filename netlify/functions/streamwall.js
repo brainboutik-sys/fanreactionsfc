@@ -43,6 +43,28 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Paid Verified tier. Keep in sync with js/lib/verified.js.
+function isCurrentlyVerified(row, now) {
+  if (!row) return false;
+  const flag = row.isVerified !== undefined ? row.isVerified : row.is_verified;
+  if (flag !== true) return false;
+  const until = row.verifiedUntil !== undefined ? row.verifiedUntil : row.verified_until;
+  if (until == null || until === '') return true;
+  const ts = new Date(until).getTime();
+  const clock = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : Date.now());
+  return Number.isFinite(ts) && ts > clock;
+}
+
+function sortVerifiedFirst(list, now) {
+  const pinned = [];
+  const rest = [];
+  for (const item of list || []) {
+    if (isCurrentlyVerified(item, now)) pinned.push(item);
+    else rest.push(item);
+  }
+  return pinned.concat(rest);
+}
+
 function applyPage(html, { title, description, url, bodyHtml, jsonLd }) {
   let out = html;
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
@@ -115,11 +137,17 @@ exports.handler = async () => {
   let liveCreators = [];
   if (sbKey) {
     try {
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team&is_live=eq.true&order=subscriber_count.desc.nullslast&limit=60`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-      );
-      if (res.ok) liveCreators = await res.json();
+      const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+      const order = '&is_live=eq.true&order=subscriber_count.desc.nullslast&limit=60';
+      const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
+      let res = await fetch(base + 'name,slug,team,subscriber_count,is_verified,verified_until' + order, { headers });
+      if (!res.ok) res = await fetch(base + 'name,slug,team' + order, { headers });
+      if (res.ok) {
+        const rows = await res.json();
+        // Subscriber order from the query, then Verified creators move
+        // ahead without reshuffling either group.
+        liveCreators = sortVerifiedFirst(Array.isArray(rows) ? rows : []);
+      }
     } catch { /* empty-state HTML below still gives crawlers a real page */ }
   }
 
@@ -129,7 +157,7 @@ exports.handler = async () => {
 
   const rows = liveCreators.filter(c => c.name);
   const listHtml = rows.length
-    ? `<ul class="seo-list">${rows.map(c => `<li><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${c.team ? ` — <a href="${esc(clubPath(c.team))}">${esc(c.team)}</a>` : ''}</li>`).join('')}</ul>`
+    ? `<ul class="seo-list">${rows.map(c => `<li><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}${c.team ? ` — <a href="${esc(clubPath(c.team))}">${esc(c.team)}</a>` : ''}</li>`).join('')}</ul>`
     : `<div class="empty-state"><div class="es-title">No one is live right now</div><p>Check back on matchday, or <a href="/discover">browse the full creator directory</a>.</p></div>`;
 
   const bodyHtml = `

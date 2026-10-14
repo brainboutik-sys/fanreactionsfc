@@ -48,6 +48,18 @@ function formatNum(n) {
   return String(n);
 }
 
+// Paid Verified tier. Keep in sync with js/lib/verified.js.
+function isCurrentlyVerified(row, now) {
+  if (!row) return false;
+  const flag = row.isVerified !== undefined ? row.isVerified : row.is_verified;
+  if (flag !== true) return false;
+  const until = row.verifiedUntil !== undefined ? row.verifiedUntil : row.verified_until;
+  if (until == null || until === '') return true;
+  const ts = new Date(until).getTime();
+  const clock = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : Date.now());
+  return Number.isFinite(ts) && ts > clock;
+}
+
 function eventPathname(event) {
   if (event.rawUrl) {
     try { return new URL(event.rawUrl).pathname; } catch {}
@@ -152,11 +164,15 @@ exports.handler = async (event) => {
   let creators = [];
   if (sbKey) {
     try {
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,league,subscriber_count,content_types&order=subscriber_count.desc.nullslast&limit=1000`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-      );
-      if (res.ok) creators = await res.json();
+      const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+      const order = '&order=subscriber_count.desc.nullslast&limit=1000';
+      const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
+      let res = await fetch(base + 'name,slug,team,league,subscriber_count,content_types,is_verified,verified_until' + order, { headers });
+      if (!res.ok) res = await fetch(base + 'name,slug,team,league,subscriber_count,content_types' + order, { headers });
+      if (res.ok) {
+        const rows = await res.json();
+        creators = Array.isArray(rows) ? rows : [];
+      }
     } catch { /* empty index still gets unique head/body */ }
   }
 
@@ -188,7 +204,7 @@ exports.handler = async (event) => {
 
   const tableRows = filtered.map(c => `
     <tr>
-      <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a></td>
+      <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}</td>
       <td>${c.team ? `<a href="${clubPath(c.team)}">${esc(c.team)}</a>` : '—'}</td>
       <td>${c.league ? esc(c.league) : '—'}</td>
       <td>${c.subscriber_count ? formatNum(c.subscriber_count) : '—'}</td>

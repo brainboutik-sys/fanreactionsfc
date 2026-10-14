@@ -6,6 +6,7 @@
      js/data/teams.js  → LEAGUES, TEAM_CRESTS, TEAM_TO_LEAGUE, TEAM_COLORS, CONTENT_TYPES
      js/lib/slugify.js → slugify()
      js/lib/club-slugs.js → clubSlug(), clubPath(), resolveClub()
+     js/lib/verified.js → isCurrentlyVerified(), verifiedBadgeHTML(), the Stripe Payment Link constant
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -275,17 +276,32 @@ function firstPartyCoverUrl(coverImageUrl) {
 // renderNewsArticle), matching news-article.js's server-rendered tags for
 // in-app shares — real crawlers never run this, they get news-article.js's
 // SSR output directly.
-function updatePageMeta(title, description, image) {
+function updatePageMeta(title, description, image, opts) {
   document.title = title;
   let meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute('content', description);
   const canonical = document.getElementById('canonicalLink');
   if (canonical) canonical.setAttribute('href', 'https://fanreactionsfc.com' + location.pathname);
+  const ogTitle = document.querySelector('meta[property="og:title"]');
+  if (ogTitle) ogTitle.setAttribute('content', title);
+  const ogDesc = document.querySelector('meta[property="og:description"]');
+  if (ogDesc) ogDesc.setAttribute('content', description);
   const resolvedImage = image || DEFAULT_OG_IMAGE;
   const ogImage = document.querySelector('meta[property="og:image"]');
   if (ogImage) ogImage.setAttribute('content', resolvedImage);
   const twitterImage = document.querySelector('meta[name="twitter:image"]');
   if (twitterImage) twitterImage.setAttribute('content', resolvedImage);
+  let robots = document.querySelector('meta[name="robots"]');
+  if (opts && opts.noindex) {
+    if (!robots) {
+      robots = document.createElement('meta');
+      robots.setAttribute('name', 'robots');
+      document.head.appendChild(robots);
+    }
+    robots.setAttribute('content', 'noindex, follow');
+  } else if (robots) {
+    robots.remove();
+  }
 }
 
 // Populate the header "N live now" chip whenever creator data is (re)loaded.
@@ -323,8 +339,14 @@ function handleRoute() {
       currentRoute = { page: 'discover', params: new URLSearchParams(location.search) };
       renderDiscover();
     } else if (path.startsWith('/creators/')) {
-      const slug = path.split('/creators/')[1].replace(/\/$/, '');
-      if (!slug) {
+      const rest = path.split('/creators/')[1].replace(/\/$/, '');
+      const statsMatch = rest.match(/^([^/]+)\/stats$/);
+      if (statsMatch) {
+        const slug = statsMatch[1];
+        if (path !== '/creators/' + slug + '/stats') history.replaceState(null, '', '/creators/' + slug + '/stats');
+        currentRoute = { page: 'creatorStats', slug };
+        renderCreatorStats(slug);
+      } else if (!rest || rest.includes('/')) {
         currentRoute = { page: 'notfound' };
         updatePageMeta('Page Not Found | FanReactionsFC', 'The page you were looking for doesn\'t exist.');
         app.innerHTML = `
@@ -336,6 +358,7 @@ function handleRoute() {
           </div>
           ${renderFooter()}`;
       } else {
+        const slug = rest;
         if (path !== '/creators/' + slug) history.replaceState(null, '', '/creators/' + slug + location.search);
         currentRoute = { page: 'profile', slug };
         renderProfile(slug);
@@ -599,7 +622,7 @@ async function signOut() {
 // the refresh actually succeeds, so a flaky network never wipes out a
 // perfectly good cached view. First-ever visit (no cache) still blocks
 // on the network, same as before.
-const CREATORS_CACHE_KEY = 'frfc_creators_cache_v1';
+const CREATORS_CACHE_KEY = 'frfc_creators_cache_v2';
 
 function loadCreatorsFromCache() {
   try {
@@ -641,6 +664,8 @@ async function fetchCreatorsFromNetwork() {
     league: r.league || getLeague(r.team),
     description: r.description || '',
     verified: r.verified || false,
+    isVerified: r.is_verified === true,
+    verifiedUntil: r.verified_until || null,
     contentTypes: r.content_types || [],
     subscriberCount: r.subscriber_count || 0,
     featured: r.featured || false,
@@ -669,7 +694,8 @@ async function fetchCreatorsFromNetwork() {
     socialDiscord: r.social_discord || '',
     socialTiktok: r.social_tiktok || '',
     socialInstagram: r.social_instagram || '',
-    youtubeChannelId: r.youtube_channel_id || ''
+    youtubeChannelId: r.youtube_channel_id || '',
+    lastYoutubeSync: r.last_youtube_sync || null
   }));
   updateLiveCountChip();
   saveCreatorsToCache();
@@ -1714,7 +1740,7 @@ function creatorCard(c) {
       <div class="cc-top">
         <span class="av-wrap">${avatarImg(c, 'cc-avatar')}${avFlag(c.channelCountry)}</span>
         <div class="cc-info">
-          <div class="cc-name">${liveDot(c.isLive)}${escHtml(c.name)} ${c.verified ? '<span class="verified">&#10003;</span>' : ''}</div>
+          <div class="cc-name">${liveDot(c.isLive)}<span class="cc-name-text">${escHtml(c.name)}</span>${verifiedBadgeHTML(c)}</div>
           <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}${countryName(c.channelCountry) ? ` <span class="cc-loc">&middot; ${escHtml(countryName(c.channelCountry))}</span>` : ''}</div>
         </div>
       </div>
@@ -1923,7 +1949,7 @@ async function renderProfile(slug) {
             <h1 class="cp-hero-name">
               ${escHtml(c.name)}
               ${c.claimedBy ? '<img src="/img/icons/claimed-verified.png" alt="Claimed by the creator" title="Claimed by the creator" class="cp-claimed-icon">' : ''}
-              ${c.verified ? '<span class="badge badge-green" style="font-size:var(--fs-xs);vertical-align:middle">Verified</span>' : ''}
+              ${verifiedBadgeHTML(c)}
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>
             <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
@@ -2059,6 +2085,18 @@ async function renderProfile(slug) {
           <div id="subSparkline" style="padding:12px 0 4px;text-align:center;color:var(--text-muted);font-size:var(--fs-sm)">Loading…</div>
         </div>` : ''}
 
+        <div class="cp-sidebar-card cp-verified-card">
+          <div class="cp-sidebar-title">Verified · ${escHtml(VERIFIED_PRICE_LABEL)}</div>
+          ${isCurrentlyVerified(c) ? `
+            <p class="cp-verified-note">This channel is Verified. The monthly card shares YouTube subscribers, video count, and recent uploads.</p>
+            <a href="/creators/${escHtml(c.slug || slugify(c.name))}/stats" class="btn btn-primary btn-sm" onclick="event.preventDefault();navigate('/creators/${c.slug || slugify(c.name)}/stats')">Monthly stats card</a>
+          ` : `
+            <p class="cp-verified-note">Verified creators are pinned on their club page, listed first on Streamwall when they are live, and get a shareable monthly stats card.</p>
+            <a href="${escHtml(VERIFIED_STRIPE_PAYMENT_LINK)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified</a>
+            <p class="cp-verified-note">Checkout is not live yet. This button uses a placeholder Stripe Payment Link. Verified status is turned on with SQL until billing is wired.</p>
+          `}
+        </div>
+
         <div class="cp-sidebar-card">
           <div class="cp-sidebar-title">Channel Info</div>
           <div class="cp-info-list">
@@ -2129,6 +2167,190 @@ async function renderProfile(slug) {
   });
 }
 
+
+function verifiedCtaHTML() {
+  return `
+    <a href="${escHtml(VERIFIED_STRIPE_PAYMENT_LINK)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${escHtml(VERIFIED_PRICE_LABEL)}</a>
+    <p class="cp-verified-note">Checkout is not live yet. This button uses a placeholder Stripe Payment Link. Verified status is turned on with SQL until billing is wired.</p>`;
+}
+
+async function loadRecentUploads(c) {
+  const uploads = [];
+  if (c.latestVideoId && /^[A-Za-z0-9_-]{11}$/.test(c.latestVideoId)) {
+    uploads.push({
+      videoId: c.latestVideoId,
+      title: c.latestVideoTitle || 'Latest upload',
+      views: c.latestVideoViews || 0,
+      thumbnail: c.latestVideoThumbnail || `https://i.ytimg.com/vi/${c.latestVideoId}/hqdefault.jpg`,
+    });
+  }
+  if (!sb || !c.id) return uploads;
+  try {
+    const { data, error } = await sb.from('frfc_video_metrics')
+      .select('video_id,views,recorded_at')
+      .eq('creator_id', c.id)
+      .order('recorded_at', { ascending: false })
+      .limit(30);
+    if (error || !data) return uploads;
+    const seen = new Set(uploads.map(u => u.videoId));
+    for (const row of data) {
+      if (!row.video_id || !/^[A-Za-z0-9_-]{11}$/.test(row.video_id) || seen.has(row.video_id)) continue;
+      seen.add(row.video_id);
+      uploads.push({
+        videoId: row.video_id,
+        title: 'Recent upload',
+        views: row.views || 0,
+        thumbnail: `https://i.ytimg.com/vi/${row.video_id}/hqdefault.jpg`,
+      });
+      if (uploads.length >= 5) break;
+    }
+  } catch (e) { /* latest synced upload is enough */ }
+  return uploads.slice(0, 5);
+}
+
+function statsUploadsHTML(uploads) {
+  if (!uploads.length) return '<p class="stats-empty">No recent upload is stored from the YouTube sync yet.</p>';
+  return `<div class="stats-uploads">${uploads.map(u => `
+    <a class="stats-upload" href="https://www.youtube.com/watch?v=${safeId(u.videoId)}" target="_blank" rel="noopener">
+      <img src="${escHtml(u.thumbnail)}" alt="" width="160" height="90">
+      <span class="stats-upload-body">
+        <span class="stats-upload-title">${escHtml(u.title)}</span>
+        <span class="stats-upload-meta">${u.views ? formatNum(u.views) + ' views' : 'YouTube'}</span>
+      </span>
+    </a>`).join('')}</div>`;
+}
+
+async function shareCreatorStats(btn) {
+  const url = btn.getAttribute('data-share-url') || location.href;
+  const title = btn.getAttribute('data-share-title') || document.title;
+  const text = btn.getAttribute('data-share-text') || '';
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    const previous = btn.textContent;
+    btn.textContent = 'Link copied';
+    setTimeout(() => { btn.textContent = previous; }, 1600);
+  } catch (e) {
+    window.prompt('Copy this link', url);
+  }
+}
+
+async function renderCreatorStats(slug) {
+  const c = creators.find(cr => (cr.slug || slugify(cr.name)) === slug);
+  const app = document.getElementById('app');
+  if (!c) {
+    updatePageMeta('Page Not Found | FanReactionsFC', 'No stats card at this address.', null, { noindex: true });
+    app.innerHTML = `
+      <div class="container section-message">
+        <div class="empty-state">
+          <div class="es-title">Creator not found</div>
+          <a href="/discover" class="btn btn-primary" style="margin-top:12px">Browse creators</a>
+        </div>
+      </div>
+      ${renderFooter()}`;
+    return;
+  }
+
+  const profileUrl = creatorLink(c);
+  const statsUrl = profileUrl + '/stats';
+  if (!isCurrentlyVerified(c)) {
+    updatePageMeta(
+      'Verified stats | FanReactionsFC',
+      `Monthly YouTube stats cards are part of the Verified creator tier (${VERIFIED_PRICE_LABEL}).`,
+      null,
+      { noindex: true }
+    );
+    app.innerHTML = `
+      <div class="page-hero">
+        <div class="container">
+          <a href="${profileUrl}" class="page-hero-back" onclick="event.preventDefault();navigate('${profileUrl}')">&larr; ${escHtml(c.name)}</a>
+          <div class="page-hero-inner">
+            <div class="page-hero-text">
+              <div class="page-hero-eyebrow">Verified</div>
+              <h1 class="page-hero-title">Monthly stats card</h1>
+              <p class="page-hero-subtitle">${escHtml(c.name)} does not have a public stats card. Verified creators (${escHtml(VERIFIED_PRICE_LABEL)}) get a shareable snapshot of their YouTube subscribers, video count, and recent uploads.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="container section">
+        <div class="stats-locked">
+          ${verifiedCtaHTML()}
+          <p><a href="${profileUrl}" onclick="event.preventDefault();navigate('${profileUrl}')">Back to ${escHtml(c.name)}</a></p>
+        </div>
+      </div>
+      ${renderFooter()}`;
+    return;
+  }
+
+  const monthLabel = statsMonthLabel(c.lastYoutubeSync);
+  const share = statsShareCopy({
+    name: c.name,
+    subscriberCount: c.subscriberCount,
+    videoCount: c.videoCount,
+    monthLabel,
+    latestTitle: c.latestVideoTitle || '',
+  });
+  const image = (c.latestVideoId && `https://i.ytimg.com/vi/${safeId(c.latestVideoId)}/hqdefault.jpg`) || c.avatar || DEFAULT_OG_IMAGE;
+  updatePageMeta(share.title, share.description, image);
+  const club = c.team && c.team !== 'Multi-Club / Other' ? c.team : '';
+  app.innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <a href="${profileUrl}" class="page-hero-back" onclick="event.preventDefault();navigate('${profileUrl}')">&larr; ${escHtml(c.name)}</a>
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow"><span class="badge badge-verified">Verified</span> ${escHtml(monthLabel)}</div>
+            <h1 class="page-hero-title">${escHtml(c.name)} — YouTube stats</h1>
+            <p class="page-hero-subtitle">${escHtml(share.description)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container section">
+      <article class="stats-card" id="creator-stats-card">
+        <div class="stats-card-top">
+          ${c.avatar ? `<img class="stats-avatar" src="${escHtml(c.avatar)}" alt="">` : ''}
+          <div>
+            <div class="stats-kicker">FanReactionsFC · Verified · ${escHtml(monthLabel)}</div>
+            <h2 class="stats-name">${escHtml(c.name)}</h2>
+            ${club ? `<a class="stats-club" href="${clubPath(club)}" onclick="event.preventDefault();navigate('${clubPath(club)}')">${escHtml(club)}</a>` : ''}
+          </div>
+        </div>
+        <div class="stats-metrics">
+          <div class="stats-metric">
+            <div class="stats-metric-label">Subscribers</div>
+            <div class="stats-metric-num">${formatNum(c.subscriberCount || 0)}</div>
+          </div>
+          <div class="stats-metric">
+            <div class="stats-metric-label">Videos</div>
+            <div class="stats-metric-num">${formatNum(c.videoCount || 0)}</div>
+          </div>
+        </div>
+        <h3 class="stats-uploads-title">Recent uploads</h3>
+        <div id="statsUploads">${c.latestVideoId ? statsUploadsHTML([{ videoId: c.latestVideoId, title: c.latestVideoTitle || 'Latest upload', views: c.latestVideoViews || 0, thumbnail: c.latestVideoThumbnail || image }]) : '<p class="stats-empty">Loading recent uploads…</p>'}</div>
+        <p class="stats-footnote">YouTube totals from the latest FanReactionsFC sync. Channel analytics are not included.</p>
+      </article>
+      <div class="stats-actions">
+        <button type="button" class="btn btn-primary" id="statsShareBtn" data-share-url="https://fanreactionsfc.com${statsUrl}" data-share-title="${escHtml(share.title)}" data-share-text="${escHtml(share.description)}" onclick="shareCreatorStats(this)">Share stats card</button>
+        <a href="${profileUrl}" class="btn btn-ghost" onclick="event.preventDefault();navigate('${profileUrl}')">Creator profile</a>
+      </div>
+    </div>
+    ${renderFooter()}`;
+
+  const uploads = await loadRecentUploads(c);
+  const slot = document.getElementById('statsUploads');
+  if (slot && currentRoute.page === 'creatorStats' && currentRoute.slug === slug) {
+    slot.innerHTML = statsUploadsHTML(uploads);
+  }
+}
 
 function formatNum(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
@@ -2270,6 +2492,9 @@ function renderClubPage(club) {
   if (sort === 'name') clubCreators.sort((a, b) => a.name.localeCompare(b.name));
   else if (sort === 'recent') clubCreators.sort((a, b) => new Date(b.latestVideoDate || 0) - new Date(a.latestVideoDate || 0));
   else clubCreators.sort((a, b) => b.subscriberCount - a.subscriberCount);
+  // Pin is a filter of this already-sorted list. Do not reorder
+  // clubCreators — that array is the organic ranking.
+  const verifiedPinned = clubCreators.filter(c => isCurrentlyVerified(c));
 
   const clubLeague = getLeague(club);
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
@@ -2304,7 +2529,21 @@ function renderClubPage(club) {
     </div>
 
     <div class="container section">
-      <div class="sc-card">
+      <!-- club-feature-slots: Verified pin is .club-verified-slot.
+           A Sponsored featured slot belongs in a sibling .club-sponsored-slot,
+           not inside the Verified box, and must not reorder #club-organic-ranking. -->
+      <div class="club-feature-slots">
+        ${verifiedPinned.length ? `
+        <section class="club-verified-slot" aria-labelledby="club-verified-heading">
+          <div class="club-verified-kicker">Pinned</div>
+          <h2 id="club-verified-heading">Verified creators</h2>
+          <p class="club-verified-note">Paid Verified tier. This box sits above the club ranking and does not change the order below. Each creator is also listed in their usual place.</p>
+          <div class="card-grid">
+            ${verifiedPinned.map(c => creatorCard(c)).join('')}
+          </div>
+        </section>` : ''}
+      </div>
+      <div class="sc-card" id="club-organic-ranking">
         <div class="sc-head">
           <div class="sc-head-title">${crestImg(club, 'crest-sm')} Creators</div>
           <div class="top-creators-tabs" style="margin:0">
@@ -2413,7 +2652,7 @@ function renderClubVideos(club) {
                   <div class="tv-creator">
                     ${avatarImg(c, 'tv-avatar')}
                     <div class="tv-creator-info">
-                      <div class="tv-creator-name">${liveDot(c.isLive)}${escHtml(c.name)}</div>
+                      <div class="tv-creator-name">${liveDot(c.isLive)}<span class="cc-name-text">${escHtml(c.name)}</span>${verifiedBadgeHTML(c)}</div>
                       <div class="tv-meta">${c.latestVideoViews ? formatNum(c.latestVideoViews) + ' views' : ''}${c.latestVideoViews && c.latestVideoDate ? ' · ' : ''}${c.latestVideoDate ? timeAgo(c.latestVideoDate) : ''}</div>
                     </div>
                   </div>
@@ -2473,7 +2712,7 @@ function rkRowsHTML() {
       <div class="rk-rank">${currentRank}${move}</div>
       <span class="av-wrap">${avatarImg(c, 'rk-avatar')}</span>
       <div class="rk-info">
-        <div class="rk-name">${liveDot(c.isLive)}${escHtml(c.name)}${c.verified ? ' <span class="rk-verified" title="Verified">&#10003;</span>' : ''}</div>
+        <div class="rk-name">${liveDot(c.isLive)}<span class="cc-name-text">${escHtml(c.name)}</span>${verifiedBadgeHTML(c)}</div>
         <div class="rk-team">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}</div>
       </div>
       <div class="rk-col rk-col--subs">${formatNum(c.subscriberCount)}</div>
@@ -4629,7 +4868,7 @@ function swGetFilteredLiveCreators() {
   let list = creators.filter(c => c.isLive && c.liveVideoId);
   if (swPickLeague) list = list.filter(c => (c.league || getLeague(c.team)) === swPickLeague);
   if (swPickTeam) list = list.filter(c => c.team === swPickTeam);
-  return list;
+  return sortVerifiedFirst(list);
 }
 
 function swFilterPickLeague(league, el) {
@@ -4682,7 +4921,7 @@ function swPickCardHTML(c) {
         <span class="sw-pick-check"></span>
         ${avatarImg(c, 'sw-pick-avatar')}
         <span class="sw-pick-info">
-          <span class="sw-pick-name">${escHtml(c.name)}</span>
+          <span class="sw-pick-name"><span class="sw-pick-name-text">${escHtml(c.name)}</span>${verifiedBadgeHTML(c)}</span>
           <span class="sw-pick-meta">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)}${c.subscriberCount ? ' &middot; ' + formatNum(c.subscriberCount) : ''}</span>
         </span>
       </div>
@@ -4705,10 +4944,10 @@ function swToggleSelect(id, input) {
 }
 
 function swLaunchWall() {
-  const ids = [...swPickerSelected]
+  const selected = [...swPickerSelected]
     .map(id => creators.find(c => c.id === id))
-    .filter(Boolean)
-    .map(c => c.liveVideoId);
+    .filter(Boolean);
+  const ids = sortVerifiedFirst(selected).map(c => c.liveVideoId);
   try { localStorage.setItem(SW_STORAGE_KEY, JSON.stringify(ids)); } catch (e) {}
   window.open('/streamwall?wall=1', '_blank');
 }

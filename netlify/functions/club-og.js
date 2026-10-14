@@ -94,6 +94,34 @@ function formatNum(n) {
   return String(n);
 }
 
+// Paid Verified tier. Keep in sync with js/lib/verified.js.
+// The legacy `verified` column is not this flag.
+function isCurrentlyVerified(row, now) {
+  if (!row) return false;
+  const flag = row.isVerified !== undefined ? row.isVerified : row.is_verified;
+  if (flag !== true) return false;
+  const until = row.verifiedUntil !== undefined ? row.verifiedUntil : row.verified_until;
+  if (until == null || until === '') return true;
+  const ts = new Date(until).getTime();
+  const clock = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : Date.now());
+  return Number.isFinite(ts) && ts > clock;
+}
+
+async function fetchAllStreamers(supabaseUrl, sbKey) {
+  const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+  const order = '&order=subscriber_count.desc.nullslast&limit=1000';
+  const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
+  const withTier = 'name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,description,is_verified,verified_until';
+  const legacy = 'name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,description';
+  // Fall back when the Verified migration has not been applied yet, so a
+  // deploy cannot blank the club page.
+  let res = await fetch(base + withTier + order, { headers });
+  if (!res.ok) res = await fetch(base + legacy + order, { headers });
+  if (!res.ok) return [];
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
 function eventPathname(event) {
   if (event.rawUrl) {
     try { return new URL(event.rawUrl).pathname; } catch {}
@@ -246,17 +274,11 @@ exports.handler = async (event) => {
   let creators = [];
   if (sbKey) {
     try {
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,description&order=subscriber_count.desc.nullslast&limit=1000`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
-      );
-      if (res.ok) {
-        const rows = await res.json();
-        extraTeams = [...new Set(rows.map(r => r.team).filter(Boolean))];
-        // resolve first, then filter — team name must be the display name
-        const maybe = resolveClub(rawSeg, extraTeams);
-        if (maybe) creators = rows.filter(r => r.team === maybe);
-      }
+      const rows = await fetchAllStreamers(supabaseUrl, sbKey);
+      extraTeams = [...new Set(rows.map(r => r.team).filter(Boolean))];
+      // resolve first, then filter — team name must be the display name
+      const maybe = resolveClub(rawSeg, extraTeams);
+      if (maybe) creators = rows.filter(r => r.team === maybe);
     } catch { /* resolve against the static list below */ }
   }
 
@@ -273,6 +295,10 @@ exports.handler = async (event) => {
     return redirect301(canonicalPath + qs);
   }
 
+  // Organic order is subscriber count only. The Verified pin box below
+  // is a separate HTML section filtered from this array. Do not sort
+  // verified creators to the front of `creators` — ItemList JSON-LD is
+  // built from this same order.
   creators.sort((a, b) => (b.subscriber_count || 0) - (a.subscriber_count || 0));
   const url = SITE_URL + canonicalPath;
   const otherClubs = extraTeams.filter(t => t && t !== club && t !== 'Multi-Club / Other').sort();
@@ -326,10 +352,21 @@ exports.handler = async (event) => {
     ? `${creators.length} ${club} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary.${top ? ` The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.` : ''}`
     : `FanReactionsFC club page for ${club} YouTube creators — watchalongs, reactions, and fan commentary.`;
 
+  const verifiedPinned = creators.filter(c => isCurrentlyVerified(c));
+  const verifiedBox = verifiedPinned.length ? `
+      <section class="club-verified-slot" aria-labelledby="club-verified-heading">
+        <div class="club-verified-kicker">Pinned</div>
+        <h2 id="club-verified-heading">Verified creators</h2>
+        <p class="club-verified-note">Paid Verified tier. This box sits above the club ranking and does not change the order below.</p>
+        <ul class="seo-list">
+          ${verifiedPinned.map(c => `<li><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a> <span class="badge badge-verified">Verified</span>${c.subscriber_count ? ` · ${formatNum(c.subscriber_count)} subscribers` : ''}</li>`).join('')}
+        </ul>
+      </section>` : '';
+
   const tableRows = creators.map((c, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a></td>
+      <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}</td>
       <td>${c.subscriber_count ? formatNum(c.subscriber_count) : '—'}</td>
     </tr>`).join('');
 
@@ -350,8 +387,15 @@ exports.handler = async (event) => {
       </div>
     </div>
     <div class="container section">
+      <!-- club-feature-slots: Verified pin is .club-verified-slot.
+           A Sponsored featured slot belongs in a sibling .club-sponsored-slot,
+           not inside the Verified box, and must not reorder #club-organic-ranking
+           or the ItemList JSON-LD. -->
+      <div class="club-feature-slots">
+        ${verifiedBox}
+      </div>
       ${creators.length ? `
-      <table class="seo-table">
+      <table class="seo-table" id="club-organic-ranking">
         <thead><tr><th>#</th><th>Creator</th><th>Subscribers</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table>` : `

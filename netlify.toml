@@ -163,6 +163,20 @@ schedule = "0 5 * * *"
   status = 200
   force = true
 
+# Monthly Verified stats card. Must sit above the /creators/* splat or
+# /creators/:slug/stats is swallowed by creator-og.
+[functions."creator-stats"]
+  included_files = ["index.html", "js/lib/verified.js"]
+
+[[redirects]]
+  from = "/creators/*/stats"
+  to = "/.netlify/functions/creator-stats"
+  status = 200
+[[redirects]]
+  from = "/creators/*/stats/"
+  to = "/.netlify/functions/creator-stats"
+  status = 200
+
 # Per-creator SSR — unique H1/body/ProfilePage JSON-LD; trailing slash 301s
 # and unknown slugs 404 inside the function.
 [[redirects]]

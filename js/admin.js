@@ -353,9 +353,10 @@ function openCreatorForm(c) {
     formField('Country Code', 'cf_country', c?.channel_country || '', 'text') +
     '<div style="font-size:var(--fs-xs);color:var(--text-muted,#888);margin:-8px 0 12px">2-letter ISO code (e.g. GB, US, FR). Only needed if YouTube doesn\'t provide one.</div>' +
     '<div class="admin-form-grid">' +
-      formCheck('Verified', 'cf_verified', c?.verified) +
+      formCheck('Legacy verified flag', 'cf_verified', c?.verified) +
       formCheck('Featured', 'cf_featured', c?.featured) +
     '</div>' +
+    '<div style="font-size:var(--fs-xs);color:var(--text-muted,#888);margin:-4px 0 12px">The legacy flag is not the paid Verified tier. Set is_verified and verified_until with SQL — see the verified-creator migration.</div>' +
     '<div class="admin-form-actions">' +
       '<button class="btn-admin btn-admin-ghost" onclick="Admin.closeModal()">Cancel</button>' +
       '<button class="btn-admin btn-admin-primary" onclick="Admin.saveCreator(\'' + (c?.id || '') + '\')">' + (isEdit ? 'Save Changes' : 'Add Creator') + '</button>' +

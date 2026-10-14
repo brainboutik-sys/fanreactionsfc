@@ -60,6 +60,8 @@ exports.handler = async () => {
       const snippet = ch.snippet || {};
       const uploadsPlaylist = ch.contentDetails && ch.contentDetails.relatedPlaylists && ch.contentDetails.relatedPlaylists.uploads;
 
+      // Channel fields only. Do not add is_verified or verified_until here —
+      // this PATCH would clear the paid Verified tier on every sync.
       const update = {
         youtube_channel_id: ch.id,
         subscriber_count: parseInt(stats.subscriberCount) || 0,

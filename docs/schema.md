@@ -36,8 +36,14 @@ Key columns: `id` (uuid PK), `name`, `team`, `league` (default `Premier League`)
 `slug`, `channel_url`, `live_url`, `avatar_url`, `description`, `content_types` (text[]).
 YouTube-synced: `youtube_channel_id`, `subscriber_count`, `total_view_count`,
 `video_count`, `latest_video_*`, `upcoming_video_*`, `is_live`, `live_video_id`,
-`upload_frequency`, `channel_country`, `last_youtube_sync`. Flags: `verified`,
-`featured`, `claimed_by` (→ auth.users). Ranking snapshot: `subscriber_count_prev`,
+`upload_frequency`, `channel_country`, `last_youtube_sync`. Flags: legacy
+`verified` (admin checkbox only — not the paid tier), `featured`,
+`claimed_by` (→ auth.users). Paid tier (migration
+`supabase/migrations/20261014120000_verified_creator_tier.sql`, already
+applied on production): `is_verified` (boolean, default false), `verified_until`
+(timestamptz, null means no expiry). A creator counts as verified when
+`is_verified` is true and `verified_until` is null or in the future.
+Ranking snapshot: `subscriber_count_prev`,
 `avg_rating_prev`, `rank_snapshot_at`. Audit: `created_by`, `created_at`, `updated_at`.
 
 | Op | Role | Rule |

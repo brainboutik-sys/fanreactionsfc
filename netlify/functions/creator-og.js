@@ -53,6 +53,18 @@ function formatNum(n) {
   return String(n);
 }
 
+// Paid Verified tier. Keep in sync with js/lib/verified.js.
+function isCurrentlyVerified(row, now) {
+  if (!row) return false;
+  const flag = row.isVerified !== undefined ? row.isVerified : row.is_verified;
+  if (flag !== true) return false;
+  const until = row.verifiedUntil !== undefined ? row.verifiedUntil : row.verified_until;
+  if (until == null || until === '') return true;
+  const ts = new Date(until).getTime();
+  const clock = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : Date.now());
+  return Number.isFinite(ts) && ts > clock;
+}
+
 function eventPathname(event) {
   if (event.rawUrl) {
     try { return new URL(event.rawUrl).pathname; } catch {}
@@ -216,19 +228,35 @@ exports.handler = async (event) => {
   let similar = [];
   let extraClubs = [];
   try {
-    const res = await fetch(
-      `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,description,avatar_url,subscriber_count,channel_url,last_youtube_sync,updated_at&or=(slug.eq.${encodeURIComponent(slug)},slug.eq.${encodeURIComponent(slugify(slug))})&limit=1`,
-      { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+    const cols = 'name,slug,team,description,avatar_url,subscriber_count,channel_url,last_youtube_sync,updated_at,is_verified,verified_until';
+    const legacyCols = 'name,slug,team,description,avatar_url,subscriber_count,channel_url,last_youtube_sync,updated_at';
+    const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
+    let res = await fetch(
+      `${base}${cols}&or=(slug.eq.${encodeURIComponent(slug)},slug.eq.${encodeURIComponent(slugify(slug))})&limit=1`,
+      { headers }
     );
+    if (!res.ok) {
+      res = await fetch(
+        `${base}${legacyCols}&or=(slug.eq.${encodeURIComponent(slug)},slug.eq.${encodeURIComponent(slugify(slug))})&limit=1`,
+        { headers }
+      );
+    }
     if (res.ok) {
       const rows = await res.json();
       creator = rows[0] || null;
     }
     if (!creator) {
-      const res2 = await fetch(
-        `${supabaseUrl}/rest/v1/frfc_streamers?select=name,slug,team,description,avatar_url,subscriber_count,channel_url,last_youtube_sync,updated_at&slug=eq.${encodeURIComponent(slug)}&limit=1`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+      let res2 = await fetch(
+        `${base}${cols}&slug=eq.${encodeURIComponent(slug)}&limit=1`,
+        { headers }
       );
+      if (!res2.ok) {
+        res2 = await fetch(
+          `${base}${legacyCols}&slug=eq.${encodeURIComponent(slug)}&limit=1`,
+          { headers }
+        );
+      }
       if (res2.ok) creator = (await res2.json())[0] || null;
     }
     if (creator && creator.team) {
@@ -270,7 +298,7 @@ exports.handler = async (event) => {
         <div class="cp-hero-inner">
           <div class="cp-hero-info">
             <div class="cp-hero-eyebrow">${creator.team ? `<a href="${clubPath(creator.team)}">${esc(creator.team)}</a>` : 'Football creator'}</div>
-            <h1 class="cp-hero-name">${esc(creator.name)}</h1>
+            <h1 class="cp-hero-name">${esc(creator.name)}${isCurrentlyVerified(creator) ? ' <span class="badge badge-verified">Verified</span>' : ''}</h1>
             <p class="cp-hero-desc">${esc(creator.description || `${creator.name} is a ${creator.team} football YouTuber on FanReactionsFC.`)}</p>
             <div class="cp-hero-actions">
               ${creator.channel_url ? `<a href="${esc(creator.channel_url)}" rel="noopener" class="btn btn-accent">Watch on YouTube</a>` : ''}

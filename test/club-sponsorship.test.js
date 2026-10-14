@@ -244,6 +244,39 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
     });
   });
 
+  test('sponsored and verified boxes are siblings above the organic ranking', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    installFetch([{ creator_id: 'paid', starts_at: null, ends_at: null }], {
+      streamers: [
+        { id: 'big', name: 'NathanConnorTV', slug: 'nathanconnortv', team: 'Liverpool', subscriber_count: 797000, channel_url: 'https://www.youtube.com/@NathanConnorTV', description: 'Top of the organic list.', is_verified: true, verified_until: '2020-01-01T00:00:00Z' },
+        { id: 'paid', name: 'TheRedmenTV', slug: 'theredmentv', team: 'Liverpool', subscriber_count: 400000, channel_url: 'https://www.youtube.com/@TheRedmenTV', avatar_url: 'https://example.com/red.jpg', description: 'Kop watchalongs.', is_verified: true, verified_until: null },
+        { id: 'other', name: 'AFTVmedia', slug: 'aftvmedia', team: 'Arsenal', subscriber_count: 1800000, channel_url: 'https://www.youtube.com/@AFTVmedia', description: 'Arsenal fan TV.' },
+        { id: 'united', name: 'Stretford Paddock', slug: 'stretford-paddock', team: 'Man United', subscriber_count: 500000, channel_url: 'https://www.youtube.com/@StretfordPaddock', description: 'United.' },
+      ],
+    });
+    await withCwd(async () => {
+      const res = await og.handler({ path: '/clubs/liverpool' });
+      assert.equal(res.statusCode, 200);
+      const sponsoredAt = res.body.indexOf('class="sponsored-slot"');
+      const verifiedAt = res.body.indexOf('class="club-verified-slot"');
+      const tableAt = res.body.indexOf('<table class="seo-table">');
+      assert.ok(sponsoredAt > -1 && verifiedAt > sponsoredAt && tableAt > verifiedAt);
+      const verified = res.body.match(/<section class="club-verified-slot"[\s\S]*?<\/section>/)[0];
+      const sponsored = res.body.slice(sponsoredAt, verifiedAt);
+      assert.match(verified, /TheRedmenTV/);
+      assert.doesNotMatch(verified, /NathanConnorTV/);
+      assert.doesNotMatch(verified, /sponsored-slot/);
+      assert.doesNotMatch(sponsored, /club-verified-slot/);
+      const table = organicTable(res.body);
+      const order = [...table.matchAll(/href="\/creators\/([^"]+)"/g)].map(m => m[1]);
+      assert.deepEqual(order, ['nathanconnortv', 'theredmentv']);
+      const page = jsonLdOf(res.body)['@graph'].find(n => n['@type'] === 'CollectionPage');
+      assert.deepEqual(page.mainEntity.itemListElement.map(i => i.name), ['NathanConnorTV', 'TheRedmenTV']);
+      assert.equal(page.mainEntity.numberOfItems, 2);
+      assert.doesNotMatch(JSON.stringify(page.mainEntity), /Sponsored/);
+    });
+  });
+
   test('videos hub and inactive lookup do not advertise a sponsorship', async () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
     const calls = installFetch([{ creator_id: 'paid' }]);

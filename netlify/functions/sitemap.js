@@ -24,6 +24,18 @@ const CLUB_SLUG_OVERRIDES = {
 function slugify(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function clubSlug(team) { return CLUB_SLUG_OVERRIDES[team] || slugify(team); }
 
+// Paid Verified tier. Keep in sync with js/lib/verified.js.
+function isCurrentlyVerified(row, now) {
+  if (!row) return false;
+  const flag = row.isVerified !== undefined ? row.isVerified : row.is_verified;
+  if (flag !== true) return false;
+  const until = row.verifiedUntil !== undefined ? row.verifiedUntil : row.verified_until;
+  if (until == null || until === '') return true;
+  const ts = new Date(until).getTime();
+  const clock = typeof now === 'number' ? now : (now instanceof Date ? now.getTime() : Date.now());
+  return Number.isFinite(ts) && ts > clock;
+}
+
 function ymd(iso) {
   if (!iso) return '';
   const d = String(iso).split('T')[0];
@@ -71,15 +83,29 @@ exports.handler = async () => {
 
   let creators = [];
   let articles = [];
+  const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
   try {
-    const [creatorsRes, articlesRes] = await Promise.all([
-      fetch(`${supabaseUrl}/rest/v1/frfc_streamers?select=slug,name,team,last_youtube_sync,updated_at`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }),
-      fetch(`${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at&status=eq.published`,
-        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }),
-    ]);
-    if (creatorsRes.ok) creators = await creatorsRes.json();
+    const articlesRes = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at&status=eq.published`,
+      { headers: sbHeaders }
+    );
     if (articlesRes.ok) articles = await articlesRes.json();
+    // Retry without the Verified columns so a deploy before the migration
+    // still lists every creator and club.
+    let creatorsRes = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_streamers?select=slug,name,team,last_youtube_sync,updated_at,is_verified,verified_until`,
+      { headers: sbHeaders }
+    );
+    if (!creatorsRes.ok) {
+      creatorsRes = await fetch(
+        `${supabaseUrl}/rest/v1/frfc_streamers?select=slug,name,team,last_youtube_sync,updated_at`,
+        { headers: sbHeaders }
+      );
+    }
+    if (creatorsRes.ok) {
+      const rows = await creatorsRes.json();
+      creators = Array.isArray(rows) ? rows : [];
+    }
   } catch {
     return fallback();
   }
@@ -99,6 +125,11 @@ exports.handler = async () => {
       loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
       priority: '0.7',
       changefreq: 'weekly',
+    })),
+    ...creators.filter(c => isCurrentlyVerified(c)).map(c => ({
+      loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}/stats`,
+      priority: '0.4',
+      changefreq: 'monthly',
     })),
     ...clubs.map(team => ({
       loc: `${SITE_URL}/clubs/${clubSlug(team)}`,

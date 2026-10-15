@@ -134,7 +134,10 @@ function htmlResponse(statusCode, body, extraHeaders) {
     statusCode,
     headers: Object.assign({
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': statusCode === 200 ? 'public, max-age=300, s-maxage=300' : 'public, max-age=60',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'Netlify-CDN-Cache-Control': statusCode === 200
+        ? 'public, s-maxage=300, must-revalidate'
+        : 'public, s-maxage=60, must-revalidate',
     }, extraHeaders || {}),
     body,
   };
@@ -153,6 +156,7 @@ function applyPage(html, { title, description, url, bodyHtml, jsonLd, noindex })
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
   out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
   if (noindex) {
@@ -527,36 +531,43 @@ exports.handler = async (event) => {
     })),
   };
 
+  // /clubs/multi-club is a directory bucket, not a football club. Typing
+  // it SportsTeam made crawlers treat "Multi-Club / Other" as a team.
+  const isMultiClub = club === 'Multi-Club / Other';
+  const collectionPage = {
+    '@type': 'CollectionPage',
+    '@id': url,
+    url,
+    name: isMultiClub ? 'Multi-club football creators' : title,
+    description,
+    isPartOf: { '@id': SITE_URL + '/#website' },
+    mainEntity: itemList,
+  };
+  if (dateModified) collectionPage.dateModified = dateModified;
+  const graphNodes = [];
+  if (!isMultiClub) {
+    collectionPage.about = { '@id': url + '#team' };
+    graphNodes.push({
+      '@type': 'SportsTeam',
+      '@id': url + '#team',
+      name: club,
+      sport: 'Soccer',
+      url,
+    });
+  }
+  graphNodes.push(collectionPage);
+  graphNodes.push({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL + '/' },
+      { '@type': 'ListItem', position: 2, name: 'Discover', item: SITE_URL + '/discover' },
+      { '@type': 'ListItem', position: 3, name: isMultiClub ? 'Multi-club' : club, item: url },
+    ],
+  });
+
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@graph': siteGraph().concat([
-      {
-        '@type': 'SportsTeam',
-        '@id': url + '#team',
-        name: club,
-        sport: 'Soccer',
-        url,
-      },
-      Object.assign({
-        '@type': 'CollectionPage',
-        '@id': url,
-        url,
-        name: title,
-        description,
-        dateModified,
-        about: { '@id': url + '#team' },
-        isPartOf: { '@id': SITE_URL + '/#website' },
-        mainEntity: itemList,
-      }, dateModified ? { dateModified } : {}),
-      {
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL + '/' },
-          { '@type': 'ListItem', position: 2, name: 'Discover', item: SITE_URL + '/discover' },
-          { '@type': 'ListItem', position: 3, name: club, item: url },
-        ],
-      },
-    ]),
+    '@graph': siteGraph().concat(graphNodes),
   };
 
   return htmlResponse(200, applyPage(html, { title, description, url, bodyHtml, jsonLd }));

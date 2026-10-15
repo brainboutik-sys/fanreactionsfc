@@ -253,6 +253,15 @@ function renderAuthRequired(what) {
   openModal('signin');
 }
 
+function toggleNav() {
+  const links = document.getElementById('navLinks');
+  const btn = document.getElementById('navToggle');
+  if (!links || !btn) return;
+  const open = links.classList.toggle('open');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+}
+
 function updateNavActive(path) {
   const links = { navHome: '/', navDiscover: '/discover', navRankings: '/rankings', navNews: '/news', navBecome: '/become-a-creator', navCommunity: '/community' };
   Object.entries(links).forEach(([id, prefix]) => {
@@ -299,6 +308,20 @@ function updatePageMeta(title, description, image, opts) {
   if (ogImage) ogImage.setAttribute('content', resolvedImage);
   const twitterImage = document.querySelector('meta[name="twitter:image"]');
   if (twitterImage) twitterImage.setAttribute('content', resolvedImage);
+  let ogSite = document.querySelector('meta[property="og:site_name"]');
+  if (!ogSite) {
+    ogSite = document.createElement('meta');
+    ogSite.setAttribute('property', 'og:site_name');
+    document.head.appendChild(ogSite);
+  }
+  ogSite.setAttribute('content', 'FanReactionsFC');
+  let twitterTitle = document.querySelector('meta[name="twitter:title"]');
+  if (!twitterTitle) {
+    twitterTitle = document.createElement('meta');
+    twitterTitle.setAttribute('name', 'twitter:title');
+    document.head.appendChild(twitterTitle);
+  }
+  twitterTitle.setAttribute('content', title);
   let robots = document.querySelector('meta[name="robots"]');
   if (opts && opts.noindex) {
     if (!robots) {
@@ -306,7 +329,7 @@ function updatePageMeta(title, description, image, opts) {
       robots.setAttribute('name', 'robots');
       document.head.appendChild(robots);
     }
-    robots.setAttribute('content', 'noindex, follow');
+    robots.setAttribute('content', opts.nofollow ? 'noindex, nofollow' : 'noindex, follow');
   } else if (robots) {
     robots.remove();
   }
@@ -482,11 +505,11 @@ function handleRoute() {
       renderFeatureDetail(featureId);
     } else if (path === '/account') {
       currentRoute = { page: 'account' };
-      updatePageMeta('Account | FanReactionsFC', 'Manage your FanReactionsFC account.');
+      updatePageMeta('Account | FanReactionsFC', 'Manage your FanReactionsFC account.', null, { noindex: true, nofollow: true });
       renderAccount();
     } else if (path.startsWith('/admin')) {
       currentRoute = { page: 'admin' };
-      updatePageMeta('Admin | FanReactionsFC', 'FanReactionsFC admin panel.');
+      updatePageMeta('Admin | FanReactionsFC', 'FanReactionsFC admin panel.', null, { noindex: true, nofollow: true });
       renderAdmin();
     } else {
       // Unknown route — show a 404 rather than falling back to Home
@@ -1165,7 +1188,7 @@ function renderHome() {
       </video>`}
       <div class="container">
         <img src="/img/logo-wide.png" alt="FanReactionsFC" class="hero-logo">
-        <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
+        <h1>Discover the best football<br> creators on <span class="accent">YouTube</span></h1>
         <p class="subtitle">The definitive database of football YouTubers. Ranked daily.</p>
         <div class="search-wrap">
           <span class="search-icon">&#128269;</span>
@@ -3401,7 +3424,7 @@ async function submitContact() {
 // tables, localStorage keys, GTM/GA4, YouTube embeds) — not boilerplate.
 // These are informational drafts; have counsel review before relying on them
 // as your sole compliance basis.
-const LEGAL_LAST_UPDATED = 'July 26, 2026';
+const LEGAL_LAST_UPDATED = 'October 15, 2026';
 
 function legalPageShell(eyebrow, title, bodyHtml) {
   document.getElementById('app').innerHTML = `
@@ -3634,7 +3657,7 @@ function renderPrivacyPolicy() {
       <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
       <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr>
     </table>
-    <p>We do not collect payment information, government IDs, or sensitive categories of data (health, religion, etc.).</p>
+    <p>We do not collect payment information, and we do not use Stripe or any other payment processor. We do not collect government IDs or sensitive categories of data (health, religion, etc.). Public YouTube data — channel names, subscriber counts, and video links — is read with the YouTube Data API to build the directory. That is public creator information, not information about you as a visitor.</p>
 
     <h2>2. Legal basis for processing</h2>
     <p>We process account and profile data under <strong>contract</strong> (to provide the service you signed up for), contact/report data under <strong>legitimate interest</strong> (responding to inquiries), and both analytics cookies and the email newsletter under your <strong>consent</strong>. Newsletter consent is separate from cookie consent: it requires its own explicit, unticked opt-in and a confirmation email (double opt-in) before we send anything, and you can withdraw either consent at any time — analytics via the cookie banner or the "Cookie preferences" link in the footer, the newsletter via the unsubscribe link in every email or the <a href="/newsletter/preferences">newsletter preferences</a> page.</p>
@@ -3646,7 +3669,7 @@ function renderPrivacyPolicy() {
       <tr><td>Netlify</td><td>Website hosting, serverless functions</td></tr>
       <tr><td>Resend</td><td>Transactional email (notifications you trigger, e.g. contact replies)</td></tr>
       <tr><td>MailerLite</td><td>Newsletter delivery and subscriber management (only if you opt in) — see <a href="https://www.mailerlite.com/legal/privacy-policy" target="_blank" rel="noopener">MailerLite's Privacy Policy</a></td></tr>
-      <tr><td>Google (Sign-In, YouTube, Tag Manager/Analytics)</td><td>Authentication, video embeds, analytics (analytics only with consent)</td></tr>
+      <tr><td>Google (Sign-In, YouTube embeds, YouTube Data API, Tag Manager/Analytics)</td><td>Authentication, video embeds, public channel data, analytics (analytics only with consent)</td></tr>
       <tr><td>football-data.org</td><td>Match fixture data used to detect live streams</td></tr>
     </table>
     <p>We do not sell your personal data. MailerLite acts as our data processor for the newsletter under a signed data processing agreement.</p>
@@ -3704,6 +3727,7 @@ function renderCookiePolicy() {
 
     <h2>Third-party embeds</h2>
     <p>Creator videos and live streams are embedded from YouTube (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>) using its privacy-enhanced <code>youtube-nocookie.com</code> domain. Promotional and preview videos show a static thumbnail and only load the YouTube player after you click play, so no request reaches Google just from viewing those pages. The one exception is Streamwall: clicking "Open Streamwall" is itself the action that loads the video players you selected, since that page's whole purpose is watching those streams. Once a YouTube player loads, YouTube/Google may set cookies under Google's own policy.</p>
+    <p>Looking up public channel information with the YouTube Data API happens on our servers and does not set a cookie in your browser. We do not use Stripe, so the site sets no payment cookies.</p>
 
     <h2>Managing cookies</h2>
     <p>You can change your analytics choice anytime via the "Cookie preferences" link in the site footer, or clear cookies/localStorage in your browser settings.</p>
@@ -4201,6 +4225,8 @@ function loadAdminAssets() {
   if (_adminAssetsPromise) return _adminAssetsPromise;
   _adminAssetsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
+    // netlify/fingerprint-assets.js rewrites this exact string in the
+    // fingerprinted copy of app.js. Keep the quotes as they are.
     script.src = '/js/admin.js';
     script.onload = resolve;
     script.onerror = () => { _adminAssetsPromise = null; reject(new Error('Failed to load admin.js')); };

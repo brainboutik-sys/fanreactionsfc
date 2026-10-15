@@ -1,8 +1,11 @@
 // Dynamic sitemap.xml — built from frfc_streamers and frfc_articles so
 // Google indexes every creator, club, and news page, not just the homepage.
 //
-// lastmod is only emitted when we have a real content/update date.
+// lastmod is only emitted when we have a real date from the database.
 // Static URLs omit lastmod rather than stamping "today" on every row.
+// Creator URLs use last_youtube_sync, then updated_at. Club URLs use the
+// latest of those creator stamps for that club, or a related article
+// date when that is newer. A missing date is omitted, never invented.
 //
 // This handler always returns 200 with a valid urlset. A Supabase blip
 // must not 500 the endpoint (it did once). Served at /sitemap.xml.
@@ -40,6 +43,38 @@ function ymd(iso) {
   if (!iso) return '';
   const d = String(iso).split('T')[0];
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
+// Prefer the YouTube sync stamp. updated_at is only used when sync is empty.
+function creatorLastmod(row) {
+  if (!row) return '';
+  return ymd(row.last_youtube_sync || row.updated_at);
+}
+
+function articleLastmod(row) {
+  if (!row) return '';
+  return ymd(row.updated_at || row.published_at);
+}
+
+function later(a, b) {
+  if (!a) return b || '';
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+// Most recent creator stamp or article date for each club slug we might emit.
+// Clubs with neither are absent from the map so lastmod is omitted.
+function clubLastmods(creators, articles) {
+  const stamps = {};
+  function bump(team, stamp) {
+    if (!team || team === 'Multi-Club / Other' || !stamp) return;
+    const slug = clubSlug(team);
+    if (!slug) return;
+    stamps[slug] = later(stamps[slug], stamp);
+  }
+  for (const c of creators || []) bump(c.team, creatorLastmod(c));
+  for (const a of articles || []) bump(a.related_team, articleLastmod(a));
+  return stamps;
 }
 
 function urlXml(u) {
@@ -85,11 +120,20 @@ exports.handler = async () => {
   let articles = [];
   const sbHeaders = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
   try {
-    const articlesRes = await fetch(
-      `${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at&status=eq.published`,
+    let articlesRes = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at,related_team&status=eq.published`,
       { headers: sbHeaders }
     );
-    if (articlesRes.ok) articles = await articlesRes.json();
+    if (!articlesRes.ok) {
+      articlesRes = await fetch(
+        `${supabaseUrl}/rest/v1/frfc_articles?select=slug,published_at,updated_at&status=eq.published`,
+        { headers: sbHeaders }
+      );
+    }
+    if (articlesRes.ok) {
+      const rows = await articlesRes.json();
+      articles = Array.isArray(rows) ? rows : [];
+    }
     // Retry without the Verified columns so a deploy before the migration
     // still lists every creator and club.
     let creatorsRes = await fetch(
@@ -111,36 +155,33 @@ exports.handler = async () => {
   }
 
   const clubs = [...new Set(creators.map(c => c.team).filter(t => t && t !== 'Multi-Club / Other'))];
+  const clubStamps = clubLastmods(creators, articles);
 
-  // Creator and club lastmod are deliberately omitted, not computed from
-  // last_youtube_sync/updated_at: the daily sync job stamps those columns
-  // on nearly every creator every run regardless of whether anything
-  // actually changed (confirmed: 352/366 creators shared one sync-run
-  // date), so they're a "last checked" timestamp, not "last changed" —
-  // not a trustworthy lastmod signal. Article lastmod stays real below
-  // (published_at/updated_at there reflects an actual editorial action).
   const urlEntries = [
     ...STATIC_URLS,
     ...creators.map(c => ({
       loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
       priority: '0.7',
       changefreq: 'weekly',
+      lastmod: creatorLastmod(c) || undefined,
     })),
     ...creators.filter(c => isCurrentlyVerified(c)).map(c => ({
       loc: `${SITE_URL}/creators/${c.slug || slugify(c.name)}/stats`,
       priority: '0.4',
       changefreq: 'monthly',
+      lastmod: creatorLastmod(c) || undefined,
     })),
     ...clubs.map(team => ({
       loc: `${SITE_URL}/clubs/${clubSlug(team)}`,
       priority: '0.6',
       changefreq: 'weekly',
+      lastmod: clubStamps[clubSlug(team)] || undefined,
     })),
     ...articles.map(a => ({
       loc: `${SITE_URL}/news/${a.slug}`,
       priority: '0.6',
       changefreq: 'weekly',
-      lastmod: ymd(a.updated_at || a.published_at) || undefined,
+      lastmod: articleLastmod(a) || undefined,
     })),
   ];
 

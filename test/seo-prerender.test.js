@@ -373,7 +373,7 @@ test('sitemap omits lastmod on static URLs and stays 200 without a service key',
   }
 });
 
-test('sitemap omits lastmod for creators and clubs even when last_youtube_sync is set (not a trustworthy content-change signal)', async () => {
+test('sitemap lastmod uses creator sync, club max(sync, article), and omits dates it does not have', async () => {
   const { handler } = require('../netlify/functions/sitemap.js');
   const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const origFetch = global.fetch;
@@ -381,12 +381,18 @@ test('sitemap omits lastmod for creators and clubs even when last_youtube_sync i
   global.fetch = async (url) => {
     if (String(url).includes('frfc_streamers')) {
       return { ok: true, json: async () => [
-        { slug: 'aftvmedia', name: 'AFTVmedia', team: 'Arsenal', last_youtube_sync: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z' },
+        { slug: 'aftvmedia', name: 'AFTVmedia', team: 'Arsenal', last_youtube_sync: '2026-09-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', is_verified: true },
+        { slug: 'other-arsenal', name: 'Other Arsenal', team: 'Arsenal', last_youtube_sync: '2026-08-01T00:00:00Z' },
+        { slug: 'no-dates', name: 'No Dates', team: 'Chelsea' },
+        { slug: 'updated-only', name: 'Updated Only', team: 'Liverpool', updated_at: '2026-07-04T12:00:00Z' },
+        { slug: 'multi', name: 'Multi', team: 'Multi-Club / Other', last_youtube_sync: '2026-06-01T00:00:00Z' },
       ] };
     }
     if (String(url).includes('frfc_articles')) {
       return { ok: true, json: async () => [
-        { slug: 'some-article', published_at: '2026-08-20T00:00:00Z', updated_at: '2026-08-21T00:00:00Z' },
+        { slug: 'some-article', published_at: '2026-08-20T00:00:00Z', updated_at: '2026-08-21T00:00:00Z', related_team: 'Arsenal' },
+        { slug: 'newer-arsenal', published_at: '2026-10-02T00:00:00Z', updated_at: '2026-10-03T00:00:00Z', related_team: 'Arsenal' },
+        { slug: 'undated', published_at: null, updated_at: null },
       ] };
     }
     return { ok: true, json: async () => [] };
@@ -394,12 +400,23 @@ test('sitemap omits lastmod for creators and clubs even when last_youtube_sync i
   try {
     const res = await handler();
     assert.equal(res.statusCode, 200);
-    const creatorUrl = res.body.match(/<url>\s*<loc>[^<]*\/creators\/aftvmedia<\/loc>[\s\S]*?<\/url>/)[0];
-    assert.doesNotMatch(creatorUrl, /<lastmod>/);
-    const clubUrl = res.body.match(/<url>\s*<loc>[^<]*\/clubs\/arsenal<\/loc>[\s\S]*?<\/url>/)[0];
-    assert.doesNotMatch(clubUrl, /<lastmod>/);
-    const articleUrl = res.body.match(/<url>\s*<loc>[^<]*\/news\/some-article<\/loc>[\s\S]*?<\/url>/)[0];
-    assert.match(articleUrl, /<lastmod>2026-08-21<\/lastmod>/);
+    const block = (loc) => {
+      const found = res.body.match(new RegExp(`<url>\\s*<loc>https://fanreactionsfc.com${loc}</loc>[\\s\\S]*?</url>`));
+      assert.ok(found, 'missing sitemap url ' + loc);
+      return found[0];
+    };
+    assert.match(block('/creators/aftvmedia'), /<lastmod>2026-09-01<\/lastmod>/);
+    assert.match(block('/creators/aftvmedia/stats'), /<lastmod>2026-09-01<\/lastmod>/);
+    assert.match(block('/creators/updated-only'), /<lastmod>2026-07-04<\/lastmod>/);
+    assert.doesNotMatch(block('/creators/no-dates'), /<lastmod>/);
+    assert.match(block('/creators/multi'), /<lastmod>2026-06-01<\/lastmod>/);
+    assert.match(block('/clubs/arsenal'), /<lastmod>2026-10-03<\/lastmod>/);
+    assert.match(block('/clubs/liverpool'), /<lastmod>2026-07-04<\/lastmod>/);
+    assert.doesNotMatch(block('/clubs/chelsea'), /<lastmod>/);
+    assert.doesNotMatch(res.body, /\/clubs\/multi-club</);
+    assert.match(block('/news/some-article'), /<lastmod>2026-08-21<\/lastmod>/);
+    assert.doesNotMatch(block('/news/undated'), /<lastmod>/);
+    assert.doesNotMatch(block('/rankings'), /<lastmod>/);
   } finally {
     global.fetch = origFetch;
     if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;

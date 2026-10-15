@@ -35,6 +35,7 @@ function applyPage(html, { title, description, url, bodyHtml, jsonLd }) {
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
   out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
   out = out.replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`);
@@ -136,7 +137,8 @@ exports.handler = async () => {
     statusCode: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'Netlify-CDN-Cache-Control': 'public, s-maxage=3600, must-revalidate',
     },
     body: applyPage(html, { title, description, url, bodyHtml, jsonLd }),
   };

@@ -72,8 +72,12 @@ exports.handler = async (event) => {
   if (!html) {
     return {
       statusCode: 404,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
-      body: `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><meta name="robots" content="noindex, follow"></head><body>${bodyHtml}</body></html>`,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=0, must-revalidate',
+        'Netlify-CDN-Cache-Control': 'public, s-maxage=60, must-revalidate',
+      },
+      body: `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><meta property="og:site_name" content="FanReactionsFC"><meta name="twitter:title" content="${esc(title)}"><meta name="robots" content="noindex, follow"></head><body>${bodyHtml}</body></html>`,
     };
   }
 
@@ -81,6 +85,7 @@ exports.handler = async (event) => {
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
   out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(SITE_URL + reqPath)}">`);
   out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
@@ -91,7 +96,8 @@ exports.handler = async (event) => {
     statusCode: 404,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=60',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'Netlify-CDN-Cache-Control': 'public, s-maxage=60, must-revalidate',
     },
     body: out,
   };

@@ -2,7 +2,7 @@
   "name": "fanreactionsfc",
   "version": "1.0.0",
   "private": true,
-  "description": "The definitive, community-rated directory of football YouTubers. Vanilla JS SPA, no build step, deployed to Netlify.",
+  "description": "The definitive, community-rated directory of football YouTubers. Vanilla JS SPA with no bundler, deployed to Netlify. The Netlify build only fingerprints static assets.",
   "homepage": "https://fanreactionsfc.com",
   "scripts": {
     "dev": "netlify dev",

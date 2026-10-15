@@ -9,10 +9,12 @@
   <title>FanReactionsFC — Discover the Best Football YouTubers</title>
   <meta name="description" content="The definitive database of football YouTubers. Rated by fans. Ranked daily. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.">
   <meta property="og:title" content="FanReactionsFC — Discover the Best Football YouTubers">
+  <meta property="og:site_name" content="FanReactionsFC">
   <meta property="og:description" content="Community-rated directory of football creators on YouTube. Browse by league, club, content type, or search by name. Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://fanreactionsfc.com">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FanReactionsFC — Discover the Best Football YouTubers">
   <meta property="og:image" content="https://fanreactionsfc.com/img/og-social-card.jpg">
   <meta property="og:image:secure_url" content="https://fanreactionsfc.com/img/og-social-card.jpg">
   <meta property="og:image:type" content="image/jpeg">
@@ -60,11 +62,12 @@
   <link rel="stylesheet" href="/css/admin.css">
 </head>
 <body>
+  <a class="skip-link" href="#app">Skip to content</a>
   <!-- Header -->
   <header class="site-header">
     <div class="container nav-inner">
       <a href="/" class="nav-brand"><img src="/img/logo-round.png" alt="FanReactionsFC" class="brand-logo-round"></a>
-      <button class="nav-toggle" id="navToggle" onclick="document.getElementById('navLinks').classList.toggle('open')">&#9776;</button>
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Open menu" aria-controls="navLinks" aria-expanded="false" onclick="toggleNav()">&#9776;</button>
       <nav class="nav-links" id="navLinks">
         <a href="/" class="nav-link active" id="navHome">Home</a>
         <a href="/discover" class="nav-link" id="navDiscover">Discover</a>
@@ -86,7 +89,7 @@
   <main id="app">
     <section class="hero">
       <div class="container">
-        <h1>Discover the best football<br>creators on <span class="accent">YouTube</span></h1>
+        <h1>Discover the best football<br> creators on <span class="accent">YouTube</span></h1>
         <p class="subtitle">Loading...</p>
       </div>
     </section>

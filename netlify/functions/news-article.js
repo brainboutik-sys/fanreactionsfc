@@ -167,12 +167,18 @@ exports.handler = async (event) => {
         </div>
       </div>`;
     out = out.replace(/<title>[^<]*<\/title>/, '<title>Article not found | FanReactionsFC</title>');
+    out = out.replace(/<meta property="og:title"[^>]*>/, '<meta property="og:title" content="Article not found | FanReactionsFC">');
+    out = out.replace(/<meta name="twitter:title"[^>]*>/, '<meta name="twitter:title" content="Article not found | FanReactionsFC">');
     out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
     out = out.replace(/<link rel="canonical"[^>]*>/, '<link rel="canonical" id="canonicalLink" href="">');
     out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${body}</main>`);
     return {
       statusCode: 404,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=0, must-revalidate',
+        'Netlify-CDN-Cache-Control': 'public, s-maxage=60, must-revalidate',
+      },
       body: out,
     };
   }
@@ -215,6 +221,11 @@ exports.handler = async (event) => {
     datePublished: article.published_at || undefined,
     dateModified: article.updated_at || article.published_at || undefined,
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    author: {
+      '@type': 'Organization',
+      name: 'FanReactionsFC',
+      url: SITE_URL,
+    },
     publisher: {
       '@type': 'Organization',
       name: 'FanReactionsFC',
@@ -251,6 +262,7 @@ exports.handler = async (event) => {
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
   out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:type"[^>]*>/, `<meta property="og:type" content="article">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
@@ -281,7 +293,8 @@ exports.handler = async (event) => {
     statusCode: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=300, s-maxage=300',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'Netlify-CDN-Cache-Control': 'public, s-maxage=300, must-revalidate',
     },
     body: out,
   };

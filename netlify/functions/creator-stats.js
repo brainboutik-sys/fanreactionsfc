@@ -122,7 +122,10 @@ function htmlResponse(statusCode, body) {
     statusCode,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': statusCode === 200 ? 'public, max-age=300, s-maxage=300' : 'public, max-age=60',
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'Netlify-CDN-Cache-Control': statusCode === 200
+        ? 'public, s-maxage=300, must-revalidate'
+        : 'public, s-maxage=60, must-revalidate',
     },
     body,
   };
@@ -141,6 +144,7 @@ function applyPage(html, { title, description, url, image, bodyHtml, noindex }) 
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
   out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
   out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
   if (image) {

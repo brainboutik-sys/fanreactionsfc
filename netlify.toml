@@ -1,5 +1,8 @@
 [build]
   publish = "."
+  # Hashes JS/CSS into /assets/* and rewrites index.html. No bundler.
+  # Skipped when CONTEXT=dev so local `netlify dev` does not dirty the tree.
+  command = "node netlify/fingerprint-assets.js"
   functions = "netlify/functions"
 
 # Bundle index.html with the creator-og / club-og functions so they can
@@ -31,6 +34,12 @@
 [functions."community-features"]
   included_files = ["index.html"]
 [functions."not-found"]
+  included_files = ["index.html"]
+[functions."privacy"]
+  included_files = ["index.html"]
+[functions."cookies"]
+  included_files = ["index.html"]
+[functions."private-pages"]
   included_files = ["index.html"]
 
 # ── Scheduled functions ──────────────────────────────────────────────────
@@ -78,12 +87,12 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/privacy/"
-  to = "/index.html"
+  to = "/.netlify/functions/privacy"
   status = 200
   force = true
 [[redirects]]
   from = "/cookies/"
-  to = "/index.html"
+  to = "/.netlify/functions/cookies"
   status = 200
   force = true
 [[redirects]]
@@ -93,7 +102,7 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/account/"
-  to = "/index.html"
+  to = "/.netlify/functions/private-pages"
   status = 200
   force = true
 [[redirects]]
@@ -248,13 +257,11 @@ schedule = "0 5 * * *"
 # and signed-in pages keep working. Everything else is a real HTTP 404
 # (see not-found.js). Files in publish/ are served first by Netlify.
 #
-# force = true on contact/privacy/cookies/terms/account: confirmed
-# live these routes (plus streamwall/tools/generator, now prerendered
-# below) all 301'd to themselves without it — the same Asset pretty-URL
-# trap /rankings had. /submit is prerendered further down, same as
-# /tools. /admin, /admin/*, /manage/*, and /community/features
-# did NOT self-redirect in production (confirmed via curl), so force=true
-# isn't added there — nothing showed it was needed.
+# force = true on contact/terms: confirmed live these routes 301'd to
+# themselves without it — the same Asset pretty-URL trap /rankings had.
+# /privacy and /cookies are prerendered. /account and /admin are a
+# noindex shell (private-pages.js) so the SPA can still boot for a
+# signed-in visitor. force = true so that shell wins over index.html.
 [[redirects]]
   from = "/contact"
   to = "/index.html"
@@ -262,12 +269,12 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/privacy"
-  to = "/index.html"
+  to = "/.netlify/functions/privacy"
   status = 200
   force = true
 [[redirects]]
   from = "/cookies"
-  to = "/index.html"
+  to = "/.netlify/functions/cookies"
   status = 200
   force = true
 [[redirects]]
@@ -277,7 +284,7 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/account"
-  to = "/index.html"
+  to = "/.netlify/functions/private-pages"
   status = 200
   force = true
 [[redirects]]
@@ -292,12 +299,19 @@ schedule = "0 5 * * *"
   force = true
 [[redirects]]
   from = "/admin"
-  to = "/index.html"
+  to = "/.netlify/functions/private-pages"
   status = 200
+  force = true
+[[redirects]]
+  from = "/admin/"
+  to = "/.netlify/functions/private-pages"
+  status = 200
+  force = true
 [[redirects]]
   from = "/admin/*"
-  to = "/index.html"
+  to = "/.netlify/functions/private-pages"
   status = 200
+  force = true
 [[redirects]]
   from = "/manage/*"
   to = "/index.html"
@@ -377,3 +391,33 @@ schedule = "0 5 * * *"
   from = "/*"
   to = "/.netlify/functions/not-found"
   status = 200
+
+# Fingerprinted JS/CSS (netlify/fingerprint-assets.js) can be cached for a
+# year: the hash is in the filename, so the URL's bytes never change.
+# Unfingerprinted /js and /css stay must-revalidate so a missed reference
+# cannot be pinned to the wrong deploy. HTML that is a static file
+# revalidates too; function HTML sets the same Cache-Control itself.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

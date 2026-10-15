@@ -23,5 +23,8 @@ Desktop.ini
 dist/
 build/
 
+# Content-hashed JS/CSS written by netlify/fingerprint-assets.js
+/assets/
+
 # Utility scripts (DB migrations, avatar fetchers)
 scripts/

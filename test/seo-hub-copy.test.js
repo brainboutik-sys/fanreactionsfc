@@ -111,10 +111,8 @@ test('article titles use the club display name and stay within 60 characters', (
   });
   assert.match(two, /Coventry/);
   assert.match(two, /Newcastle/);
-  // "Coventry and Newcastle fan YouTubers react to 4-1 | FanReactionsFC" is 66
-  // characters, so the score is not clipped off a dangling "to".
-  assert.equal(two, 'Coventry and Newcastle YouTubers react | FanReactionsFC');
-  assert.ok(two.length <= 60, two + ' (' + two.length + ')');
+  // The two-club line with the score does not fit in 60, so the full headline stays.
+  assert.equal(two, 'Coventry and Newcastle YouTubers react to a 4-1 at the CBS Arena');
 
   const preview = seo.articleSeoTitle({
     title: 'Manchester City v Liverpool preview: Wednesday night',
@@ -284,21 +282,46 @@ test('article sentences do not split on decimals or abbreviations', () => {
   assert.match(vs, /vs\. Arsenal on Sunday\./);
 });
 
+function titleCore(title) {
+  return String(title || '').replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+}
+
+// A title is the whole headline, or a prefix that stops on a clause boundary.
+function titleShape(title, headline) {
+  const core = titleCore(title);
+  const h = String(headline || '').replace(/\s+/g, ' ').trim();
+  if (core === h) return 'headline';
+  if (h.indexOf(core) === 0) {
+    const rest = h.slice(core.length);
+    const marks = [':', ' – ', ' - ', ',', ' as ', ' after ', ' over ', ' amid '];
+    if (marks.some((mark) => rest.toLowerCase().startsWith(mark.toLowerCase()))) return 'boundary';
+  }
+  if (/ v .+ preview: fan YouTubers \| FanReactionsFC$/.test(title)) return 'preview';
+  if (/ fan YouTubers react to \S+ \| FanReactionsFC$/.test(title)) return 'two-club';
+  if (/ YouTubers react: \S.+ \| FanReactionsFC$/.test(title)) return 'curated';
+  return '';
+}
+
 test('article titles and metas stay clean on the published catalogue', () => {
   const rows = JSON.parse(fs.readFileSync(path.join(root, 'test/fixtures/published-articles.json'), 'utf8'));
   assert.ok(rows.length >= 60, 'expected the published snapshot');
   const dangling = new Set('to a an the at on of in and fan for as with from by v vs or out up into over after can could would will may might shall than'.split(' '));
-  const nameOut = /\b[A-Z][\w'’.-]+(?:\s+[A-Z][\w'’.-]+)*\s+out$/;
 
   for (const row of rows) {
     const title = seo.articleSeoTitle(row);
     const meta = seo.articleSeoMeta(row);
-    const core = title.replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
-    const titleLast = (core.split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z]/g, '');
-    assert.ok(title.length <= 60, row.slug + ' title ' + title.length + ' ' + title);
-    assert.match(title, /\| FanReactionsFC$/, row.slug);
-    if (!(titleLast === 'out' && nameOut.test(core))) {
-      assert.equal(dangling.has(titleLast), false, row.slug + ' title ends on ' + titleLast + ': ' + title);
+    const core = titleCore(title);
+    const shape = titleShape(title, row.title);
+    const headline = row.title.replace(/\s+/g, ' ').trim();
+    assert.ok(shape, row.slug + ' title is not a whole headline, clause boundary, or complete template: ' + title);
+    assert.ok(core.length >= 20, row.slug + ' title event is under 20 characters: ' + title);
+    if (shape === 'boundary') assert.ok(core.length >= 25, row.slug + ' boundary cut is under 25: ' + title);
+    assert.ok(title.length <= 90, row.slug + ' title ' + title.length + ' ' + title);
+    if (shape === 'headline') assert.equal(core, headline, row.slug);
+    if (shape === 'boundary') {
+      assert.equal(headline.indexOf(core), 0, row.slug);
+      const last = (core.split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z]/g, '');
+      assert.equal(dangling.has(last), false, row.slug + ' title ends on ' + last + ': ' + title);
     }
     assert.ok(meta.length <= 155 && meta.length > 0, row.slug + ' meta ' + meta.length + ' ' + meta);
     assert.match(meta, /[.!?]$/, row.slug + ' meta ' + meta);
@@ -306,56 +329,72 @@ test('article titles and metas stay clean on the published catalogue', () => {
     const metaLast = (meta.slice(0, -1).trim().split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z]/g, '');
     assert.equal(dangling.has(metaLast), false, row.slug + ' meta ends on ' + metaLast + ': ' + meta);
     assert.doesNotMatch(title + '\n' + meta, /\$|undefined|null/i, row.slug);
-    if (/\bpreview\b/i.test(row.title)) assert.doesNotMatch(meta, /\breact to\b/, row.slug + ' ' + meta);
+    if (/\bpreview\b/i.test(row.title)) {
+      assert.doesNotMatch(title, /\breact/i, row.slug + ' ' + title);
+      assert.doesNotMatch(meta, /\breact/i, row.slug + ' ' + meta);
+      assert.doesNotMatch(meta, /^Fan YouTubers react\./, row.slug);
+    }
   }
 
   const at = (slug) => rows.find((row) => row.slug === slug);
-  const alonso = seo.articleSeoMeta(at('chelsea-youtubers-react-as-alonsos-blues-hang-on-4-3'));
-  assert.match(alonso, /Stamford Bridge\./);
-  assert.doesNotMatch(alonso, /\bat\.$/);
+  const alonso = at('chelsea-youtubers-react-as-alonsos-blues-hang-on-4-3');
+  assert.equal(seo.articleSeoTitle(alonso), alonso.title);
+  assert.match(seo.articleSeoMeta(alonso), /Stamford Bridge\./);
+  assert.doesNotMatch(seo.articleSeoMeta(alonso), /\bat\.$/);
 
   const friedkin = at('everton-youtubers-react-as-the-friedkin-group-put-the-club-up-for-sale');
+  assert.equal(seo.articleSeoTitle(friedkin), friedkin.title);
   assert.equal(seo.articleSeoMeta(friedkin), 'Everton fan YouTubers react.');
-  assert.doesNotMatch(seo.articleSeoTitle(friedkin), /react to the Friedkin Group put/);
 
   const barcola = at('liverpool-youtubers-react-as-barcola-deal-nears');
+  assert.equal(seo.articleSeoTitle(barcola), barcola.title);
   assert.match(seo.articleSeoMeta(barcola), /Bradley Barcola\./);
   assert.doesNotMatch(seo.articleSeoMeta(barcola), /\bin\.$/);
-  assert.doesNotMatch(seo.articleSeoTitle(barcola), /Nears/);
 
   const atletico = at('liverpool-youtubers-preview-atletico-at-anfield');
-  assert.doesNotMatch(seo.articleSeoMeta(atletico), /Wednesday 9\./);
-  assert.doesNotMatch(seo.articleSeoTitle(atletico), /react: at Anfield/);
-  assert.doesNotMatch(seo.articleSeoMeta(atletico), /\breact to\b/);
+  assert.equal(seo.articleSeoTitle(atletico), atletico.title);
+  assert.doesNotMatch(seo.articleSeoMeta(atletico), /\breact/i);
 
   const ward = at('liverpool-youtubers-react-as-julian-ward-nears-sporting-director-return');
+  assert.equal(titleShape(seo.articleSeoTitle(ward), ward.title), 'boundary');
+  assert.doesNotMatch(seo.articleSeoTitle(ward), /Julian Ward$/);
   assert.doesNotMatch(seo.articleSeoMeta(ward), /\bto\.$/);
-  assert.doesNotMatch(seo.articleSeoTitle(ward), /nears/);
 
   const burwell = at('sunderland-youtubers-react-to-tom-burwells-sudden-exit');
+  assert.equal(seo.articleSeoTitle(burwell), burwell.title);
   assert.doesNotMatch(seo.articleSeoMeta(burwell), /\bwith\.$/);
 
   const madrid = at('united-youtubers-react-as-martinez-calls-out-the-board-after-a-2-0-in-madrid');
-  assert.doesNotMatch(seo.articleSeoTitle(madrid), /out board/);
+  assert.equal(seo.articleSeoTitle(madrid), 'United YouTubers react as Martinez calls out the board');
   assert.doesNotMatch(seo.articleSeoMeta(madrid), /\bthe\.$/);
 
   const bridge = at('chelsea-and-bournemouth-youtubers-preview-saturday-afternoon-at-stamford-bridge');
-  assert.doesNotMatch(seo.articleSeoTitle(bridge), /preview: fan \|/);
-  assert.equal(seo.articleSeoMeta(bridge), 'Chelsea and Bournemouth fan YouTubers react.');
+  assert.equal(seo.articleSeoTitle(bridge), bridge.title);
+  assert.equal(seo.articleSeoMeta(bridge), 'Chelsea v Bournemouth preview.');
 
   const derby = at('united-and-city-youtubers-preview-the-manchester-derby');
-  assert.doesNotMatch(seo.articleSeoTitle(derby), /\bthe \|/);
+  assert.equal(seo.articleSeoTitle(derby), derby.title);
+  assert.match(seo.articleSeoMeta(derby), /^United v City preview:/);
+  assert.doesNotMatch(seo.articleSeoMeta(derby), /\breact/i);
 
   const greece = at('arsenal-youtubers-react-to-tzolis-injury-on-greece-duty');
-  assert.doesNotMatch(seo.articleSeoTitle(greece), /on Greece duty/);
+  assert.equal(seo.articleSeoTitle(greece), greece.title);
   const germany = at('arsenal-youtubers-react-to-havertz-injury-on-germany-duty');
-  assert.doesNotMatch(seo.articleSeoTitle(germany), /on Germany duty/);
+  assert.equal(seo.articleSeoTitle(germany), germany.title);
 
   const draw = at('arsenal-face-real-madrid-and-bayern-as-fan-channels-react-to-the-ucl-draw');
-  assert.doesNotMatch(seo.articleSeoTitle(draw), /React UCL Draw/);
+  assert.equal(seo.articleSeoTitle(draw), 'Arsenal Face Real Madrid and Bayern');
+
+  const arteta = at('arsenal-youtubers-react-as-arteta-agrees-a-new-long-term-deal');
+  assert.equal(seo.articleSeoTitle(arteta), arteta.title);
+  const villa = at('chelsea-youtubers-react-as-villa-agree-75m-martinez-move');
+  assert.equal(seo.articleSeoTitle(villa), villa.title);
+
+  const spursPreview = at('united-and-spurs-youtubers-preview-saturday-evening-at-old-trafford');
+  assert.equal(seo.articleSeoMeta(spursPreview), 'United v Spurs preview.');
 
   const brighton = at('brighton-and-arsenal-youtubers-react-to-a-3-0-at-the-amex');
-  assert.doesNotMatch(seo.articleSeoTitle(brighton), /react to \|/);
+  assert.equal(seo.articleSeoTitle(brighton), brighton.title);
   const palace = at('leeds-and-crystal-palace-youtubers-react-to-a-0-0-at-elland-road');
   assert.match(seo.articleSeoTitle(palace), /react to 0–0 \|/);
 });

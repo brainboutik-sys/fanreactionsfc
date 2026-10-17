@@ -359,31 +359,43 @@ function acceptTitle(title) {
   return !isDanglingWord(core.split(/\s+/).pop());
 }
 
-// Always-correct title: the headline, suffix dropped before a word-boundary clip.
-// Trailing stop-words are removed only after a clip, so a real headline ending is kept.
+// No hard clip. (a) full headline plus the suffix when that fits in 60.
+// (b) the full headline, no suffix, when it is 70 characters or fewer.
+// (c) the last clause boundary that still leaves 25 characters.
+// (d) the full headline up to 90 characters, no suffix.
+// The headline's own casing is kept.
+function clauseBoundaryEnds(text) {
+  const lower = text.toLowerCase();
+  const marks = [':', ' – ', ' - ', ',', ' as ', ' after ', ' over ', ' amid '];
+  const ends = [];
+  marks.forEach(function (mark) {
+    const needle = mark.toLowerCase();
+    let from = 0;
+    while (from < lower.length) {
+      const at = lower.indexOf(needle, from);
+      if (at < 0) break;
+      ends.push(at);
+      from = at + 1;
+    }
+  });
+  ends.sort(function (a, b) { return a - b; });
+  return ends;
+}
+
 function headlineTitle(headline) {
-  let c = String(headline || '').replace(/\s+/g, ' ').trim();
-  c = c.replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
-  const max = ARTICLE_TITLE_MAX - ARTICLE_TITLE_SUFFIX.length;
-  const clipped = c.length > max;
-  if (clipped) c = seoClipWords(c, max);
-  if (clipped) {
-    const words = c.split(/\s+/).filter(Boolean);
-    while (words.length > 1 && (
-      isDanglingWord(words[words.length - 1]) ||
-      isEventVerb(words[words.length - 1]) ||
-      /^[A-Za-z]+(?:-[A-Za-z]+)+$/.test(words[words.length - 1]) ||
-      (titleWordKey(words[words.length - 1]) === 'city' && /^(the|a|an)$/i.test(titleWordKey(words[words.length - 2] || '')))
-    )) {
-      words.pop();
-    }
-    if (words.length && /['’]s$/i.test(words[words.length - 1])) {
-      words[words.length - 1] = words[words.length - 1].replace(/['’]s$/i, '');
-    }
-    c = words.join(' ').trim();
+  const c = String(headline || '').replace(/\s+/g, ' ').trim()
+    .replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+  if (!c) return 'Fan reactions';
+  if ((c + ARTICLE_TITLE_SUFFIX).length <= ARTICLE_TITLE_MAX) return c + ARTICLE_TITLE_SUFFIX;
+  if (c.length <= 70) return c;
+  const ends = clauseBoundaryEnds(c);
+  for (let i = ends.length - 1; i >= 0; i--) {
+    const left = c.slice(0, ends[i]).trim();
+    if (left.length < 25 || left.length > 90) continue;
+    if (isDanglingWord(left.split(/\s+/).pop())) continue;
+    return left;
   }
-  if (!c) c = 'Fan reactions';
-  return c + ARTICLE_TITLE_SUFFIX;
+  return c.length <= 90 ? c : c.slice(0, 90).trim();
 }
 
 function cleanSubject(words) {
@@ -565,13 +577,30 @@ function articleSeoTitle(article) {
   return headlineTitle(headline);
 }
 
-function plainReactLead(headline) {
-  const mentioned = clubsInHeadline(headline);
-  if (mentioned.length >= 2) {
-    const both = mentioned[0] + ' and ' + mentioned[1] + ' fan YouTubers react.';
-    if (both.length <= ARTICLE_META_MAX) return both;
+function previewNamePair(headline, a, b) {
+  if (a && b) return [a, b];
+  const and = String(headline || '').match(/^(.*?)\s+and\s+(.*?)\s+YouTubers\s+preview\b/i);
+  if (and) return [and[1].trim(), and[2].trim()];
+  const versus = String(headline || '').match(/^(.*?)\s+v\s+(.*?)\s+preview\b/i);
+  if (versus) return [versus[1].trim(), versus[2].trim()];
+  if (a) return [a];
+  return [];
+}
+
+function previewSeoMeta(pair, sentences) {
+  const usable = sentences.filter(function (s) { return s && s.length <= ARTICLE_META_MAX; });
+  if (pair.length >= 2) {
+    const lead = pair[0] + ' v ' + pair[1] + ' preview:';
+    for (let i = 0; i < sentences.length; i++) {
+      const combo = lead + ' ' + sentences[i];
+      if (sentences[i] && combo.length <= ARTICLE_META_MAX) return combo;
+    }
+    if (usable.length) return usable[0];
+    return pair[0] + ' v ' + pair[1] + ' preview.';
   }
-  return 'Fan YouTubers react.';
+  if (usable.length) return usable[0];
+  if (pair.length === 1) return pair[0] + ' preview.';
+  return usable[0] || 'Match preview.';
 }
 
 function articleSeoMeta(article) {
@@ -579,12 +608,20 @@ function articleSeoMeta(article) {
   const club = articleClubName(article && (article.related_team || article.relatedTeam));
   const event = allowListEvent(eventFromHeadline(headline), headline);
   const summary = String((article && (article.summary || article.dek)) || '').replace(/\s+/g, ' ').trim();
+  const sentences = wholeSentences(summary);
+  if (/\bpreview\b/i.test(headline)) {
+    const mentioned = clubsInHeadline(headline);
+    const other = mentioned.filter(function (name) { return name !== club; })[0] || '';
+    const pair = !club && mentioned.length >= 2 ? mentioned : null;
+    const a = club || (pair ? pair[0] : '');
+    const b = club ? other : (pair ? pair[1] : '');
+    return previewSeoMeta(previewNamePair(headline, a, b), sentences);
+  }
   let lead = '';
   if (club && event) lead = seoFill(ARTICLE_COPY.metaLead, { Club: club, Event: event });
   else if (club) lead = club + ' fan YouTubers react.';
   if (lead.length > ARTICLE_META_MAX) lead = club ? (club + ' fan YouTubers react.') : '';
   if (lead.length > ARTICLE_META_MAX) lead = '';
-  const sentences = wholeSentences(summary);
   const sentence = sentences[0] || '';
   const stripped = parenStrippedSentence(sentence);
   const inner = thatClause(stripped || sentence);
@@ -608,7 +645,14 @@ function articleSeoMeta(article) {
     }
     if (sentences[i].length <= ARTICLE_META_MAX) return sentences[i];
   }
-  return lead || plainReactLead(headline);
+  if (lead) return lead;
+  const mentioned = clubsInHeadline(headline);
+  if (mentioned.length >= 2) {
+    const both = mentioned[0] + ' and ' + mentioned[1] + ' fan YouTubers react.';
+    if (both.length <= ARTICLE_META_MAX) return both;
+  }
+  if (mentioned.length === 1) return mentioned[0] + ' fan YouTubers react.';
+  return 'Football fan YouTubers react.';
 }
 
 function articleMoreLabel(related) {

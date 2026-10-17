@@ -94,27 +94,35 @@ function redirect301(toPath) {
   };
 }
 
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/[<\u2028\u2029]/g, function (ch) {
+    if (ch === '<') return '\\u003c';
+    if (ch === '\u2028') return '\\u2028';
+    return '\\u2029';
+  });
+}
+
 function applyPage(html, { title, description, url, image, bodyHtml, jsonLd, noindex }) {
   let out = html;
-  out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
-  out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`);
+  out = out.replace(/<meta name="description"[^>]*>/, () => `<meta name="description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:title"[^>]*>/, () => `<meta property="og:title" content="${esc(title)}">`);
   out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
-  out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
+  out = out.replace(/<meta property="og:description"[^>]*>/, () => `<meta property="og:description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:url"[^>]*>/, () => `<meta property="og:url" content="${esc(url)}">`);
   if (image) {
-    out = out.replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(image)}">`);
-    out = out.replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${esc(image)}">`);
+    out = out.replace(/<meta property="og:image"[^>]*>/, () => `<meta property="og:image" content="${esc(image)}">`);
+    out = out.replace(/<meta name="twitter:image"[^>]*>/, () => `<meta name="twitter:image" content="${esc(image)}">`);
   }
   if (noindex) {
     out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
   }
-  out = out.replace(/<link rel="canonical"[^>]*>/, noindex
+  out = out.replace(/<link rel="canonical"[^>]*>/, () => (noindex
     ? '<link rel="canonical" id="canonicalLink" href="">'
-    : `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`);
-  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${bodyHtml}</main>`);
+    : `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`));
+  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, () => `<main id="app">${bodyHtml}</main>`);
   if (jsonLd) {
-    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`);
+    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => `<script type="application/ld+json">${jsonForScript(jsonLd)}</script>`);
   }
   return out;
 }
@@ -306,7 +314,7 @@ exports.handler = async (event) => {
             <p class="cp-hero-desc">${esc(creator.description || `${creator.name} is a ${creator.team} football YouTuber on FanReactionsFC.`)}</p>
             <div class="cp-hero-actions">
               ${creator.channel_url ? `<a href="${esc(creator.channel_url)}" rel="noopener" class="btn btn-accent">Watch on YouTube</a>` : ''}
-              ${creator.team ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">More ${esc(creator.team)} creators</a>` : ''}
+              ${creator.team && creator.team !== 'Multi-Club / Other' ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">best ${esc(creator.team)} fan YouTubers</a>` : (creator.team ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">More ${esc(creator.team)} creators</a>` : '')}
             </div>
           </div>
         </div>
@@ -319,7 +327,7 @@ exports.handler = async (event) => {
         <div class="cp-section-card">
           <div class="cp-section-head">
             <span class="cp-section-label">More ${esc(creator.team)} Creators</span>
-            <a href="${clubPath(creator.team)}" class="cp-section-link">View all &rarr;</a>
+            <a href="${clubPath(creator.team)}" class="cp-section-link">${creator.team && creator.team !== 'Multi-Club / Other' ? `best ${esc(creator.team)} fan YouTubers` : 'View all &rarr;'}</a>
           </div>
           <ul class="seo-list">
             ${similar.map(s => `<li><a href="/creators/${esc(s.slug || slugify(s.name))}">${esc(s.name)}</a>${s.subscriber_count ? ` · ${formatNum(s.subscriber_count)} subscribers` : ''} — <a href="${clubPath(s.team)}">${esc(s.team)}</a></li>`).join('')}

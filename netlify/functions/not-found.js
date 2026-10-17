@@ -82,15 +82,15 @@ exports.handler = async (event) => {
   }
 
   let out = html;
-  out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
-  out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`);
+  out = out.replace(/<meta name="description"[^>]*>/, () => `<meta name="description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:title"[^>]*>/, () => `<meta property="og:title" content="${esc(title)}">`);
   out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
-  out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(SITE_URL + reqPath)}">`);
-  out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
-  out = out.replace(/<link rel="canonical"[^>]*>/, '<link rel="canonical" id="canonicalLink" href="">');
-  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${bodyHtml}</main>`);
+  out = out.replace(/<meta property="og:description"[^>]*>/, () => `<meta property="og:description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:url"[^>]*>/, () => `<meta property="og:url" content="${esc(SITE_URL + reqPath)}">`);
+  out = out.replace('<head>', () => '<head>\n  <meta name="robots" content="noindex, follow">');
+  out = out.replace(/<link rel="canonical"[^>]*>/, () => '<link rel="canonical" id="canonicalLink" href="">');
+  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, () => `<main id="app">${bodyHtml}</main>`);
 
   return {
     statusCode: 404,

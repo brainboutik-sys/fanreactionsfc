@@ -57,7 +57,7 @@ test('shared head and prerendered pages include og:site_name and twitter:title',
     ['../netlify/functions/news.js', { path: '/news' }, /FanReactionsFC News/],
     ['../netlify/functions/tools.js', { path: '/tools' }, /Tools \| FanReactionsFC/],
     ['../netlify/functions/submit.js', { path: '/submit' }, /Submit a Creator \| FanReactionsFC/],
-    ['../netlify/functions/club-og.js', { path: '/clubs/arsenal' }, /Arsenal Football YouTubers/],
+    ['../netlify/functions/club-og.js', { path: '/clubs/arsenal' }, /Best Arsenal Fan YouTubers/],
     ['../netlify/functions/become-a-creator.js', { path: '/become-a-creator' }, /FanReactionsFC/],
     ['../netlify/functions/streamwall.js', { path: '/streamwall' }, /Streamwall/],
     ['../netlify/functions/community-features.js', { path: '/community/features' }, /Community/],
@@ -123,7 +123,7 @@ test('NewsArticle JSON-LD names FanReactionsFC as the author', async () => {
       assert.equal(article.author['@type'], 'Organization');
       assert.equal(article.author.name, 'FanReactionsFC');
       assert.equal(article.author.url, 'https://fanreactionsfc.com');
-      assert.match(res.body, /<meta name="twitter:title" content="Arsenal watchalong roundup \| FanReactionsFC News">/);
+      assert.match(res.body, /<meta name="twitter:title" content="Arsenal watchalong roundup \| FanReactionsFC">/);
       assert.match(res.body, /property="og:site_name" content="FanReactionsFC"/);
     });
   } finally {

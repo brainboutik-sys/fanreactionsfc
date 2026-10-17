@@ -907,10 +907,10 @@ function countryName(code) {
 }
 function avatarInitials(name) { return (name || '?').split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
 function avatarOnerror(img, name) { img.onerror=null; img.style.display='none'; const el=document.createElement('div'); el.className=img.className+' avatar-fallback'; el.textContent=avatarInitials(name); img.parentNode.insertBefore(el,img); }
-function avatarImg(c, cls = 'cc-avatar') {
+function avatarImg(c, cls = 'cc-avatar', alt = '') {
   const url = c.avatar || '';
   if (!url) return `<div class="${cls} avatar-fallback">${avatarInitials(c.name)}</div>`;
-  return `<img class="${cls}" src="${url}" alt="" loading="lazy" onerror="avatarOnerror(this,'${escHtml(c.name.replace(/'/g, "\\'"))}')">`;
+  return `<img class="${cls}" src="${url}" alt="${escHtml(alt)}" loading="lazy" onerror="avatarOnerror(this,'${escHtml(c.name.replace(/'/g, "\\'"))}')">`;
 }
 function creatorLink(c) { return `/creators/${c.slug || slugify(c.name)}`; }
 function clubHref(team, suffix) { return clubPath(team, suffix); }
@@ -1484,7 +1484,7 @@ async function loadHomeLatestNews() {
   if (!el) return;
   try {
     const { data, error } = await sb.from('frfc_articles')
-      .select('slug,title,summary,cover_image_url,tags,published_at')
+      .select('slug,title,summary,cover_image_url,tags,related_team,published_at')
       .eq('status', 'published')
       .order('published_at', { ascending: false })
       .limit(3);
@@ -2151,7 +2151,7 @@ async function renderProfile(slug) {
         <div class="cp-section-card">
           <div class="cp-section-head">
             <span class="cp-section-label">${crestImg(c.team, 'crest-sm')} More ${escHtml(c.team)} Creators</span>
-            <a href="${clubPath(c.team)}" class="cp-section-link">View all &rarr;</a>
+            <a href="${clubPath(c.team)}" class="cp-section-link">${c.team && c.team !== 'Multi-Club / Other' ? `best ${escHtml(c.team)} fan YouTubers` : 'View all &rarr;'}</a>
           </div>
           <div class="card-grid">${similar.map(s => creatorCard(s)).join('')}</div>
         </div>` : ''}
@@ -2573,8 +2573,224 @@ async function handleFavorite(id) {
   }
 }
 
+function hubOneSentence(description) {
+  const text = String(description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  const sentenceMatch = text.match(/^.*?[.!?](\s|$)/);
+  const sentence = (sentenceMatch ? sentenceMatch[0] : text).trim();
+  if (sentence.length <= 180) return sentence;
+  return sentence.slice(0, 177).trim() + '…';
+}
+
+function hubCreatorCard(c, rank, club) {
+  const subsStr = c.subscriberCount ? formatNum(c.subscriberCount) + ' subscribers' : '';
+  const freqStr = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
+  const synced = c.lastYoutubeSync ? new Date(c.lastYoutubeSync).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
+  const types = (c.contentTypes || []).slice(0, 4);
+  const blurb = hubOneSentence(c.description);
+  const country = countryName(c.channelCountry);
+  const yt = c.channel && /^https?:\/\//i.test(c.channel)
+    ? `<a class="hub-yt" href="${escHtml(c.channel)}" target="_blank" rel="noopener">YouTube</a>` : '';
+  return `
+    <div class="hub-card">
+      <span class="hub-rank">#${rank}</span>
+      <a href="${creatorLink(c)}" class="creator-card${c.isLive ? ' is-live' : ''}">
+        ${c.isLive ? '<span class="cc-live badge badge-live">LIVE</span>' : ''}
+        <div class="cc-top">
+          <span class="av-wrap">${avatarImg(c, 'cc-avatar', hubAvatarAlt(c.name, club))}${avFlag(c.channelCountry)}</span>
+          <div class="cc-info">
+            <div class="cc-name">${liveDot(c.isLive)}<span class="cc-name-text">${escHtml(c.name)}</span>${verifiedBadgeHTML(c)}</div>
+            <div class="cc-team">${crestImg(c.team, 'cc-crest')} ${escHtml(c.team)}${country ? ` <span class="cc-loc">&middot; ${escHtml(country)}</span>` : ''}</div>
+          </div>
+        </div>
+        <div class="cc-meta">
+          ${subsStr ? `<span class="cc-subs">${escHtml(subsStr)}${synced ? ` <span class="hub-asof">(${escHtml(synced)})</span>` : ''}</span>` : ''}
+          ${freqStr ? `<span class="cc-freq">${escHtml(freqStr)}</span>` : ''}
+        </div>
+        ${types.length ? `<div class="cc-tags">${types.map(t => `<span class="cc-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+        ${blurb ? `<p class="hub-blurb">${escHtml(blurb)}</p>` : ''}
+      </a>
+      ${yt}
+    </div>`;
+}
+
+function hubRelatedClubs(club) {
+  const league = getLeague(club);
+  if (!league || league === 'Other') return [];
+  const counts = {};
+  creators.forEach(c => {
+    if (!c.team || c.team === club || c.team === 'Multi-Club / Other') return;
+    if (getLeague(c.team) !== league) return;
+    counts[c.team] = (counts[c.team] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 6)
+    .map(([name]) => name);
+}
+
+function hubFaqAnswerHtml(faq) {
+  if (faq.a === HUB_COPY.faqListA) {
+    return 'Submit it on the <a href="/become-a-creator" onclick="event.preventDefault();navigate(\'/become-a-creator\')">Become a creator</a> page. Listing is free.';
+  }
+  return escHtml(faq.a);
+}
+
+// Ranking hub for a real club. /clubs/multi-club stays on renderClubPage.
+async function renderClubHub(club) {
+  let sponsored = null;
+  if (typeof sb !== 'undefined' && sb && typeof isSponsorshipActive === 'function') {
+    try {
+      const { data, error } = await sb.from('frfc_club_sponsorships')
+        .select('creator_id,starts_at,ends_at,club_slug')
+        .eq('club_slug', clubSlug(club))
+        .maybeSingle();
+      if (!error && data && isSponsorshipActive(data, new Date())) {
+        sponsored = creators.find(c => c.id === data.creator_id) || null;
+      }
+    } catch (e) { sponsored = null; }
+  }
+  if (currentRoute.page !== 'club' || currentRoute.club !== club) return;
+
+  const params = new URLSearchParams(location.search);
+  const sort = params.get('sort') || 'subs';
+  const bySubs = creators.filter(c => c.team === club)
+    .sort((a, b) => (b.subscriberCount || 0) - (a.subscriberCount || 0));
+  const organic = sponsored ? bySubs.filter(c => c.id !== sponsored.id) : bySubs.slice();
+  const rankOf = new Map(organic.map((c, i) => [c.id, i + 1]));
+  let shown = organic.slice();
+  if (sort === 'name') shown.sort((a, b) => a.name.localeCompare(b.name));
+  else if (sort === 'recent') shown.sort((a, b) => new Date(b.latestVideoDate || 0) - new Date(a.latestVideoDate || 0));
+  const verifiedPinned = bySubs.filter(c => isCurrentlyVerified(c));
+  const claim = hubClaimTop(organic, null);
+  const subsLabel = claim && claim.subscriberCount ? formatNum(claim.subscriberCount) : '';
+  const faqs = buildHubFaqs({
+    club,
+    topName: claim && claim.name,
+    subs: subsLabel,
+    watchNames: organic.filter(c => (c.contentTypes || []).some(t => String(t).toLowerCase() === 'watchalong')).slice(0, 3).map(c => c.name),
+  });
+  const intro = hubIntro(club, organic.length, claim && claim.name);
+  const rankedHeading = hubRankedHeading(club, organic.length);
+  const videos = bySubs
+    .filter(c => c.latestVideoId)
+    .map(c => ({ c, at: new Date(c.latestVideoDate || 0).getTime() }))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 8);
+  const related = hubRelatedClubs(club);
+  const clubLeague = getLeague(club);
+  const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
+  const clubUrl = clubPath(club);
+
+  updatePageMeta(
+    hubTitle(club, new Date()),
+    hubMeta(club, organic.length, claim && claim.name, new Date())
+  );
+
+  document.getElementById('app').innerHTML = `
+    <div class="page-hero">
+      <div class="container">
+        <nav class="hub-breadcrumb" aria-label="Breadcrumb">
+          <a href="/" onclick="event.preventDefault();navigate('/')">Home</a>
+          <span aria-hidden="true">›</span>
+          <a href="/discover" onclick="event.preventDefault();navigate('/discover')">Discover</a>
+          <span aria-hidden="true">›</span>
+          <span>${escHtml(club)}</span>
+        </nav>
+        <div class="page-hero-inner">
+          ${crestImg(club, 'page-hero-crest')}
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">${leagueInfo ? escHtml(clubLeague) : 'Football Club'}</div>
+            <h1 class="page-hero-title">${escHtml(hubH1(club))}</h1>
+            ${intro ? `<p class="page-hero-subtitle hub-aeo" style="max-width:640px">${escHtml(intro)}</p>` : ''}
+            <p class="hub-method">${escHtml(hubMethod(new Date()))}</p>
+            <div class="page-hero-meta">
+              <span class="page-hero-tag">${organic.length} creator${organic.length !== 1 ? 's' : ''}</span>
+              ${bySubs.filter(c => c.isLive).length ? `<span class="page-hero-tag" style="background:rgba(230,57,70,.2);border-color:rgba(230,57,70,.3);color:#ff8080">● ${bySubs.filter(c => c.isLive).length} live</span>` : ''}
+            </div>
+          </div>
+          <div class="page-hero-actions">
+            <a href="${clubPath(club, '/videos')}" class="btn btn-on-dark btn-sm" onclick="event.preventDefault();navigate('${clubPath(club, '/videos')}')">📺 Videos</a>
+            <a href="/submit" class="btn btn-accent btn-pill btn-sm" onclick="event.preventDefault();navigate('/submit')">+ Suggest</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container section">
+      <div class="club-feature-slots">
+        ${sponsored && typeof sponsoredSlotHtml === 'function' ? sponsoredSlotHtml(club, sponsored) : ''}
+        ${verifiedPinned.length ? `
+        <section class="club-verified-slot" aria-labelledby="club-verified-heading">
+          <div class="club-verified-kicker">Pinned</div>
+          <p id="club-verified-heading" class="club-verified-title">Verified creators</p>
+          <p class="club-verified-note">Paid Verified tier. This box sits above the club ranking and does not change the order below. Each creator is also listed in their usual place.</p>
+          <div class="card-grid">
+            ${verifiedPinned.map(c => creatorCard(c)).join('')}
+          </div>
+        </section>` : ''}
+      </div>
+      ${rankedHeading ? `
+      <section class="hub-section" id="club-organic-ranking">
+        <div class="sc-card">
+          <div class="sc-head">
+            <h2 class="hub-h2">${escHtml(rankedHeading)}</h2>
+            <div class="top-creators-tabs" style="margin:0">
+              <button class="top-creators-tab ${sort === 'subs' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=subs')">By Subs</button>
+              <button class="top-creators-tab ${sort === 'name' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=name')">A&ndash;Z</button>
+              <button class="top-creators-tab ${sort === 'recent' ? 'active' : ''}" onclick="navigate('${clubUrl}?sort=recent')">Recent</button>
+            </div>
+          </div>
+          <div class="sc-body">
+            <div class="card-grid">
+              ${shown.length ? shown.map(c => hubCreatorCard(c, rankOf.get(c.id), club)).join('') :
+                `<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px" onclick="event.preventDefault();navigate('/submit')">Suggest a Creator</a></div>`}
+            </div>
+          </div>
+        </div>
+      </section>` : `
+      <div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px" onclick="event.preventDefault();navigate('/submit')">Suggest a Creator</a></div>`}
+      ${videos.length ? `
+      <section class="hub-section">
+        <h2 class="hub-h2">${escHtml(seoFill(HUB_COPY.h2Videos, { Club: club }))}</h2>
+        <div class="hub-videos">
+          ${videos.map(({ c }) => `
+            <a class="hub-video" href="https://www.youtube.com/watch?v=${escHtml(c.latestVideoId)}" target="_blank" rel="noopener">
+              ${c.latestVideoThumbnail ? `<img src="${escHtml(c.latestVideoThumbnail)}" alt="${escHtml(c.latestVideoTitle || c.name)}" loading="lazy">` : ''}
+              <span class="hub-video-title">${escHtml(c.latestVideoTitle || 'Latest upload')}</span>
+              <span class="hub-video-meta">${escHtml(c.name)}${c.latestVideoDate ? ' · ' + escHtml(new Date(c.latestVideoDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })) : ''}</span>
+            </a>`).join('')}
+        </div>
+      </section>` : ''}
+      <section class="hub-section">
+        <h2 class="hub-h2">${escHtml(seoFill(HUB_COPY.h2Faq, { Club: club }))}</h2>
+        <dl class="hub-faq">
+          ${faqs.map(f => `<dt>${escHtml(f.q)}</dt><dd>${hubFaqAnswerHtml(f)}</dd>`).join('')}
+        </dl>
+      </section>
+      <section class="hub-section">
+        <h2 class="hub-h2">${escHtml(seoFill(HUB_COPY.h2How, { Club: club }))}</h2>
+        <p>${escHtml(HUB_COPY.howBody)}</p>
+        <p class="seo-more-links"><a href="/rankings" onclick="event.preventDefault();navigate('/rankings')">Best Football Fan YouTubers Ranked</a></p>
+      </section>
+      ${related.length ? `
+      <section class="hub-section" id="clubRelatedNews" data-hub-related="1">
+        <h2 class="hub-h2">${escHtml(HUB_COPY.h2Related)}</h2>
+        <ul class="seo-list">
+          ${related.map(name => `<li><a href="${clubPath(name)}" onclick="event.preventDefault();navigate('${clubPath(name)}')">${escHtml(seoFill(HUB_COPY.relatedAnchor, { Club: name }))}</a></li>`).join('')}
+        </ul>
+      </section>` : '<div id="clubRelatedNews"></div>'}
+    </div>
+    ${renderFooter()}
+  `;
+  loadClubRelatedNews(club);
+}
+
 // ── Render: Club Page ─────────────────────────────────────────────────────
 function renderClubPage(club) {
+  if (club !== 'Multi-Club / Other') {
+    renderClubHub(club);
+    return;
+  }
   const params = new URLSearchParams(location.search);
   const sort = params.get('sort') || 'subs';
   let clubCreators = creators.filter(c => c.team === club);
@@ -2708,14 +2924,20 @@ async function loadClubRelatedNews(club) {
   if (!el) return;
   try {
     const { data, error } = await sb.from('frfc_articles')
-      .select('slug,title,summary,cover_image_url,tags,published_at')
+      .select('slug,title,summary,cover_image_url,tags,related_team,published_at')
       .eq('status', 'published')
-      .eq('related_team', club)
+      .eq('related_team', clubSlug(club))
       .order('published_at', { ascending: false })
       .limit(3);
     if (error || !data || !data.length) return;
     // Bail if the user has already navigated elsewhere by the time this resolves.
     if (currentRoute.page !== 'club' || currentRoute.club !== club) return;
+    if (club !== 'Multi-Club / Other') {
+      const list = `<ul class="seo-list">${data.map(a => `<li><a href="/news/${escHtml(a.slug)}" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">${escHtml(a.title)}</a></li>`).join('')}</ul>`;
+      if (el.dataset.hubRelated === '1') el.insertAdjacentHTML('beforeend', list);
+      else el.innerHTML = `<section class="hub-section"><h2 class="hub-h2">${escHtml(HUB_COPY.h2Related)}</h2>${list}</section>`;
+      return;
+    }
     el.innerHTML = `
       <div class="sc-card" style="margin-top:20px">
         <div class="sc-head"><div class="sc-head-title">${crestImg(club, 'crest-sm')} ${escHtml(club)} in the News</div></div>
@@ -3520,7 +3742,7 @@ function creatorLinksHTML(links) {
 function newsCardHTML(a) {
   return `
     <a href="/news/${escHtml(a.slug)}" class="news-card" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">
-      ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="" class="news-card-thumb" loading="lazy"></div>` : ''}
+      ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="${escHtml(articleCoverAlt(a.related_team, a.title))}" class="news-card-thumb" loading="lazy"></div>` : ''}
       <div class="news-card-body">
         ${a.tags && a.tags.length ? `<div class="news-card-tags">${a.tags.slice(0, 2).map(t => `<span class="news-card-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
         <div class="news-card-title">${escHtml(a.title)}</div>
@@ -3539,7 +3761,7 @@ function newsCardHTML(a) {
 function newsCardCompactHTML(a) {
   return `
     <a href="/news/${escHtml(a.slug)}" class="news-card news-card-compact" onclick="event.preventDefault();navigate('/news/${escHtml(a.slug)}')">
-      ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="" class="news-card-thumb" loading="lazy"></div>` : ''}
+      ${a.cover_image_url ? `<div class="news-card-thumb-wrap"><img src="${escHtml(a.cover_image_url)}" alt="${escHtml(articleCoverAlt(a.related_team, a.title))}" class="news-card-thumb" loading="lazy"></div>` : ''}
       <div class="news-card-body">
         <div class="news-card-title">${escHtml(a.title)}</div>
         ${a.summary ? `<div class="news-card-summary news-card-summary-clamp">${escHtml(a.summary)}</div>` : ''}
@@ -3575,7 +3797,7 @@ async function loadNewsPage(replace) {
   const moreBtn = document.getElementById('newsLoadMore');
   try {
     const { data, error } = await sb.from('frfc_articles')
-      .select('slug,title,summary,cover_image_url,tags,published_at')
+      .select('slug,title,summary,cover_image_url,tags,related_team,published_at')
       .eq('status', 'published')
       .order('published_at', { ascending: false })
       .range(newsOffset, newsOffset + NEWS_PAGE_SIZE - 1);
@@ -3606,7 +3828,7 @@ async function renderNewsArticle(slug) {
     return;
   }
 
-  updatePageMeta(`${article.title} | FanReactionsFC News`, metaDescText(article.summary, 155), firstPartyCoverUrl(article.cover_image_url));
+  updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), firstPartyCoverUrl(article.cover_image_url));
 
   sb.rpc('increment_article_view', { article_id: article.id }).then(() => {});
 
@@ -3618,18 +3840,17 @@ async function renderNewsArticle(slug) {
             <div class="page-hero-eyebrow">News${article.tags && article.tags.length ? ' &middot; ' + escHtml(article.tags[0]) : ''}</div>
             <h1 class="page-hero-title">${escHtml(article.title)}</h1>
             ${article.dek ? `<p class="page-hero-subtitle">${escHtml(article.dek)}</p>` : ''}
-            <div class="news-article-meta">${article.published_at ? new Date(article.published_at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : ''}</div>
+            ${articleDateLine(article.published_at, article.updated_at) ? `<div class="news-article-meta">${escHtml(articleDateLine(article.published_at, article.updated_at))}</div>` : ''}
           </div>
         </div>
       </div>
     </div>
     <div class="container container-narrow section">
-      ${firstPartyCoverUrl(article.cover_image_url) ? `<img src="${escHtml(firstPartyCoverUrl(article.cover_image_url))}" alt="" class="news-article-cover">` : ''}
+      ${firstPartyCoverUrl(article.cover_image_url) ? `<img src="${escHtml(firstPartyCoverUrl(article.cover_image_url))}" alt="${escHtml(articleCoverAlt(article.related_team, article.title))}" class="news-article-cover">` : ''}
       <div class="news-article-body">${newsBodyHTML(article.body)}</div>
-      ${article.related_team ? `
+      ${articleMoreLabel(article.related_team) ? `
       <div class="news-article-related">
-        <span>More on</span>
-        <a href="${clubPath(article.related_team)}" onclick="event.preventDefault();navigate('${clubPath(article.related_team)}')">${crestImg(article.related_team, 'crest-sm')} ${escHtml(article.related_team)}</a>
+        <a href="${clubPath(articleClubName(article.related_team))}" onclick="event.preventDefault();navigate('${clubPath(articleClubName(article.related_team))}')">${escHtml(articleMoreLabel(article.related_team))}</a>
       </div>` : ''}
       ${creatorLinksHTML(article.creator_links)}
       ${newsletterSignupHTML('article')}

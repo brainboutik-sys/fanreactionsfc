@@ -111,7 +111,9 @@ test('article titles use the club display name and stay within 60 characters', (
   });
   assert.match(two, /Coventry/);
   assert.match(two, /Newcastle/);
-  assert.match(two, /fan YouTubers/);
+  // "Coventry and Newcastle fan YouTubers react to 4-1 | FanReactionsFC" is 66
+  // characters, so the score is not clipped off a dangling "to".
+  assert.equal(two, 'Coventry and Newcastle YouTubers react | FanReactionsFC');
   assert.ok(two.length <= 60, two + ' (' + two.length + ')');
 
   const preview = seo.articleSeoTitle({
@@ -249,6 +251,113 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
     if (prev === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = prev;
   }
+});
+
+test('article sentences do not split on decimals or abbreviations', () => {
+  const fee = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers react to the fee',
+    related_team: 'chelsea',
+    summary: 'The deal is a £1.5m move. Nothing is signed yet.',
+  });
+  assert.match(fee, /The deal is a £1\.5m move\./);
+  assert.doesNotMatch(fee, /£1\.(?!\d)/);
+
+  const mr = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers react to the exit',
+    related_team: 'chelsea',
+    summary: 'Mr. Jones left the club on Friday. Fans reacted overnight.',
+  });
+  assert.match(mr, /Mr\. Jones left the club on Friday\./);
+
+  const st = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers react to the result',
+    related_team: 'chelsea',
+    summary: 'St. Pauli beat the hosts away. The rooms reacted.',
+  });
+  assert.match(st, /St\. Pauli beat the hosts away\./);
+
+  const vs = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers react to the tie',
+    related_team: 'chelsea',
+    summary: 'It is Chelsea vs. Arsenal on Sunday. Kick-off is early.',
+  });
+  assert.match(vs, /vs\. Arsenal on Sunday\./);
+});
+
+test('article titles and metas stay clean on the published catalogue', () => {
+  const rows = JSON.parse(fs.readFileSync(path.join(root, 'test/fixtures/published-articles.json'), 'utf8'));
+  assert.ok(rows.length >= 60, 'expected the published snapshot');
+  const dangling = new Set('to a an the at on of in and fan for as with from by v vs or out up into over after can could would will may might shall than'.split(' '));
+  const nameOut = /\b[A-Z][\w'’.-]+(?:\s+[A-Z][\w'’.-]+)*\s+out$/;
+
+  for (const row of rows) {
+    const title = seo.articleSeoTitle(row);
+    const meta = seo.articleSeoMeta(row);
+    const core = title.replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+    const titleLast = (core.split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z]/g, '');
+    assert.ok(title.length <= 60, row.slug + ' title ' + title.length + ' ' + title);
+    assert.match(title, /\| FanReactionsFC$/, row.slug);
+    if (!(titleLast === 'out' && nameOut.test(core))) {
+      assert.equal(dangling.has(titleLast), false, row.slug + ' title ends on ' + titleLast + ': ' + title);
+    }
+    assert.ok(meta.length <= 155 && meta.length > 0, row.slug + ' meta ' + meta.length + ' ' + meta);
+    assert.match(meta, /[.!?]$/, row.slug + ' meta ' + meta);
+    assert.match(meta, /[A-Za-z]/, row.slug + ' meta ' + meta);
+    const metaLast = (meta.slice(0, -1).trim().split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z]/g, '');
+    assert.equal(dangling.has(metaLast), false, row.slug + ' meta ends on ' + metaLast + ': ' + meta);
+    assert.doesNotMatch(title + '\n' + meta, /\$|undefined|null/i, row.slug);
+    if (/\bpreview\b/i.test(row.title)) assert.doesNotMatch(meta, /\breact to\b/, row.slug + ' ' + meta);
+  }
+
+  const at = (slug) => rows.find((row) => row.slug === slug);
+  const alonso = seo.articleSeoMeta(at('chelsea-youtubers-react-as-alonsos-blues-hang-on-4-3'));
+  assert.match(alonso, /Stamford Bridge\./);
+  assert.doesNotMatch(alonso, /\bat\.$/);
+
+  const friedkin = at('everton-youtubers-react-as-the-friedkin-group-put-the-club-up-for-sale');
+  assert.equal(seo.articleSeoMeta(friedkin), 'Everton fan YouTubers react.');
+  assert.doesNotMatch(seo.articleSeoTitle(friedkin), /react to the Friedkin Group put/);
+
+  const barcola = at('liverpool-youtubers-react-as-barcola-deal-nears');
+  assert.match(seo.articleSeoMeta(barcola), /Bradley Barcola\./);
+  assert.doesNotMatch(seo.articleSeoMeta(barcola), /\bin\.$/);
+  assert.doesNotMatch(seo.articleSeoTitle(barcola), /Nears/);
+
+  const atletico = at('liverpool-youtubers-preview-atletico-at-anfield');
+  assert.doesNotMatch(seo.articleSeoMeta(atletico), /Wednesday 9\./);
+  assert.doesNotMatch(seo.articleSeoTitle(atletico), /react: at Anfield/);
+  assert.doesNotMatch(seo.articleSeoMeta(atletico), /\breact to\b/);
+
+  const ward = at('liverpool-youtubers-react-as-julian-ward-nears-sporting-director-return');
+  assert.doesNotMatch(seo.articleSeoMeta(ward), /\bto\.$/);
+  assert.doesNotMatch(seo.articleSeoTitle(ward), /nears/);
+
+  const burwell = at('sunderland-youtubers-react-to-tom-burwells-sudden-exit');
+  assert.doesNotMatch(seo.articleSeoMeta(burwell), /\bwith\.$/);
+
+  const madrid = at('united-youtubers-react-as-martinez-calls-out-the-board-after-a-2-0-in-madrid');
+  assert.doesNotMatch(seo.articleSeoTitle(madrid), /out board/);
+  assert.doesNotMatch(seo.articleSeoMeta(madrid), /\bthe\.$/);
+
+  const bridge = at('chelsea-and-bournemouth-youtubers-preview-saturday-afternoon-at-stamford-bridge');
+  assert.doesNotMatch(seo.articleSeoTitle(bridge), /preview: fan \|/);
+  assert.equal(seo.articleSeoMeta(bridge), 'Chelsea and Bournemouth fan YouTubers react.');
+
+  const derby = at('united-and-city-youtubers-preview-the-manchester-derby');
+  assert.doesNotMatch(seo.articleSeoTitle(derby), /\bthe \|/);
+
+  const greece = at('arsenal-youtubers-react-to-tzolis-injury-on-greece-duty');
+  assert.doesNotMatch(seo.articleSeoTitle(greece), /on Greece duty/);
+  const germany = at('arsenal-youtubers-react-to-havertz-injury-on-germany-duty');
+  assert.doesNotMatch(seo.articleSeoTitle(germany), /on Germany duty/);
+
+  const draw = at('arsenal-face-real-madrid-and-bayern-as-fan-channels-react-to-the-ucl-draw');
+  assert.doesNotMatch(seo.articleSeoTitle(draw), /React UCL Draw/);
+
+  const brighton = at('brighton-and-arsenal-youtubers-react-to-a-3-0-at-the-amex');
+  assert.doesNotMatch(seo.articleSeoTitle(brighton), /react to \|/);
+  const palace = at('leeds-and-crystal-palace-youtubers-react-to-a-0-0-at-elland-road');
+  assert.match(seo.articleSeoTitle(palace), /react to 0–0 \|/);
 });
 
 test('static homepage shell does not say Loading', () => {

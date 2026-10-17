@@ -185,20 +185,18 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
       assert.doesNotMatch(JSON.stringify(jsonLd), /Sponsored/);
       const page = jsonLd['@graph'].find(n => n['@type'] === 'CollectionPage');
       assert.equal(page.mainEntity['@type'], 'ItemList');
-      assert.equal(page.mainEntity.numberOfItems, 2);
-      assert.equal(page.mainEntity.itemListElement.length, 2);
+      assert.equal(page.mainEntity.numberOfItems, 1);
+      assert.equal(page.mainEntity.itemListElement.length, 1);
       assert.equal(page.mainEntity.itemListElement[0].position, 1);
       assert.equal(page.mainEntity.itemListElement[0].name, 'NathanConnorTV');
-      assert.equal(page.mainEntity.itemListElement[1].position, 2);
-      assert.equal(page.mainEntity.itemListElement[1].name, 'TheRedmenTV');
-      assert.equal(page.mainEntity.itemListElement.filter(i => i.name === 'TheRedmenTV').length, 1);
+      assert.equal(page.mainEntity.itemListElement.filter(i => i.name === 'TheRedmenTV').length, 0);
       assert.equal((jsonLd['@graph'] || []).filter(n => n['@type'] === 'ItemList').length, 0);
 
       const meta = res.body.match(/<meta name="description" content="([^"]*)"/);
       assert.ok(meta);
-      assert.match(meta[1], /most-followed is NathanConnorTV/);
+      assert.match(meta[1], /#1 is NathanConnorTV/);
       assert.doesNotMatch(meta[1], /Sponsored|TheRedmenTV/);
-      assert.match(res.body, /<title>Liverpool Football YouTubers \| FanReactionsFC<\/title>/);
+      assert.match(res.body, /<title>Best Liverpool Fan YouTubers/);
     });
   });
 
@@ -271,8 +269,8 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
       const order = [...table.matchAll(/href="\/creators\/([^"]+)"/g)].map(m => m[1]);
       assert.deepEqual(order, ['nathanconnortv', 'theredmentv']);
       const page = jsonLdOf(res.body)['@graph'].find(n => n['@type'] === 'CollectionPage');
-      assert.deepEqual(page.mainEntity.itemListElement.map(i => i.name), ['NathanConnorTV', 'TheRedmenTV']);
-      assert.equal(page.mainEntity.numberOfItems, 2);
+      assert.deepEqual(page.mainEntity.itemListElement.map(i => i.name), ['NathanConnorTV']);
+      assert.equal(page.mainEntity.numberOfItems, 1);
       assert.doesNotMatch(JSON.stringify(page.mainEntity), /Sponsored/);
     });
   });

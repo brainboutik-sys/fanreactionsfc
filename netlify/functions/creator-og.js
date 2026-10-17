@@ -306,7 +306,7 @@ exports.handler = async (event) => {
             <p class="cp-hero-desc">${esc(creator.description || `${creator.name} is a ${creator.team} football YouTuber on FanReactionsFC.`)}</p>
             <div class="cp-hero-actions">
               ${creator.channel_url ? `<a href="${esc(creator.channel_url)}" rel="noopener" class="btn btn-accent">Watch on YouTube</a>` : ''}
-              ${creator.team ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">More ${esc(creator.team)} creators</a>` : ''}
+              ${creator.team && creator.team !== 'Multi-Club / Other' ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">best ${esc(creator.team)} fan YouTubers</a>` : (creator.team ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">More ${esc(creator.team)} creators</a>` : '')}
             </div>
           </div>
         </div>
@@ -319,7 +319,7 @@ exports.handler = async (event) => {
         <div class="cp-section-card">
           <div class="cp-section-head">
             <span class="cp-section-label">More ${esc(creator.team)} Creators</span>
-            <a href="${clubPath(creator.team)}" class="cp-section-link">View all &rarr;</a>
+            <a href="${clubPath(creator.team)}" class="cp-section-link">${creator.team && creator.team !== 'Multi-Club / Other' ? `best ${esc(creator.team)} fan YouTubers` : 'View all &rarr;'}</a>
           </div>
           <ul class="seo-list">
             ${similar.map(s => `<li><a href="/creators/${esc(s.slug || slugify(s.name))}">${esc(s.name)}</a>${s.subscriber_count ? ` · ${formatNum(s.subscriber_count)} subscribers` : ''} — <a href="${clubPath(s.team)}">${esc(s.team)}</a></li>`).join('')}

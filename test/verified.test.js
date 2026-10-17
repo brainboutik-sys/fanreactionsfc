@@ -165,7 +165,7 @@ test('club pin and streamwall order do not rewrite organic ranking', async () =>
       const res = await club.handler({ path: '/clubs/arsenal' });
       assert.equal(res.statusCode, 200);
       assert.match(res.body, /class="club-verified-slot"/);
-      assert.match(res.body, /id="club-verified-heading">Verified creators/);
+      assert.match(res.body, /id="club-verified-heading"[^>]*>Verified creators/);
       assert.doesNotMatch(res.body, /class="sponsored-slot"/);
       const raw = res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       const jsonLd = JSON.parse(raw[1]);
@@ -179,7 +179,7 @@ test('club pin and streamwall order do not rewrite organic ranking', async () =>
       assert.match(slot, /Pinned Channel/);
       assert.doesNotMatch(slot, /Expired Channel/);
       assert.doesNotMatch(slot, /Big Channel/);
-      assert.match(res.body, /The most-followed is Expired Channel/);
+      assert.match(res.body, /#1 is Expired Channel/);
 
       const wall = require('../netlify/functions/streamwall.js');
       const live = await wall.handler({ path: '/streamwall' });

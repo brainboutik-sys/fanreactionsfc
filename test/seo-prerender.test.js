@@ -39,9 +39,9 @@ test('club-og prerenders unique H1/canonical for /clubs/arsenal without homepage
   await withCwd(async () => {
     const res = await handler({ path: '/clubs/arsenal' });
     assert.equal(res.statusCode, 200);
-    assert.match(res.body, /<h1 class="page-hero-title">Arsenal Football YouTubers<\/h1>/);
+    assert.match(res.body, /<h1 class="page-hero-title">Best Arsenal Fan YouTubers<\/h1>/);
     assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/clubs\/arsenal"/);
-    assert.match(res.body, /<title>Arsenal Football YouTubers/);
+    assert.match(res.body, /<title>Best Arsenal Fan YouTubers/);
     assert.doesNotMatch(res.body, /Discover the best football/);
     assert.match(res.body, /ItemList/);
     assert.match(res.body, /SportsTeam/);

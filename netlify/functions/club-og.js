@@ -12,6 +12,357 @@ const path = require('path');
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SITE_URL = 'https://fanreactionsfc.com';
 
+// SEO_COPY_START
+// ── Club hub templates ────────────────────────────────────────────────────
+const HUB_TITLE_MAX = 60;
+const HUB_META_MAX = 155;
+const HUB_COPY = {
+  titleFull: 'Best {Club} Fan YouTubers ({YYYY}) – Ranked | FanReactionsFC',
+  titleShort: 'Best {Club} Fan YouTubers {YYYY} | FanReactionsFC',
+  meta: 'The {N} best {Club} fan YouTubers ranked: watchalongs, reactions and fan TV. #1 is {Top}. Updated {Month YYYY}.',
+  metaNoRank: '{Club} fan YouTubers: watchalongs, reactions and fan TV. Updated {Month YYYY}.',
+  h1: 'Best {Club} Fan YouTubers',
+  intro: 'The best {Club} fan YouTuber right now is {Top}, the most-followed of {N} {Club} fan channels in our directory. Fan Reactions FC ranks independent fan channels only (watchalongs, match reactions and fan TV), never official club accounts.',
+  method: 'Ranked by subscribers. Updated {Month YYYY}.',
+  h2Ranked: 'Top {N} {Club} Fan YouTubers Ranked',
+  h2Videos: 'Latest {Club} Fan Videos',
+  h2Faq: '{Club} Fan YouTubers FAQ',
+  h2How: 'How We Rank {Club} Fan Channels',
+  h2Related: 'Related',
+  howBody: 'Channels are ranked by YouTube subscribers, refreshed regularly. Only independent fan channels are listed.',
+  faqBiggestQ: 'Who is the biggest {Club} fan YouTuber?',
+  faqBiggestA: '{Top} is the most-followed {Club} fan channel in our directory, with {subs} subscribers.',
+  faqWatchQ: 'Which {Club} fan YouTubers do watchalongs?',
+  faqWatchA: '{Names} do {Club} watchalongs.',
+  faqWatchAOne: '{Names} does {Club} watchalongs.',
+  faqHowQ: 'How is this {Club} ranking made?',
+  faqHowA: 'Channels are ranked by YouTube subscribers, refreshed regularly. Only independent fan channels are listed.',
+  faqListQ: 'How do I get my {Club} channel listed?',
+  faqListA: 'Submit it on the Become a creator page. Listing is free.',
+  avatarAlt: '{Channel} - {Club} fan YouTuber',
+  relatedAnchor: '{Club} fan YouTubers',
+};
+
+// ── Article templates ─────────────────────────────────────────────────────
+const ARTICLE_TITLE_MAX = 60;
+const ARTICLE_META_MAX = 155;
+const ARTICLE_TITLE_SUFFIX = ' | FanReactionsFC';
+const ARTICLE_COPY = {
+  title: '{Club} fan YouTubers react: {Event} | FanReactionsFC',
+  twoClub: '{A} and {B} fan YouTubers react to {Score}',
+  preview: '{A} v {B} preview: fan YouTubers',
+  metaLead: '{Club} fan YouTubers react to {Event}.',
+  more: 'More {Club} fan YouTubers',
+  coverAlt: '{Club} fan YouTubers react: {Headline}',
+  updated: 'Updated {Date}',
+  published: 'Published {Date}',
+};
+
+// Display names are the existing short names (Man City, not Manchester City).
+// Headline aliases only where the longer name is unambiguous.
+const SEO_CLUB_NAMES = [
+  'Arsenal','Aston Villa','Bournemouth','Brentford','Brighton','Chelsea','Coventry','Crystal Palace','Everton','Fulham','Hull City','Ipswich','Leeds United','Liverpool','Man City','Man United','Newcastle','Nottm Forest','Sunderland','Tottenham',
+  'Birmingham','Blackburn','Bristol City','Burnley','Charlton','Derby','Leicester','Middlesbrough','Millwall','Norwich','Oxford Utd','Portsmouth','Preston','QPR','Sheffield Utd','Sheffield Wed','Southampton','Stoke','Swansea','Watford','West Brom','West Ham','Wolves','Wrexham','Luton',
+  'Barcelona','Real Madrid','Atletico Madrid','Sevilla','Real Betis','Real Sociedad','Villarreal','Athletic Bilbao','Valencia','Celta Vigo','Espanyol','Getafe','Osasuna','Mallorca','Rayo Vallecano','Girona','Las Palmas','Alaves','Valladolid','Leganes',
+  'Juventus','AC Milan','Inter Milan','Napoli','Roma','Lazio','Atalanta','Fiorentina','Bologna','Torino','Udinese','Monza','Empoli','Genoa','Cagliari','Lecce','Hellas Verona','Parma','Venezia','Como',
+  'Bayern Munich','Borussia Dortmund','RB Leipzig','Bayer Leverkusen','Union Berlin','Freiburg','Eintracht Frankfurt','Wolfsburg','Mainz','Borussia Monchengladbach','Hoffenheim','Werder Bremen','Augsburg','Bochum','Heidenheim','Stuttgart','Holstein Kiel','St. Pauli',
+  'PSG','Marseille','Lyon','Monaco','Lille','Nice','Rennes','Lens','Strasbourg','Nantes','Montpellier','Toulouse','Brest','Reims','Le Havre','Auxerre','Angers','Saint-Etienne',
+];
+const SEO_CLUB_SLUG_OVERRIDES = {
+  'Man United': 'manchester-united',
+  'Man City': 'manchester-city',
+  'Nottm Forest': 'nottingham-forest',
+  'Oxford Utd': 'oxford-united',
+  'Sheffield Utd': 'sheffield-united',
+  'Sheffield Wed': 'sheffield-wednesday',
+  'West Brom': 'west-bromwich-albion',
+};
+const SEO_HEADLINE_ALIASES = [
+  ['Manchester City', 'Man City'],
+  ['Manchester United', 'Man United'],
+  ['Man Utd', 'Man United'],
+  ['Nottingham Forest', 'Nottm Forest'],
+  ['Paris Saint-Germain', 'PSG'],
+  ['Newcastle United', 'Newcastle'],
+  ['West Ham United', 'West Ham'],
+  ['Wolverhampton', 'Wolves'],
+  ['Spurs', 'Tottenham'],
+];
+
+function seoFill(template, vars) {
+  return String(template).replace(/\{([A-Za-z0-9 ]+)\}/g, function (_, key) {
+    return vars && vars[key] != null ? String(vars[key]) : '';
+  });
+}
+
+function seoSlugify(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function seoAsDate(now) {
+  if (now instanceof Date) return now;
+  const d = now ? new Date(now) : new Date();
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+function seoYear(now) {
+  return String(seoAsDate(now).getUTCFullYear());
+}
+
+function seoMonthYear(now) {
+  return seoAsDate(now).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+function seoClip(text, max) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, Math.max(0, max - 1));
+  const sp = cut.lastIndexOf(' ');
+  return ((sp > 40 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '')).trim() + '…';
+}
+
+function seoClipWords(text, max) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t || max <= 0) return '';
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max + 1);
+  const sp = cut.lastIndexOf(' ');
+  const out = (sp > 0 ? t.slice(0, sp) : t.slice(0, max)).trim();
+  return out.replace(/[.,;:–\-]+$/, '').trim();
+}
+
+function hubTitle(club, now) {
+  const yyyy = seoYear(now);
+  const full = seoFill(HUB_COPY.titleFull, { Club: club, YYYY: yyyy });
+  if (full.length <= HUB_TITLE_MAX) return full;
+  return seoFill(HUB_COPY.titleShort, { Club: club, YYYY: yyyy });
+}
+
+function hubH1(club) {
+  return seoFill(HUB_COPY.h1, { Club: club });
+}
+
+function hubMeta(club, count, topName, now) {
+  const month = seoMonthYear(now);
+  const n = Number(count) || 0;
+  if (!topName || n < 1) {
+    return seoClip(seoFill(HUB_COPY.metaNoRank, { Club: club, 'Month YYYY': month }), HUB_META_MAX);
+  }
+  return seoClip(seoFill(HUB_COPY.meta, {
+    N: n,
+    Club: club,
+    Top: topName,
+    'Month YYYY': month,
+  }), HUB_META_MAX);
+}
+
+function hubIntro(club, count, topName) {
+  if (!topName || !(Number(count) > 0)) return '';
+  return seoFill(HUB_COPY.intro, { Club: club, N: count, Top: topName });
+}
+
+function hubMethod(now) {
+  return seoFill(HUB_COPY.method, { 'Month YYYY': seoMonthYear(now) });
+}
+
+function hubRankedHeading(club, count) {
+  const n = Number(count) || 0;
+  if (n < 1) return '';
+  return seoFill(HUB_COPY.h2Ranked, { N: n, Club: club });
+}
+
+function hubAvatarAlt(channel, club) {
+  return seoFill(HUB_COPY.avatarAlt, { Channel: channel, Club: club });
+}
+
+// #1 / "most-followed" copy skips the paid slot. If that slot IS the
+// subscriber leader, there is no #1 claim (the visible rank list is unchanged).
+function hubClaimTop(creators, sponsored) {
+  const list = creators || [];
+  const leader = list[0];
+  if (!leader || !leader.name) return null;
+  const sid = sponsored && sponsored.id;
+  if (sid && leader.id === sid) return null;
+  const subs = leader.subscriber_count != null ? leader.subscriber_count : leader.subscriberCount;
+  if (!(Number(subs) > 0)) return null;
+  return leader;
+}
+
+function seoNameList(names) {
+  const list = (names || []).filter(Boolean);
+  if (list.length <= 1) return list[0] || '';
+  if (list.length === 2) return list[0] + ' and ' + list[1];
+  return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+}
+
+function buildHubFaqs(opts) {
+  const club = opts && opts.club;
+  const faqs = [];
+  if (opts && opts.topName && opts.subs) {
+    faqs.push({
+      q: seoFill(HUB_COPY.faqBiggestQ, { Club: club }),
+      a: seoFill(HUB_COPY.faqBiggestA, { Club: club, Top: opts.topName, subs: opts.subs }),
+    });
+  }
+  const watch = (opts && opts.watchNames) || [];
+  if (watch.length) {
+    faqs.push({
+      q: seoFill(HUB_COPY.faqWatchQ, { Club: club }),
+      a: seoFill(watch.length === 1 ? HUB_COPY.faqWatchAOne : HUB_COPY.faqWatchA, {
+        Club: club,
+        Names: seoNameList(watch),
+      }),
+    });
+  }
+  faqs.push({
+    q: seoFill(HUB_COPY.faqHowQ, { Club: club }),
+    a: HUB_COPY.faqHowA,
+  });
+  faqs.push({
+    q: seoFill(HUB_COPY.faqListQ, { Club: club }),
+    a: HUB_COPY.faqListA,
+  });
+  return faqs;
+}
+
+function seoEscapeReg(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function seoClubMatchList() {
+  const rows = SEO_CLUB_NAMES.map(function (name) { return { label: name, display: name }; });
+  SEO_HEADLINE_ALIASES.forEach(function (pair) { rows.push({ label: pair[0], display: pair[1] }); });
+  rows.sort(function (a, b) { return b.label.length - a.label.length; });
+  return rows;
+}
+
+function articleClubName(related) {
+  const raw = String(related || '').trim();
+  if (!raw || /^(none|null|n\/a|undefined)$/i.test(raw)) return '';
+  if (/^multi-club/i.test(raw)) return '';
+  for (let i = 0; i < SEO_CLUB_NAMES.length; i++) {
+    if (SEO_CLUB_NAMES[i].toLowerCase() === raw.toLowerCase()) return SEO_CLUB_NAMES[i];
+  }
+  const slug = seoSlugify(raw);
+  if (!slug || slug === 'none' || slug === 'multi-club') return '';
+  const keys = Object.keys(SEO_CLUB_SLUG_OVERRIDES);
+  for (let i = 0; i < keys.length; i++) {
+    if (SEO_CLUB_SLUG_OVERRIDES[keys[i]] === slug) return keys[i];
+  }
+  for (let i = 0; i < SEO_CLUB_NAMES.length; i++) {
+    if (seoSlugify(SEO_CLUB_NAMES[i]) === slug) return SEO_CLUB_NAMES[i];
+  }
+  return '';
+}
+
+function clubsInHeadline(headline) {
+  const text = String(headline || '');
+  const found = [];
+  seoClubMatchList().forEach(function (row) {
+    if (found.some(function (f) { return f.display === row.display; })) return;
+    const re = new RegExp('\\b' + seoEscapeReg(row.label) + '\\b', 'i');
+    const idx = text.search(re);
+    if (idx >= 0) found.push({ display: row.display, index: idx });
+  });
+  found.sort(function (a, b) { return a.index - b.index; });
+  return found.map(function (f) { return f.display; });
+}
+
+function eventFromHeadline(headline) {
+  let s = String(headline || '').replace(/\s+/g, ' ').trim();
+  const react = s.match(/\bYouTubers\s+react\s+(?:as|to)\s+(.+)$/i);
+  const preview = s.match(/\bYouTubers\s+preview\s+(.+)$/i);
+  if (react) s = react[1];
+  else if (preview) s = preview[1];
+  return s.replace(/^[\s,.:;\-–]+/, '').replace(/[.\s]+$/, '').trim();
+}
+
+function fitArticleTitle(core) {
+  let c = String(core || '').replace(/\s+/g, ' ').trim();
+  c = c.replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+  if (!c) c = 'FanReactionsFC';
+  const full = c + ARTICLE_TITLE_SUFFIX;
+  if (full.length <= ARTICLE_TITLE_MAX) return full;
+  return seoClipWords(c, ARTICLE_TITLE_MAX - ARTICLE_TITLE_SUFFIX.length) + ARTICLE_TITLE_SUFFIX;
+}
+
+function articleSeoTitle(article) {
+  const headline = (article && (article.title || article.headline)) || '';
+  const primary = articleClubName(article && (article.related_team || article.relatedTeam));
+  const mentioned = clubsInHeadline(headline);
+  const other = mentioned.filter(function (name) { return name !== primary; })[0] || '';
+  const pair = !primary && mentioned.length >= 2 ? mentioned : null;
+  const a = primary || (pair ? pair[0] : '');
+  const b = primary ? other : (pair ? pair[1] : '');
+  const scoreMatch = String(headline).match(/\b\d{1,2}\s*[-–]\s*\d{1,2}\b/);
+  const score = scoreMatch ? scoreMatch[0].replace(/\s+/g, '') : '';
+  if (a && b && /\bpreview\b/i.test(headline)) {
+    return fitArticleTitle(seoFill(ARTICLE_COPY.preview, { A: a, B: b }));
+  }
+  if (a && b && score && /\breact\b/i.test(headline)) {
+    return fitArticleTitle(seoFill(ARTICLE_COPY.twoClub, { A: a, B: b, Score: score }));
+  }
+  if (primary) {
+    const event = eventFromHeadline(headline);
+    const prefix = primary + ' fan YouTubers react: ';
+    const budget = ARTICLE_TITLE_MAX - ARTICLE_TITLE_SUFFIX.length - prefix.length;
+    const shortEvent = seoClipWords(event, budget);
+    if (shortEvent) return prefix + shortEvent + ARTICLE_TITLE_SUFFIX;
+    return fitArticleTitle(primary + ' fan YouTubers react');
+  }
+  return fitArticleTitle(headline);
+}
+
+function articleSeoMeta(article) {
+  const headline = (article && (article.title || article.headline)) || '';
+  const club = articleClubName(article && (article.related_team || article.relatedTeam));
+  const event = eventFromHeadline(headline);
+  const summary = String((article && (article.summary || article.dek)) || '').replace(/\s+/g, ' ').trim();
+  let lead = '';
+  if (club && event) lead = seoFill(ARTICLE_COPY.metaLead, { Club: club, Event: event });
+  else if (club) lead = club + ' fan YouTubers react.';
+  let text = lead;
+  if (summary) {
+    const leadFlat = lead.toLowerCase();
+    if (!leadFlat || summary.toLowerCase() !== event.toLowerCase()) {
+      text = (lead ? lead + ' ' : '') + summary;
+    }
+  }
+  if (!text) text = headline;
+  return seoClip(text, ARTICLE_META_MAX);
+}
+
+function articleMoreLabel(related) {
+  const club = articleClubName(related);
+  if (!club) return '';
+  return seoFill(ARTICLE_COPY.more, { Club: club });
+}
+
+function articleCoverAlt(relatedOrClub, headline) {
+  const fromRelated = articleClubName(relatedOrClub);
+  const club = fromRelated || (SEO_CLUB_NAMES.indexOf(relatedOrClub) >= 0 ? relatedOrClub : '');
+  const title = String(headline || '').replace(/\s+/g, ' ').trim();
+  if (club && title) return seoFill(ARTICLE_COPY.coverAlt, { Club: club, Headline: title });
+  return title;
+}
+
+function articleDateLine(published, updated) {
+  const fmt = function (d) {
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  };
+  const pub = published ? new Date(published) : null;
+  const upd = updated ? new Date(updated) : null;
+  const pubOk = pub && !Number.isNaN(pub.getTime());
+  const updOk = upd && !Number.isNaN(upd.getTime());
+  if (pubOk && updOk && Math.abs(upd.getTime() - pub.getTime()) >= 60 * 60 * 1000) {
+    return seoFill(ARTICLE_COPY.updated, { Date: fmt(upd) });
+  }
+  if (pubOk) return seoFill(ARTICLE_COPY.published, { Date: fmt(pub) });
+  return '';
+}
+
+// SEO_COPY_END
+
 const CLUB_SLUG_OVERRIDES = {
   'Man United': 'manchester-united',
   'Man City': 'manchester-city',
@@ -111,11 +462,13 @@ async function fetchAllStreamers(supabaseUrl, sbKey) {
   const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
   const order = '&order=subscriber_count.desc.nullslast&limit=1000';
   const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
+  const extended = 'id,name,slug,team,league,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description,is_verified,verified_until,content_types,latest_video_id,latest_video_title,latest_video_date,latest_video_thumbnail,upload_frequency,channel_country';
   const withTier = 'id,name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description,is_verified,verified_until';
   const legacy = 'id,name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description';
-  // Production already has is_verified and verified_until. Retry without
-  // them only if this database is older, so a club page still renders.
-  let res = await fetch(base + withTier + order, { headers });
+  // Prefer the columns the hub template renders (format, latest video,
+  // country). Fall back if this database is older so the page still renders.
+  let res = await fetch(base + extended + order, { headers });
+  if (!res.ok) res = await fetch(base + withTier + order, { headers });
   if (!res.ok) res = await fetch(base + legacy + order, { headers });
   if (!res.ok) return [];
   const rows = await res.json();
@@ -348,6 +701,136 @@ function siteGraph() {
   ];
 }
 
+// Same club → league map as js/data/teams.js. Used only to pick 4–6
+// same-league hubs that already have creators. Not a second taxonomy.
+const HUB_LEAGUE_CLUBS = {
+  'Premier League': ['Arsenal','Aston Villa','Bournemouth','Brentford','Brighton','Chelsea','Coventry','Crystal Palace','Everton','Fulham','Hull City','Ipswich','Leeds United','Liverpool','Man City','Man United','Newcastle','Nottm Forest','Sunderland','Tottenham'],
+  'Championship': ['Birmingham','Blackburn','Bristol City','Burnley','Charlton','Derby','Leicester','Middlesbrough','Millwall','Norwich','Oxford Utd','Portsmouth','Preston','QPR','Sheffield Utd','Sheffield Wed','Southampton','Stoke','Swansea','Watford','West Brom','West Ham','Wolves','Wrexham'],
+  'La Liga': ['Barcelona','Real Madrid','Atletico Madrid','Sevilla','Real Betis','Real Sociedad','Villarreal','Athletic Bilbao','Valencia','Celta Vigo','Espanyol','Getafe','Osasuna','Mallorca','Rayo Vallecano','Girona','Las Palmas','Alaves','Valladolid','Leganes'],
+  'Serie A': ['Juventus','AC Milan','Inter Milan','Napoli','Roma','Lazio','Atalanta','Fiorentina','Bologna','Torino','Udinese','Monza','Empoli','Genoa','Cagliari','Lecce','Hellas Verona','Parma','Venezia','Como'],
+  'Bundesliga': ['Bayern Munich','Borussia Dortmund','RB Leipzig','Bayer Leverkusen','Union Berlin','Freiburg','Eintracht Frankfurt','Wolfsburg','Mainz','Borussia Monchengladbach','Hoffenheim','Werder Bremen','Augsburg','Bochum','Heidenheim','Stuttgart','Holstein Kiel','St. Pauli'],
+  'Ligue 1': ['PSG','Marseille','Lyon','Monaco','Lille','Nice','Rennes','Lens','Strasbourg','Nantes','Montpellier','Toulouse','Brest','Reims','Le Havre','Auxerre','Angers','Saint-Etienne'],
+};
+const HUB_LEAGUE_OF = {};
+Object.entries(HUB_LEAGUE_CLUBS).forEach(([league, teams]) => {
+  teams.forEach(t => { HUB_LEAGUE_OF[t] = league; });
+});
+
+function relatedHubClubs(club, directory) {
+  const league = HUB_LEAGUE_OF[club];
+  if (!league) return [];
+  const counts = {};
+  for (const row of directory || []) {
+    const team = row && row.team;
+    if (!team || team === club || team === 'Multi-Club / Other') continue;
+    if (HUB_LEAGUE_OF[team] !== league) continue;
+    counts[team] = (counts[team] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 6)
+    .map(([name]) => name);
+}
+
+function watchalongNames(creators) {
+  return (creators || []).filter(c => {
+    const types = c.content_types || c.contentTypes || [];
+    return types.some(t => String(t).toLowerCase() === 'watchalong');
+  }).slice(0, 3).map(c => c.name).filter(Boolean);
+}
+
+function oneSentence(description) {
+  const text = String(description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  const sentenceMatch = text.match(/^.*?[.!?](\s|$)/);
+  const sentence = (sentenceMatch ? sentenceMatch[0] : text).trim();
+  if (sentence.length <= 180) return sentence;
+  const clipped = sentence.slice(0, 177);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return ((lastSpace > 80 ? clipped.slice(0, lastSpace) : clipped).trim()) + '…';
+}
+
+function syncedMonth(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function videoDay(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function latestFanVideos(creators) {
+  return (creators || [])
+    .map(c => ({
+      id: c.latest_video_id || '',
+      title: c.latest_video_title || '',
+      date: c.latest_video_date || '',
+      thumb: c.latest_video_thumbnail || '',
+      name: c.name || '',
+      slug: c.slug || slugify(c.name || ''),
+    }))
+    .filter(v => v.id && v.name)
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .slice(0, 8);
+}
+
+// Paid slot is omitted. Positions stay the organic subscriber ranks, so a
+// sponsor at rank 2 leaves a gap rather than renumbering everyone above them.
+function hubItemList(club, creators, sponsored) {
+  const sid = sponsored && sponsored.id;
+  const elements = [];
+  (creators || []).forEach((c, i) => {
+    if (!c || !c.name) return;
+    if (sid && c.id === sid) return;
+    const slug = c.slug || slugify(c.name);
+    const itemUrl = `${SITE_URL}/creators/${slug}`;
+    const node = { '@type': 'Person', name: c.name, url: itemUrl };
+    if (/^https?:\/\//i.test(c.channel_url || '')) node.sameAs = c.channel_url;
+    if (/^https?:\/\//i.test(c.avatar_url || '')) node.image = c.avatar_url;
+    elements.push({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: itemUrl,
+      name: c.name,
+      item: node,
+    });
+  });
+  return {
+    '@type': 'ItemList',
+    name: `Best ${club} fan YouTubers`,
+    numberOfItems: elements.length,
+    itemListOrder: 'https://schema.org/ItemListOrderDescending',
+    itemListElement: elements,
+  };
+}
+
+function faqAnswerHtml(faq) {
+  if (faq.a === HUB_COPY.faqListA) {
+    return 'Submit it on the <a href="/become-a-creator">Become a creator</a> page. Listing is free.';
+  }
+  return esc(faq.a);
+}
+
+async function fetchClubNews(supabaseUrl, sbKey, club) {
+  try {
+    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_articles?select=slug,title,published_at&status=eq.published&related_team=eq.${encodeURIComponent(clubSlug(club))}&order=published_at.desc&limit=3`,
+      { headers }
+    );
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 exports.handler = async (event) => {
   const html = readIndexHtml();
   if (!html) {
@@ -456,31 +939,41 @@ exports.handler = async (event) => {
     return htmlResponse(200, applyPage(html, { title, description, url, bodyHtml, jsonLd }));
   }
 
+  // /clubs/multi-club keeps its existing directory copy. It is not a club hub.
+  const isMultiClub = club === 'Multi-Club / Other';
   const top = creators[0];
-  const title = `${club} Football YouTubers | FanReactionsFC`;
-  const description = creators.length
-    ? `${creators.length} ${club} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary.${top ? ` The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.` : ''}`
-    : `FanReactionsFC club page for ${club} YouTube creators — watchalongs, reactions, and fan commentary.`;
+  const claimTop = isMultiClub ? null : hubClaimTop(creators, sponsoredCreator);
+  const title = isMultiClub
+    ? `${club} Football YouTubers | FanReactionsFC`
+    : hubTitle(club, new Date());
+  const description = isMultiClub
+    ? (creators.length
+      ? `${creators.length} ${club} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary.${top ? ` The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.` : ''}`
+      : `FanReactionsFC club page for ${club} YouTube creators — watchalongs, reactions, and fan commentary.`)
+    : hubMeta(club, creators.length, claimTop && claimTop.name, new Date());
 
   const verifiedPinned = creators.filter(c => isCurrentlyVerified(c));
   const verifiedBox = verifiedPinned.length ? `
       <section class="club-verified-slot" aria-labelledby="club-verified-heading">
         <div class="club-verified-kicker">Pinned</div>
-        <h2 id="club-verified-heading">Verified creators</h2>
+        <p id="club-verified-heading" class="club-verified-title">Verified creators</p>
         <p class="club-verified-note">Paid Verified tier. This box sits above the club ranking and does not change the order below.</p>
         <ul class="seo-list">
           ${verifiedPinned.map(c => `<li><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a> <span class="badge badge-verified">Verified</span>${c.subscriber_count ? ` · ${formatNum(c.subscriber_count)} subscribers` : ''}</li>`).join('')}
         </ul>
       </section>` : '';
 
-  const tableRows = creators.map((c, i) => `
+  let bodyHtml;
+  let itemList;
+  let faqs = [];
+  if (isMultiClub) {
+    const tableRows = creators.map((c, i) => `
     <tr>
       <td>${i + 1}</td>
       <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}</td>
       <td>${c.subscriber_count ? formatNum(c.subscriber_count) : '—'}</td>
     </tr>`).join('');
-
-  const bodyHtml = `
+    bodyHtml = `
     <div class="page-hero">
       <div class="container">
         <a href="/discover" class="page-hero-back">&larr; All clubs</a>
@@ -497,8 +990,6 @@ exports.handler = async (event) => {
       </div>
     </div>
     <div class="container section">
-      <!-- Featured sponsorship and the Verified pin are sibling boxes
-           above the organic table. Neither is a ListItem. -->
       <div class="club-feature-slots">
         ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator) : ''}
         ${verifiedBox}
@@ -515,25 +1006,130 @@ exports.handler = async (event) => {
       <p class="seo-more-links"><a href="/rankings">See all ranked creators</a> · <a href="/discover">Discover more clubs</a></p>
     </div>
     ${ssrFooter(otherClubs)}`;
+    itemList = {
+      '@type': 'ItemList',
+      name: `${club} football YouTubers`,
+      numberOfItems: creators.length,
+      itemListOrder: 'https://schema.org/ItemListOrderDescending',
+      itemListElement: creators.slice(0, 50).map((c, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        url: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
+        name: c.name,
+      })),
+    };
+  } else {
+    const rankedHeading = hubRankedHeading(club, creators.length);
+    const intro = hubIntro(club, creators.length, claimTop && claimTop.name);
+    const subsLabel = claimTop && claimTop.subscriber_count ? formatNum(claimTop.subscriber_count) : '';
+    faqs = buildHubFaqs({
+      club,
+      topName: claimTop && claimTop.name,
+      subs: subsLabel,
+      watchNames: watchalongNames(creators),
+    });
+    const tableRows = creators.map((c, i) => {
+      const slug = c.slug || slugify(c.name);
+      const avatar = /^https?:\/\//i.test(c.avatar_url || '')
+        ? `<img class="hub-avatar" src="${esc(c.avatar_url)}" alt="${esc(hubAvatarAlt(c.name, club))}" loading="lazy">`
+        : '';
+      const types = Array.isArray(c.content_types) ? c.content_types.slice(0, 4) : [];
+      const badges = types.length ? `<span class="hub-badges">${types.map(t => `<span class="cc-tag">${esc(t)}</span>`).join('')}</span>` : '';
+      const blurb = oneSentence(c.description);
+      const freq = c.upload_frequency && c.upload_frequency !== 'Unknown' && c.upload_frequency !== 'Inactive'
+        ? c.upload_frequency : '';
+      const synced = syncedMonth(c.last_youtube_sync);
+      const country = c.channel_country ? String(c.channel_country).toUpperCase() : '';
+      const yt = /^https?:\/\//i.test(c.channel_url || '')
+        ? `<a href="${esc(c.channel_url)}" target="_blank" rel="noopener">YouTube</a>` : '';
+      const subs = c.subscriber_count ? `${formatNum(c.subscriber_count)} subscribers` : '—';
+      const extra = [synced ? `as of ${synced}` : '', freq, country].filter(Boolean).join(' · ');
+      return `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${avatar}<a href="/creators/${esc(slug)}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}${badges}${blurb ? `<div class="hub-blurb">${esc(blurb)}</div>` : ''}</td>
+      <td>${esc(subs)}${extra ? `<div class="hub-asof">${esc(extra)}</div>` : ''}${yt ? `<div>${yt}</div>` : ''}</td>
+    </tr>`;
+    }).join('');
+    const videos = latestFanVideos(creators);
+    const videoHtml = videos.length ? `
+      <section class="hub-section">
+        <h2>${esc(seoFill(HUB_COPY.h2Videos, { Club: club }))}</h2>
+        <ul class="hub-videos">
+          ${videos.map(v => {
+            const thumb = /^https?:\/\//i.test(v.thumb || '')
+              ? `<img src="${esc(v.thumb)}" alt="${esc(v.title || v.name)}" loading="lazy">` : '';
+            const when = videoDay(v.date);
+            return `<li>${thumb}<a href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">${esc(v.title || 'Latest upload')}</a><div class="hub-video-meta">${esc(v.name)}${when ? ` · ${esc(when)}` : ''}</div></li>`;
+          }).join('')}
+        </ul>
+      </section>` : '';
+    const related = relatedHubClubs(club, directory);
+    const news = sbKey ? await fetchClubNews(supabaseUrl, sbKey, club) : [];
+    const relatedHtml = (related.length || news.length) ? `
+      <section class="hub-section">
+        <h2>${esc(HUB_COPY.h2Related)}</h2>
+        ${related.length ? `<ul class="seo-list">${related.map(name => `<li><a href="${clubPath(name)}">${esc(seoFill(HUB_COPY.relatedAnchor, { Club: name }))}</a></li>`).join('')}</ul>` : ''}
+        ${news.length ? `<ul class="seo-list">${news.map(a => `<li><a href="/news/${esc(a.slug)}">${esc(a.title)}</a></li>`).join('')}</ul>` : ''}
+      </section>` : '';
+    bodyHtml = `
+    <div class="page-hero">
+      <div class="container">
+        <nav class="hub-breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a> <span aria-hidden="true">›</span>
+          <a href="/discover">Discover</a> <span aria-hidden="true">›</span>
+          <span>${esc(club)}</span>
+        </nav>
+        <div class="page-hero-inner">
+          <div class="page-hero-text">
+            <div class="page-hero-eyebrow">${esc(HUB_LEAGUE_OF[club] || 'Football Club')}</div>
+            <h1 class="page-hero-title">${esc(hubH1(club))}</h1>
+            ${intro ? `<p class="page-hero-subtitle hub-aeo">${esc(intro)}</p>` : ''}
+            <p class="hub-method">${esc(hubMethod(new Date()))}</p>
+            <div class="page-hero-meta">
+              <span class="page-hero-tag">${creators.length} creator${creators.length !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container section">
+      <!-- Featured sponsorship and the Verified pin sit outside the ranked
+           table. Neither is a ListItem and neither changes rank numbers. -->
+      <div class="club-feature-slots">
+        ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator) : ''}
+        ${verifiedBox}
+      </div>
+      ${rankedHeading ? `
+      <section class="hub-section" id="club-organic-ranking">
+        <h2>${esc(rankedHeading)}</h2>
+        <table class="seo-table">
+          <thead><tr><th>#</th><th>Creator</th><th>Subscribers</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </section>` : `
+      <div class="empty-state">
+        <div class="es-title">No creators yet</div>
+        <p>Know a great ${esc(club)} YouTuber? <a href="/submit">Suggest a creator</a>.</p>
+      </div>`}
+      ${videoHtml}
+      <section class="hub-section">
+        <h2>${esc(seoFill(HUB_COPY.h2Faq, { Club: club }))}</h2>
+        <dl class="hub-faq">
+          ${faqs.map(f => `<dt>${esc(f.q)}</dt><dd>${faqAnswerHtml(f)}</dd>`).join('')}
+        </dl>
+      </section>
+      <section class="hub-section">
+        <h2>${esc(seoFill(HUB_COPY.h2How, { Club: club }))}</h2>
+        <p>${esc(HUB_COPY.howBody)}</p>
+        <p class="seo-more-links"><a href="/rankings">Best Football Fan YouTubers Ranked</a></p>
+      </section>
+      ${relatedHtml}
+    </div>
+    ${ssrFooter(otherClubs)}`;
+    itemList = hubItemList(club, creators, sponsoredCreator);
+  }
 
-  // Organic ranking only. The sponsored card is not a ListItem, is not
-  // inserted at position 1, and does not change numberOfItems.
-  const itemList = {
-    '@type': 'ItemList',
-    name: `${club} football YouTubers`,
-    numberOfItems: creators.length,
-    itemListOrder: 'https://schema.org/ItemListOrderDescending',
-    itemListElement: creators.slice(0, 50).map((c, i) => ({
-      '@type': 'ListItem',
-      position: i + 1,
-      url: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
-      name: c.name,
-    })),
-  };
-
-  // /clubs/multi-club is a directory bucket, not a football club. Typing
-  // it SportsTeam made crawlers treat "Multi-Club / Other" as a team.
-  const isMultiClub = club === 'Multi-Club / Other';
   const collectionPage = {
     '@type': 'CollectionPage',
     '@id': url,
@@ -564,6 +1160,16 @@ exports.handler = async (event) => {
       { '@type': 'ListItem', position: 3, name: isMultiClub ? 'Multi-club' : club, item: url },
     ],
   });
+  if (!isMultiClub && faqs.length) {
+    graphNodes.push({
+      '@type': 'FAQPage',
+      mainEntity: faqs.map(f => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    });
+  }
 
   const jsonLd = {
     '@context': 'https://schema.org',

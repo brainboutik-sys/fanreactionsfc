@@ -322,6 +322,8 @@ test('article titles and metas stay clean on the published catalogue', () => {
       assert.equal(headline.indexOf(core), 0, row.slug);
       const last = (core.split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z]/g, '');
       assert.equal(dangling.has(last), false, row.slug + ' title ends on ' + last + ': ' + title);
+      assert.equal(/\b(?:react|preview)$/i.test(core), false, row.slug + ' boundary cut has no event: ' + title);
+      assert.equal(/^(?:[\w'’.-]+\s+)+(?:fan\s+)?YouTubers$/i.test(core), false, row.slug + ' boundary cut is only the lead: ' + title);
     }
     assert.ok(meta.length <= 155 && meta.length > 0, row.slug + ' meta ' + meta.length + ' ' + meta);
     assert.match(meta, /[.!?]$/, row.slug + ' meta ' + meta);
@@ -356,9 +358,13 @@ test('article titles and metas stay clean on the published catalogue', () => {
   assert.doesNotMatch(seo.articleSeoMeta(atletico), /\breact/i);
 
   const ward = at('liverpool-youtubers-react-as-julian-ward-nears-sporting-director-return');
-  assert.equal(titleShape(seo.articleSeoTitle(ward), ward.title), 'boundary');
-  assert.doesNotMatch(seo.articleSeoTitle(ward), /Julian Ward$/);
+  assert.equal(seo.articleSeoTitle(ward), ward.title);
+  assert.equal(titleShape(seo.articleSeoTitle(ward), ward.title), 'headline');
   assert.doesNotMatch(seo.articleSeoMeta(ward), /\bto\.$/);
+
+  const spursReact = at('united-and-spurs-youtubers-react-as-ten-man-spurs-snatch-a-1-1-at-old-trafford');
+  assert.equal(seo.articleSeoTitle(spursReact), spursReact.title);
+  assert.equal(titleShape(seo.articleSeoTitle(spursReact), spursReact.title), 'headline');
 
   const burwell = at('sunderland-youtubers-react-to-tom-burwells-sudden-exit');
   assert.equal(seo.articleSeoTitle(burwell), burwell.title);

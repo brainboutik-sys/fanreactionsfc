@@ -371,7 +371,7 @@ function acceptTitle(title) {
 
 // No hard clip. (a) full headline plus the suffix when that fits in 60.
 // (b) the full headline, no suffix, when it is 70 characters or fewer.
-// (c) the last clause boundary that still leaves 25 characters.
+// (c) the last clause boundary that still leaves 25 characters and an event.
 // (d) the full headline up to 90 characters, no suffix.
 // The headline's own casing is kept.
 function clauseBoundaryEnds(text) {
@@ -392,6 +392,14 @@ function clauseBoundaryEnds(text) {
   return ends;
 }
 
+// "Liverpool YouTubers react" names no event. Skip that cut.
+function cutIsLeadOnly(left) {
+  const t = String(left || '').replace(/\s+/g, ' ').trim();
+  if (/\b(?:react|preview)\s*$/i.test(t)) return true;
+  if (/^(?:[\w'’.-]+\s+)+(?:fan\s+)?YouTubers$/i.test(t)) return true;
+  return false;
+}
+
 function headlineTitle(headline) {
   const c = String(headline || '').replace(/\s+/g, ' ').trim()
     .replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
@@ -403,6 +411,7 @@ function headlineTitle(headline) {
     const left = c.slice(0, ends[i]).trim();
     if (left.length < 25 || left.length > 90) continue;
     if (isDanglingWord(left.split(/\s+/).pop())) continue;
+    if (cutIsLeadOnly(left)) continue;
     return left;
   }
   return c.length <= 90 ? c : c.slice(0, 90).trim();

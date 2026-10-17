@@ -94,27 +94,35 @@ function redirect301(toPath) {
   };
 }
 
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/[<\u2028\u2029]/g, function (ch) {
+    if (ch === '<') return '\\u003c';
+    if (ch === '\u2028') return '\\u2028';
+    return '\\u2029';
+  });
+}
+
 function applyPage(html, { title, description, url, image, bodyHtml, jsonLd, noindex }) {
   let out = html;
-  out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
-  out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`);
+  out = out.replace(/<meta name="description"[^>]*>/, () => `<meta name="description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:title"[^>]*>/, () => `<meta property="og:title" content="${esc(title)}">`);
   out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
-  out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
+  out = out.replace(/<meta property="og:description"[^>]*>/, () => `<meta property="og:description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:url"[^>]*>/, () => `<meta property="og:url" content="${esc(url)}">`);
   if (image) {
-    out = out.replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(image)}">`);
-    out = out.replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${esc(image)}">`);
+    out = out.replace(/<meta property="og:image"[^>]*>/, () => `<meta property="og:image" content="${esc(image)}">`);
+    out = out.replace(/<meta name="twitter:image"[^>]*>/, () => `<meta name="twitter:image" content="${esc(image)}">`);
   }
   if (noindex) {
     out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
   }
-  out = out.replace(/<link rel="canonical"[^>]*>/, noindex
+  out = out.replace(/<link rel="canonical"[^>]*>/, () => (noindex
     ? '<link rel="canonical" id="canonicalLink" href="">'
-    : `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`);
-  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${bodyHtml}</main>`);
+    : `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`));
+  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, () => `<main id="app">${bodyHtml}</main>`);
   if (jsonLd) {
-    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`);
+    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => `<script type="application/ld+json">${jsonForScript(jsonLd)}</script>`);
   }
   return out;
 }

@@ -176,10 +176,12 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
 
       const table = organicTable(res.body);
       assert.doesNotMatch(table, /sponsored/i);
+      assert.doesNotMatch(table, /theredmentv/);
       const order = [...table.matchAll(/href="\/creators\/([^"]+)"/g)].map(m => m[1]);
-      assert.deepEqual(order, ['nathanconnortv', 'theredmentv']);
+      assert.deepEqual(order, ['nathanconnortv']);
       assert.match(table, /<td>1<\/td>[\s\S]*nathanconnortv/);
-      assert.match(table, /<td>2<\/td>[\s\S]*theredmentv/);
+      assert.doesNotMatch(table, /<td>2<\/td>/);
+      assert.match(res.body, /Top 1 Liverpool Fan YouTubers Ranked/);
 
       const jsonLd = jsonLdOf(res.body);
       assert.doesNotMatch(JSON.stringify(jsonLd), /Sponsored/);
@@ -267,7 +269,8 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
       assert.doesNotMatch(sponsored, /club-verified-slot/);
       const table = organicTable(res.body);
       const order = [...table.matchAll(/href="\/creators\/([^"]+)"/g)].map(m => m[1]);
-      assert.deepEqual(order, ['nathanconnortv', 'theredmentv']);
+      assert.deepEqual(order, ['nathanconnortv']);
+      assert.doesNotMatch(table, /theredmentv/);
       const page = jsonLdOf(res.body)['@graph'].find(n => n['@type'] === 'CollectionPage');
       assert.deepEqual(page.mainEntity.itemListElement.map(i => i.name), ['NathanConnorTV']);
       assert.equal(page.mainEntity.numberOfItems, 1);
@@ -294,9 +297,45 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
       assert.equal(res.statusCode, 200);
       assert.ok(calls.some(u => u.includes('frfc_club_sponsorships?club_slug=eq.manchester-united')));
       assert.match(res.body, /Sponsored: Featured Man United creator/);
-      const table = organicTable(res.body);
-      assert.match(table, /stretford-paddock/);
-      assert.doesNotMatch(table, /rel="sponsored"/);
+      assert.match(res.body, /stretford-paddock/);
+      assert.doesNotMatch(res.body, /<table class="seo-table">/);
+      assert.doesNotMatch(res.body, /<td>1<\/td>/);
+      const page = jsonLdOf(res.body)['@graph'].find(n => n['@type'] === 'CollectionPage');
+      assert.equal(page.mainEntity.numberOfItems, 0);
+    });
+  });
+
+  test('a creator name containing </script> and $& stays literal in HTML and JSON-LD', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    const name = '$&</script>\u2028';
+    installFetch([], {
+      streamers: [{
+        id: 'evil',
+        name,
+        slug: 'evil-name',
+        team: 'Liverpool',
+        subscriber_count: 1200,
+        description: "costs $' dollars",
+        latest_video_id: 'abcdefghijk',
+        latest_video_title: '$$ clip $&',
+        channel_url: 'https://www.youtube.com/@evil',
+      }],
+    });
+    await withCwd(async () => {
+      const res = await og.handler({ path: '/clubs/liverpool' });
+      assert.equal(res.statusCode, 200);
+      assert.match(res.body, /\$&amp;&lt;\/script&gt;/);
+      assert.match(res.body, /costs \$&#39; dollars/);
+      assert.match(res.body, /\$\$ clip \$&amp;/);
+      const raw = res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      assert.ok(raw, 'json-ld script present');
+      assert.match(raw[1], /\\u003c\/script>/);
+      assert.match(raw[1], /\\u2028/);
+      assert.doesNotMatch(raw[1], /<\/script>/);
+      const data = JSON.parse(raw[1]);
+      const page = data['@graph'].find(n => n['@type'] === 'CollectionPage');
+      assert.equal(page.mainEntity.itemListElement[0].name, name);
+      assert.equal(page.mainEntity.numberOfItems, 1);
     });
   });
 });

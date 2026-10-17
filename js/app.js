@@ -2656,21 +2656,22 @@ async function renderClubHub(club) {
   const sort = params.get('sort') || 'subs';
   const bySubs = creators.filter(c => c.team === club)
     .sort((a, b) => (b.subscriberCount || 0) - (a.subscriberCount || 0));
-  const rankOf = new Map(bySubs.map((c, i) => [c.id, i + 1]));
-  let shown = bySubs.slice();
+  const organic = sponsored ? bySubs.filter(c => c.id !== sponsored.id) : bySubs.slice();
+  const rankOf = new Map(organic.map((c, i) => [c.id, i + 1]));
+  let shown = organic.slice();
   if (sort === 'name') shown.sort((a, b) => a.name.localeCompare(b.name));
   else if (sort === 'recent') shown.sort((a, b) => new Date(b.latestVideoDate || 0) - new Date(a.latestVideoDate || 0));
   const verifiedPinned = bySubs.filter(c => isCurrentlyVerified(c));
-  const claim = hubClaimTop(bySubs, sponsored);
+  const claim = hubClaimTop(organic, null);
   const subsLabel = claim && claim.subscriberCount ? formatNum(claim.subscriberCount) : '';
   const faqs = buildHubFaqs({
     club,
     topName: claim && claim.name,
     subs: subsLabel,
-    watchNames: bySubs.filter(c => (c.contentTypes || []).some(t => String(t).toLowerCase() === 'watchalong')).slice(0, 3).map(c => c.name),
+    watchNames: organic.filter(c => (c.contentTypes || []).some(t => String(t).toLowerCase() === 'watchalong')).slice(0, 3).map(c => c.name),
   });
-  const intro = hubIntro(club, bySubs.length, claim && claim.name);
-  const rankedHeading = hubRankedHeading(club, bySubs.length);
+  const intro = hubIntro(club, organic.length, claim && claim.name);
+  const rankedHeading = hubRankedHeading(club, organic.length);
   const videos = bySubs
     .filter(c => c.latestVideoId)
     .map(c => ({ c, at: new Date(c.latestVideoDate || 0).getTime() }))
@@ -2683,7 +2684,7 @@ async function renderClubHub(club) {
 
   updatePageMeta(
     hubTitle(club, new Date()),
-    hubMeta(club, bySubs.length, claim && claim.name, new Date())
+    hubMeta(club, organic.length, claim && claim.name, new Date())
   );
 
   document.getElementById('app').innerHTML = `
@@ -2704,7 +2705,7 @@ async function renderClubHub(club) {
             ${intro ? `<p class="page-hero-subtitle hub-aeo" style="max-width:640px">${escHtml(intro)}</p>` : ''}
             <p class="hub-method">${escHtml(hubMethod(new Date()))}</p>
             <div class="page-hero-meta">
-              <span class="page-hero-tag">${bySubs.length} creator${bySubs.length !== 1 ? 's' : ''}</span>
+              <span class="page-hero-tag">${organic.length} creator${organic.length !== 1 ? 's' : ''}</span>
               ${bySubs.filter(c => c.isLive).length ? `<span class="page-hero-tag" style="background:rgba(230,57,70,.2);border-color:rgba(230,57,70,.3);color:#ff8080">● ${bySubs.filter(c => c.isLive).length} live</span>` : ''}
             </div>
           </div>

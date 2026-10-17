@@ -277,6 +277,159 @@ function eventFromHeadline(headline) {
   return s.replace(/^[\s,.:;\-–]+/, '').replace(/[.\s]+$/, '').trim();
 }
 
+// Title-only shortenings. The directory name stays on the hub; the title
+// uses one of these when the long name would push the event past 60 characters.
+const SEO_TITLE_SHORT = {
+  'Man United': 'Man Utd',
+  'Crystal Palace': 'Palace',
+  'Nottm Forest': 'Forest',
+  'Sheffield Utd': 'Sheffield',
+  'Sheffield Wed': 'Sheffield',
+  'Borussia Dortmund': 'Dortmund',
+  'Borussia Monchengladbach': 'Gladbach',
+  'Bayer Leverkusen': 'Leverkusen',
+  'Eintracht Frankfurt': 'Frankfurt',
+  'Bayern Munich': 'Bayern',
+  'Athletic Bilbao': 'Bilbao',
+  'Atletico Madrid': 'Atletico',
+  'Real Madrid': 'Madrid',
+  'Real Sociedad': 'Sociedad',
+  'Real Betis': 'Betis',
+  'Rayo Vallecano': 'Vallecano',
+  'Hellas Verona': 'Verona',
+  'Inter Milan': 'Inter',
+  'AC Milan': 'Milan',
+};
+
+function shorterClubLabel(name) {
+  if (SEO_TITLE_SHORT[name] && SEO_TITLE_SHORT[name].length < name.length) return SEO_TITLE_SHORT[name];
+  const parts = String(name || '').split(' ');
+  if (parts.length < 2 || parts[0] === 'Man') return name;
+  const tail = parts[parts.length - 1];
+  if (/^(United|City|Town|Hotspur|Albion|Wanderers|Rovers|County)$/.test(tail)) return parts[0];
+  return tail.length < name.length ? tail : name;
+}
+
+function eventWordBare(word) {
+  return String(word || '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function isEventVerb(word) {
+  return /^(faces|face|facing|agrees|agree|agreed|agreeing|apologises|apologizes|apologise|apologize|apologised|apologized|calls|called|calling|wins|won|signs|signed|says|said|confirms|confirmed|hits|hit|scores|scored|returns|returned|misses|missed|suffers|suffered|beats|beat|draws|drew|sacks|sacked|appoints|appointed|leaves|left|joins|joined|extends|extended|rejects|rejected|admits|admitted|denies|denied|slams|slammed|praises|praised|undergoes|underwent|lands|landed|announces|announced|reveals|revealed|claims|claimed|loses|lost|makes|made|takes|took|gets|got|goes|went|backs|backed|fires|fired|quits|quit|stays|stayed|keeps|kept|breaks|broke|earns|earned|names|named|picks|picked|drops|dropped|reaches|reached|reach)$/.test(eventWordBare(word));
+}
+
+const EVENT_FILLER = {
+  a: 1, an: 1, the: 1, his: 1, her: 1, their: 1, its: 1, in: 1, on: 1, at: 1, of: 1, to: 1, for: 1,
+  after: 1, before: 1, as: 1, and: 1, with: 1, from: 1, into: 1, over: 1, about: 1, that: 1, this: 1,
+  principle: 1, months: 1, month: 1, weeks: 1, week: 1, days: 1, day: 1, around: 1,
+  one: 1, two: 1, three: 1, four: 1, five: 1, six: 1, seven: 1, eight: 1, nine: 1, ten: 1,
+};
+
+const VERB_TO_NOUN = {
+  apologises: 'apology', apologizes: 'apology', apologise: 'apology', apologize: 'apology',
+  apologised: 'apology', apologized: 'apology',
+  agrees: 'agreement', agree: 'agreement', agreed: 'agreement',
+  signs: 'signing', signed: 'signing',
+  wins: 'win', won: 'win',
+  loses: 'loss', lost: 'loss',
+  sacks: 'sacking', sacked: 'sacking',
+  extends: 'extension', extended: 'extension',
+  returns: 'return', returned: 'return',
+};
+
+// "Reece James faces three months out" → "Reece James out".
+// "Farke agrees a new deal in principle" → "Farke new deal".
+// "Martinez apologises after his board outburst" → "Martinez apology".
+function shortEventPhrase(event) {
+  const words = String(event || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (!words.length) return '';
+  let verbAt = -1;
+  for (let i = 1; i < words.length; i++) {
+    if (isEventVerb(words[i])) { verbAt = i; break; }
+  }
+  if (verbAt < 0) return words.join(' ');
+  const subject = words.slice(0, verbAt);
+  const verb = eventWordBare(words[verbAt]);
+  const rest = words.slice(verbAt + 1);
+  if (/^(after|following|as|once|when)\b/i.test(rest.join(' '))) {
+    const noun = VERB_TO_NOUN[verb];
+    if (noun) return subject.concat([noun]).join(' ');
+  }
+  const outcome = [];
+  rest.forEach(function (word) {
+    const bare = eventWordBare(word);
+    if (bare === 'out') { outcome.push(word); return; }
+    if (!bare || EVENT_FILLER[bare]) return;
+    outcome.push(word);
+  });
+  if (!outcome.length && VERB_TO_NOUN[verb]) outcome.push(VERB_TO_NOUN[verb]);
+  return subject.concat(outcome).join(' ');
+}
+
+function isCleanNounPhrase(event) {
+  const words = String(event || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+  return !words.some(isEventVerb);
+}
+
+function articleTitlePrefixes(club) {
+  const names = [club];
+  const short = shorterClubLabel(club);
+  if (short && short !== club) names.push(short);
+  const prefixes = [];
+  names.forEach(function (name) {
+    prefixes.push(name + ' fan YouTubers react: ');
+    prefixes.push(name + ' YouTubers react: ');
+  });
+  return prefixes;
+}
+
+function packArticleTitle(club, event) {
+  const phrase = shortEventPhrase(event) || String(event || '').trim();
+  let words = phrase.split(' ').filter(Boolean);
+  const prefixes = articleTitlePrefixes(club);
+  if (!words.length) return fitArticleTitle(prefixes[0].replace(/:\s*$/, ''));
+  while (words.length) {
+    const ev = words.join(' ');
+    for (let i = 0; i < prefixes.length; i++) {
+      const title = prefixes[i] + ev + ARTICLE_TITLE_SUFFIX;
+      if (title.length <= ARTICLE_TITLE_MAX) return title;
+    }
+    if (words.length === 1) break;
+    words = words.slice(1);
+  }
+  return fitArticleTitle(prefixes[prefixes.length - 1] + words.join(' '));
+}
+
+function firstSentence(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  const match = t.match(/^[\s\S]*?[.!?]/);
+  return (match ? match[0] : t).trim();
+}
+
+function sentenceWithin(sentence, budget) {
+  let s = String(sentence || '').replace(/\s+/g, ' ').trim();
+  if (!s || budget <= 0) return '';
+  if (s.length <= budget) return s;
+  const noParen = s.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+  if (noParen && noParen.length <= budget) return noParen;
+  const source = noParen || s;
+  const thatAt = source.toLowerCase().indexOf(' that ');
+  if (thatAt >= 0) {
+    let fact = source.slice(thatAt + 6).trim();
+    if (fact && !/[.!?]$/.test(fact)) fact += '.';
+    if (fact.length <= budget) return fact;
+  }
+  const window = source.slice(0, budget);
+  const end = Math.max(window.lastIndexOf('.'), window.lastIndexOf('!'), window.lastIndexOf('?'));
+  if (end >= 20) return source.slice(0, end + 1).trim();
+  const sp = window.lastIndexOf(' ');
+  let out = (sp > 0 ? window.slice(0, sp) : window).replace(/[.,;:]+$/, '').trim();
+  if (out && !/[.!?]$/.test(out)) out += '.';
+  return out;
+}
+
 function fitArticleTitle(core) {
   let c = String(core || '').replace(/\s+/g, ' ').trim();
   c = c.replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
@@ -304,10 +457,7 @@ function articleSeoTitle(article) {
   }
   if (primary) {
     const event = eventFromHeadline(headline);
-    const prefix = primary + ' fan YouTubers react: ';
-    const budget = ARTICLE_TITLE_MAX - ARTICLE_TITLE_SUFFIX.length - prefix.length;
-    const shortEvent = seoClipWords(event, budget);
-    if (shortEvent) return prefix + shortEvent + ARTICLE_TITLE_SUFFIX;
+    if (event) return packArticleTitle(primary, event);
     return fitArticleTitle(primary + ' fan YouTubers react');
   }
   return fitArticleTitle(headline);
@@ -318,18 +468,20 @@ function articleSeoMeta(article) {
   const club = articleClubName(article && (article.related_team || article.relatedTeam));
   const event = eventFromHeadline(headline);
   const summary = String((article && (article.summary || article.dek)) || '').replace(/\s+/g, ' ').trim();
+  const sentence = firstSentence(summary);
   let lead = '';
-  if (club && event) lead = seoFill(ARTICLE_COPY.metaLead, { Club: club, Event: event });
+  if (club && event && isCleanNounPhrase(event)) lead = seoFill(ARTICLE_COPY.metaLead, { Club: club, Event: event });
   else if (club) lead = club + ' fan YouTubers react.';
-  let text = lead;
-  if (summary) {
-    const leadFlat = lead.toLowerCase();
-    if (!leadFlat || summary.toLowerCase() !== event.toLowerCase()) {
-      text = (lead ? lead + ' ' : '') + summary;
-    }
+  const budget = ARTICLE_META_MAX - (lead ? lead.length + 1 : 0);
+  let fact = '';
+  if (sentence) {
+    const bare = sentence.replace(/[.!?]+$/, '').toLowerCase();
+    if (!lead || bare !== String(event || '').toLowerCase()) fact = sentenceWithin(sentence, budget);
   }
-  if (!text) text = headline;
-  return seoClip(text, ARTICLE_META_MAX);
+  let text = lead;
+  if (fact) text = lead ? lead + ' ' + fact : fact;
+  if (!text) text = sentenceWithin(headline, ARTICLE_META_MAX) || headline;
+  return text.length <= ARTICLE_META_MAX ? text : sentenceWithin(text, ARTICLE_META_MAX);
 }
 
 function articleMoreLabel(related) {
@@ -339,9 +491,10 @@ function articleMoreLabel(related) {
 }
 
 function articleCoverAlt(relatedOrClub, headline) {
+  const title = String(headline || '').replace(/\s+/g, ' ').trim();
+  if (/\breact\b/i.test(title)) return title;
   const fromRelated = articleClubName(relatedOrClub);
   const club = fromRelated || (SEO_CLUB_NAMES.indexOf(relatedOrClub) >= 0 ? relatedOrClub : '');
-  const title = String(headline || '').replace(/\s+/g, ' ').trim();
   if (club && title) return seoFill(ARTICLE_COPY.coverAlt, { Club: club, Headline: title });
   return title;
 }
@@ -504,23 +657,31 @@ function redirect301(toPath) {
   };
 }
 
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/[<\u2028\u2029]/g, function (ch) {
+    if (ch === '<') return '\\u003c';
+    if (ch === '\u2028') return '\\u2028';
+    return '\\u2029';
+  });
+}
+
 function applyPage(html, { title, description, url, bodyHtml, jsonLd, noindex }) {
   let out = html;
-  out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
-  out = out.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`);
+  out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`);
+  out = out.replace(/<meta name="description"[^>]*>/, () => `<meta name="description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:title"[^>]*>/, () => `<meta property="og:title" content="${esc(title)}">`);
   out = out.replace(/<meta name="twitter:title"[^>]*>/, () => `<meta name="twitter:title" content="${esc(title)}">`);
-  out = out.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}">`);
-  out = out.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}">`);
+  out = out.replace(/<meta property="og:description"[^>]*>/, () => `<meta property="og:description" content="${esc(description)}">`);
+  out = out.replace(/<meta property="og:url"[^>]*>/, () => `<meta property="og:url" content="${esc(url)}">`);
   if (noindex) {
-    out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');
+    out = out.replace('<head>', () => '<head>\n  <meta name="robots" content="noindex, follow">');
   }
-  out = out.replace(/<link rel="canonical"[^>]*>/, noindex
+  out = out.replace(/<link rel="canonical"[^>]*>/, () => (noindex
     ? '<link rel="canonical" id="canonicalLink" href="">'
-    : `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`);
-  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, `<main id="app">${bodyHtml}</main>`);
+    : `<link rel="canonical" id="canonicalLink" href="${esc(url)}">`));
+  out = out.replace(/<main id="app">[\s\S]*?<\/main>/, () => `<main id="app">${bodyHtml}</main>`);
   if (jsonLd) {
-    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`);
+    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => `<script type="application/ld+json">${jsonForScript(jsonLd)}</script>`);
   }
   return out;
 }
@@ -779,12 +940,12 @@ function latestFanVideos(creators) {
     .slice(0, 8);
 }
 
-// Paid slot is omitted. Positions stay the organic subscriber ranks, so a
-// sponsor at rank 2 leaves a gap rather than renumbering everyone above them.
+// The sponsored creator is omitted. Positions are 1..N over the organic
+// list only, matching the visible rank numbers and numberOfItems.
 function hubItemList(club, creators, sponsored) {
   const sid = sponsored && sponsored.id;
   const elements = [];
-  (creators || []).forEach((c, i) => {
+  (creators || []).forEach((c) => {
     if (!c || !c.name) return;
     if (sid && c.id === sid) return;
     const slug = c.slug || slugify(c.name);
@@ -794,7 +955,7 @@ function hubItemList(club, creators, sponsored) {
     if (/^https?:\/\//i.test(c.avatar_url || '')) node.image = c.avatar_url;
     elements.push({
       '@type': 'ListItem',
-      position: i + 1,
+      position: elements.length + 1,
       url: itemUrl,
       name: c.name,
       item: node,
@@ -942,7 +1103,9 @@ exports.handler = async (event) => {
   // /clubs/multi-club keeps its existing directory copy. It is not a club hub.
   const isMultiClub = club === 'Multi-Club / Other';
   const top = creators[0];
-  const claimTop = isMultiClub ? null : hubClaimTop(creators, sponsoredCreator);
+  const sid = sponsoredCreator && sponsoredCreator.id;
+  const organic = creators.filter(c => !(sid && c.id === sid));
+  const claimTop = isMultiClub ? null : hubClaimTop(organic, null);
   const title = isMultiClub
     ? `${club} Football YouTubers | FanReactionsFC`
     : hubTitle(club, new Date());
@@ -950,7 +1113,7 @@ exports.handler = async (event) => {
     ? (creators.length
       ? `${creators.length} ${club} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary.${top ? ` The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.` : ''}`
       : `FanReactionsFC club page for ${club} YouTube creators — watchalongs, reactions, and fan commentary.`)
-    : hubMeta(club, creators.length, claimTop && claimTop.name, new Date());
+    : hubMeta(club, organic.length, claimTop && claimTop.name, new Date());
 
   const verifiedPinned = creators.filter(c => isCurrentlyVerified(c));
   const verifiedBox = verifiedPinned.length ? `
@@ -967,7 +1130,7 @@ exports.handler = async (event) => {
   let itemList;
   let faqs = [];
   if (isMultiClub) {
-    const tableRows = creators.map((c, i) => `
+    const tableRows = organic.map((c, i) => `
     <tr>
       <td>${i + 1}</td>
       <td><a href="/creators/${esc(c.slug || slugify(c.name))}">${esc(c.name)}</a>${isCurrentlyVerified(c) ? ' <span class="badge badge-verified">Verified</span>' : ''}</td>
@@ -994,7 +1157,7 @@ exports.handler = async (event) => {
         ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator) : ''}
         ${verifiedBox}
       </div>
-      ${creators.length ? `
+      ${organic.length ? `
       <table class="seo-table">
         <thead><tr><th>#</th><th>Creator</th><th>Subscribers</th></tr></thead>
         <tbody>${tableRows}</tbody>
@@ -1009,9 +1172,9 @@ exports.handler = async (event) => {
     itemList = {
       '@type': 'ItemList',
       name: `${club} football YouTubers`,
-      numberOfItems: creators.length,
+      numberOfItems: Math.min(organic.length, 50),
       itemListOrder: 'https://schema.org/ItemListOrderDescending',
-      itemListElement: creators.slice(0, 50).map((c, i) => ({
+      itemListElement: organic.slice(0, 50).map((c, i) => ({
         '@type': 'ListItem',
         position: i + 1,
         url: `${SITE_URL}/creators/${c.slug || slugify(c.name)}`,
@@ -1019,16 +1182,16 @@ exports.handler = async (event) => {
       })),
     };
   } else {
-    const rankedHeading = hubRankedHeading(club, creators.length);
-    const intro = hubIntro(club, creators.length, claimTop && claimTop.name);
+    const rankedHeading = hubRankedHeading(club, organic.length);
+    const intro = hubIntro(club, organic.length, claimTop && claimTop.name);
     const subsLabel = claimTop && claimTop.subscriber_count ? formatNum(claimTop.subscriber_count) : '';
     faqs = buildHubFaqs({
       club,
       topName: claimTop && claimTop.name,
       subs: subsLabel,
-      watchNames: watchalongNames(creators),
+      watchNames: watchalongNames(organic),
     });
-    const tableRows = creators.map((c, i) => {
+    const tableRows = organic.map((c, i) => {
       const slug = c.slug || slugify(c.name);
       const avatar = /^https?:\/\//i.test(c.avatar_url || '')
         ? `<img class="hub-avatar" src="${esc(c.avatar_url)}" alt="${esc(hubAvatarAlt(c.name, club))}" loading="lazy">`
@@ -1087,7 +1250,7 @@ exports.handler = async (event) => {
             ${intro ? `<p class="page-hero-subtitle hub-aeo">${esc(intro)}</p>` : ''}
             <p class="hub-method">${esc(hubMethod(new Date()))}</p>
             <div class="page-hero-meta">
-              <span class="page-hero-tag">${creators.length} creator${creators.length !== 1 ? 's' : ''}</span>
+              <span class="page-hero-tag">${organic.length} creator${organic.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
         </div>

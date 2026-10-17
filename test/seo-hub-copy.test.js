@@ -71,8 +71,8 @@ test('hub meta and FAQ are filled from data and skip a sponsored #1', () => {
 
 test('article titles use the club display name and stay within 60 characters', () => {
   const james = seo.articleSeoTitle({ title: 'Reece James out', related_team: 'chelsea' });
-  // "Reece James out" makes the hand example 61 characters, so the last word is clipped.
-  assert.equal(james, 'Chelsea fan YouTubers react: Reece James | FanReactionsFC');
+  // The hand example with "fan" is 61 characters, so "fan" drops and the outcome stays.
+  assert.equal(james, 'Chelsea YouTubers react: Reece James out | FanReactionsFC');
   assert.equal(james.length, 57);
   assert.ok(james.length <= 60);
 
@@ -80,17 +80,30 @@ test('article titles use the club display name and stay within 60 characters', (
     title: 'Chelsea YouTubers react as Reece James faces three months out',
     related_team: 'chelsea',
   });
-  assert.ok(real.length <= 60, real + ' (' + real.length + ')');
-  assert.match(real, /^Chelsea fan YouTubers react: /);
+  assert.equal(real, 'Chelsea YouTubers react: Reece James out | FanReactionsFC');
   assert.match(real, /\| FanReactionsFC$/);
   assert.doesNotMatch(real, / News$/);
+
+  const farke = seo.articleSeoTitle({
+    title: 'Leeds YouTubers react as Farke agrees a new deal in principle',
+    related_team: 'leeds-united',
+  });
+  assert.equal(farke, 'Leeds fan YouTubers react: Farke new deal | FanReactionsFC');
+  assert.ok(farke.length <= 60, farke);
 
   const united = seo.articleSeoTitle({
     title: 'United YouTubers react as Martinez apologises after his board outburst',
     related_team: 'manchester-united',
   });
-  assert.match(united, /^Man United fan YouTubers react: /);
+  assert.equal(united, 'Man Utd YouTubers react: Martinez apology | FanReactionsFC');
   assert.ok(united.length <= 60, united);
+
+  const dortmund = seo.articleSeoTitle({
+    title: 'Dortmund YouTubers react as Reus agrees a new deal in principle',
+    related_team: 'borussia-dortmund',
+  });
+  assert.equal(dortmund, 'Dortmund fan YouTubers react: Reus new deal | FanReactionsFC');
+  assert.ok(dortmund.length <= 60, dortmund);
 
   const two = seo.articleSeoTitle({
     title: 'Coventry and Newcastle YouTubers react to a 4-1 at the CBS Arena',
@@ -115,18 +128,48 @@ test('article titles use the club display name and stay within 60 characters', (
   assert.equal(seo.articleMoreLabel('chelsea'), 'More Chelsea fan YouTubers');
   assert.equal(seo.articleClubName('leeds-united'), 'Leeds United');
   assert.equal(seo.articleCoverAlt('chelsea', 'Reece James out'), 'Chelsea fan YouTubers react: Reece James out');
+  assert.equal(
+    seo.articleCoverAlt('chelsea', 'Chelsea YouTubers react as Reece James faces three months out'),
+    'Chelsea YouTubers react as Reece James faces three months out'
+  );
   assert.equal(seo.articleCoverAlt('', 'No club here'), 'No club here');
 });
 
 test('article meta leads with the club and the visible date flips when the article was edited', () => {
-  const meta = seo.articleSeoMeta({
+  const chelsea = seo.articleSeoMeta({
     title: 'Chelsea YouTubers react as Reece James faces three months out',
     related_team: 'chelsea',
-    summary: 'Six directory channels react to Reece James\'s knee surgery.',
+    summary: 'Six directory channels react to Reece James\'s knee surgery. Chelsea confirmed on Friday 16 Oct 2026 that the captain had surgery.',
   });
-  assert.match(meta, /^Chelsea fan YouTubers react to Reece James faces three months out\./);
-  assert.ok(meta.length <= 155, meta + ' (' + meta.length + ')');
-  assert.match(meta, /knee surgery/);
+  assert.equal(chelsea, 'Chelsea fan YouTubers react. Six directory channels react to Reece James\'s knee surgery.');
+  assert.ok(chelsea.length <= 155, chelsea);
+  assert.doesNotMatch(chelsea, /faces three months/);
+  assert.doesNotMatch(chelsea, /…$/);
+
+  const leeds = seo.articleSeoMeta({
+    title: 'Leeds YouTubers react as Farke agrees a new deal in principle',
+    related_team: 'leeds-united',
+    summary: 'Five directory channels react to the report (The Athletic, Fri 16 Oct 2026) that Daniel Farke and Leeds United have reached an agreement in principle on a new contract running to 2029. Paperwork is still to be finalised.',
+  });
+  assert.equal(leeds, 'Leeds United fan YouTubers react. Daniel Farke and Leeds United have reached an agreement in principle on a new contract running to 2029.');
+  assert.ok(leeds.length <= 155, leeds + ' (' + leeds.length + ')');
+  assert.match(leeds, /2029\.$/);
+
+  const united = seo.articleSeoMeta({
+    title: 'United YouTubers react as Martinez apologises after his board outburst',
+    related_team: 'manchester-united',
+    summary: 'Six directory channels react to Lisandro Martinez\'s apology. After criticising the hierarchy, he apologised.',
+  });
+  assert.equal(united, 'Man United fan YouTubers react. Six directory channels react to Lisandro Martinez\'s apology.');
+  assert.ok(united.length <= 155, united);
+  assert.doesNotMatch(united, /react to Martinez apologises/);
+
+  const noun = seo.articleSeoMeta({
+    title: 'Liverpool YouTubers react to a 6-3 win at LASK',
+    related_team: 'liverpool',
+    summary: 'Six directory channels react to the win.',
+  });
+  assert.match(noun, /^Liverpool fan YouTubers react to a 6-3 win at LASK\./);
 
   const same = seo.articleDateLine('2026-10-16T16:43:10Z', '2026-10-16T16:43:40Z');
   assert.match(same, /^Published /);

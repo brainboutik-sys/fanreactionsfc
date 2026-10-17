@@ -678,19 +678,34 @@ function articleCoverAlt(relatedOrClub, headline) {
   return title;
 }
 
+// A same-day or next-day updated_at is a bulk touch, not an edit.
+const ARTICLE_UPDATE_GAP_MS = 3 * 24 * 60 * 60 * 1000;
+
+function articleUpdateIsMeaningful(published, updated) {
+  const pub = published ? new Date(published) : null;
+  const upd = updated ? new Date(updated) : null;
+  if (!pub || Number.isNaN(pub.getTime()) || !upd || Number.isNaN(upd.getTime())) return false;
+  return upd.getTime() - pub.getTime() >= ARTICLE_UPDATE_GAP_MS;
+}
+
 function articleDateLine(published, updated) {
   const fmt = function (d) {
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   };
   const pub = published ? new Date(published) : null;
-  const upd = updated ? new Date(updated) : null;
   const pubOk = pub && !Number.isNaN(pub.getTime());
-  const updOk = upd && !Number.isNaN(upd.getTime());
-  if (pubOk && updOk && Math.abs(upd.getTime() - pub.getTime()) >= 60 * 60 * 1000) {
-    return seoFill(ARTICLE_COPY.updated, { Date: fmt(upd) });
+  if (articleUpdateIsMeaningful(published, updated)) {
+    return seoFill(ARTICLE_COPY.updated, { Date: fmt(new Date(updated)) });
   }
   if (pubOk) return seoFill(ARTICLE_COPY.published, { Date: fmt(pub) });
   return '';
+}
+
+function articleDateModified(published, updated) {
+  if (articleUpdateIsMeaningful(published, updated)) return updated;
+  const pub = published ? new Date(published) : null;
+  if (pub && !Number.isNaN(pub.getTime())) return published;
+  return undefined;
 }
 
 // SEO_COPY_END
@@ -718,6 +733,7 @@ if (typeof module !== 'undefined' && module.exports) {
     articleMoreLabel: articleMoreLabel,
     articleCoverAlt: articleCoverAlt,
     articleDateLine: articleDateLine,
+    articleDateModified: articleDateModified,
     seoMonthYear: seoMonthYear,
   };
 }

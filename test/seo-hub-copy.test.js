@@ -173,8 +173,26 @@ test('article meta leads with the club and the visible date flips when the artic
 
   const same = seo.articleDateLine('2026-10-16T16:43:10Z', '2026-10-16T16:43:40Z');
   assert.match(same, /^Published /);
-  const edited = seo.articleDateLine('2026-10-16T16:43:10Z', '2026-10-17T08:42:38Z');
-  assert.match(edited, /^Updated /);
+  const nextMorning = seo.articleDateLine('2026-10-16T16:43:10Z', '2026-10-17T08:42:38Z');
+  assert.match(nextMorning, /^Published /);
+  assert.doesNotMatch(nextMorning, /Updated/);
+});
+
+test('article updated date needs a gap of 3 days', () => {
+  const published = '2026-10-01T12:00:00Z';
+
+  assert.equal(seo.articleDateLine(published, null), 'Published 1 October 2026');
+  assert.equal(seo.articleDateLine(published, ''), 'Published 1 October 2026');
+  assert.equal(seo.articleDateModified(published, null), published);
+  assert.equal(seo.articleDateModified(published, undefined), published);
+
+  const within = '2026-10-04T11:59:59Z';
+  assert.equal(seo.articleDateLine(published, within), 'Published 1 October 2026');
+  assert.equal(seo.articleDateModified(published, within), published);
+
+  const later = '2026-10-05T12:00:00Z';
+  assert.equal(seo.articleDateLine(published, later), 'Updated 5 October 2026');
+  assert.equal(seo.articleDateModified(published, later), later);
 });
 
 function withCwd(fn) {
@@ -238,11 +256,12 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
       assert.match(res.body, /alt="A note with no club"/);
       assert.match(res.body, /Locked editorial body\. Chelsea is mentioned but must not be auto-linked\./);
       assert.match(res.body, /Published 1 October 2026/);
+      assert.doesNotMatch(res.body, /Updated 1 October 2026/);
       const article = JSON.parse(res.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g).pop().replace(/<\/?script[^>]*>/g, ''));
       assert.equal(article['@type'], 'NewsArticle');
       assert.equal(article.author.name, 'FanReactionsFC');
-      assert.ok(article.datePublished);
-      assert.ok(article.dateModified);
+      assert.equal(article.datePublished, '2026-10-01T00:00:00Z');
+      assert.equal(article.dateModified, article.datePublished);
     });
   } finally {
     global.fetch = origFetch;

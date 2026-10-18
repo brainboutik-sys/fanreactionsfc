@@ -111,8 +111,23 @@ test('article titles use the club display name and stay within 60 characters', (
   });
   assert.match(two, /Coventry/);
   assert.match(two, /Newcastle/);
-  // The two-club line with the score does not fit in 60, so the full headline stays.
-  assert.equal(two, 'Coventry and Newcastle YouTubers react to a 4-1 at the CBS Arena');
+  // "react to 4-1" is 64 characters. "fan" makes the short form 64 too, so it drops.
+  assert.equal(two, 'Coventry and Newcastle YouTubers react: 4-1 | FanReactionsFC');
+  assert.equal(two.length, 60);
+
+  const hill = seo.articleSeoTitle({
+    title: 'Everton and Chelsea YouTubers react to a 0-2 at the Hill Dickinson',
+    related_team: null,
+  });
+  assert.equal(hill, 'Everton and Chelsea YouTubers react: 0-2 | FanReactionsFC');
+  assert.ok(hill.length <= 60, hill);
+
+  const fulham = seo.articleSeoTitle({
+    title: 'Fulham and Wolves YouTubers react to a 1-0 at Craven Cottage tonight',
+    related_team: null,
+  });
+  assert.equal(fulham, 'Fulham and Wolves fan YouTubers react: 1-0 | FanReactionsFC');
+  assert.ok(fulham.length <= 60, fulham);
 
   const preview = seo.articleSeoTitle({
     title: 'Manchester City v Liverpool preview: Wednesday night',
@@ -141,7 +156,8 @@ test('article meta leads with the club and the visible date flips when the artic
     related_team: 'chelsea',
     summary: 'Six directory channels react to Reece James\'s knee surgery. Chelsea confirmed on Friday 16 Oct 2026 that the captain had surgery.',
   });
-  assert.equal(chelsea, 'Chelsea fan YouTubers react. Six directory channels react to Reece James\'s knee surgery.');
+  assert.equal(chelsea, 'Six directory channels react to Reece James\'s knee surgery.');
+  assert.doesNotMatch(chelsea, /^Chelsea fan YouTubers react\./);
   assert.ok(chelsea.length <= 155, chelsea);
   assert.doesNotMatch(chelsea, /faces three months/);
   assert.doesNotMatch(chelsea, /…$/);
@@ -151,7 +167,7 @@ test('article meta leads with the club and the visible date flips when the artic
     related_team: 'leeds-united',
     summary: 'Five directory channels react to the report (The Athletic, Fri 16 Oct 2026) that Daniel Farke and Leeds United have reached an agreement in principle on a new contract running to 2029. Paperwork is still to be finalised.',
   });
-  assert.equal(leeds, 'Leeds United fan YouTubers react. Daniel Farke and Leeds United have reached an agreement in principle on a new contract running to 2029.');
+  assert.equal(leeds, 'Five directory channels react to the report that Daniel Farke and Leeds United have reached an agreement in principle on a new contract running to 2029.');
   assert.ok(leeds.length <= 155, leeds + ' (' + leeds.length + ')');
   assert.match(leeds, /2029\.$/);
 
@@ -160,7 +176,7 @@ test('article meta leads with the club and the visible date flips when the artic
     related_team: 'manchester-united',
     summary: 'Six directory channels react to Lisandro Martinez\'s apology. After criticising the hierarchy, he apologised.',
   });
-  assert.equal(united, 'Man United fan YouTubers react. Six directory channels react to Lisandro Martinez\'s apology.');
+  assert.equal(united, 'Six directory channels react to Lisandro Martinez\'s apology.');
   assert.ok(united.length <= 155, united);
   assert.doesNotMatch(united, /react to Martinez apologises/);
 
@@ -262,6 +278,29 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
       assert.equal(article.author.name, 'FanReactionsFC');
       assert.equal(article.datePublished, '2026-10-01T00:00:00Z');
       assert.equal(article.dateModified, article.datePublished);
+    });
+
+    global.fetch = async () => ({
+      ok: true,
+      json: async () => [{
+        title: 'Everton and Chelsea YouTubers react to a 0-2 at the Hill Dickinson',
+        summary: 'Six directory channels react to the match.',
+        body: 'The rooms split.\n\nMore from [Toffee TV](/clubs/everton) and [GBFC](/clubs/chelsea).',
+        slug: 'everton-chelsea',
+        related_team: null,
+        published_at: '2026-10-17T00:00:00Z',
+        updated_at: '2026-10-17T00:05:00Z',
+      }],
+    });
+    await withCwd(async () => {
+      const res = await articleFn.handler({ path: '/news/everton-chelsea' });
+      assert.equal(res.statusCode, 200);
+      const related = res.body.match(/<div class="news-article-related">[\s\S]*?<\/div>/);
+      assert.ok(related, 'expected a related club link');
+      assert.match(related[0], /href="\/clubs\/everton"/);
+      assert.match(related[0], /More Everton fan YouTubers/);
+      assert.doesNotMatch(related[0], /\/clubs\/chelsea/);
+      assert.doesNotMatch(res.body, /\/clubs\/none/);
     });
   } finally {
     global.fetch = origFetch;
@@ -422,6 +461,59 @@ test('article titles and metas stay clean on the published catalogue', () => {
   assert.equal(seo.articleSeoTitle(brighton), brighton.title);
   const palace = at('leeds-and-crystal-palace-youtubers-react-to-a-0-0-at-elland-road');
   assert.match(seo.articleSeoTitle(palace), /react to 0–0 \|/);
+
+  const vitality = at('bournemouth-and-liverpool-youtubers-react-to-a-0-1-at-the-vitality');
+  assert.equal(seo.articleSeoTitle(vitality), vitality.title);
+  const carabao = at('liverpool-and-spurs-youtubers-react-to-a-3-1-carabao-at-anfield');
+  assert.equal(seo.articleSeoTitle(carabao), carabao.title);
+});
+
+test('meta keeps a quoted exclamation whole and does not repeat a react prefix', () => {
+  const ferdinand = seo.articleSeoMeta({
+    title: 'YouTubers react to the Rio Ferdinand v SaeedTV Instagram row',
+    related_team: 'manchester-united',
+    summary: "Directory channels react to the Instagram exchange between Rio Ferdinand and SaeedTV, reported on Sat 17 Oct 2026 by the Daily Mail, the Mirror and GiveMeSport. After Ferdinand shared a picture with Michael Carrick, Saeed commented 'Stop yapping and call out the owners!' and Ferdinand replied with a remark about Saeed's body, which the Daily Mail and Mirror describe as a \"fat-shaming\" row. Saeed answered in a 15-minute video, 'Exposing Rio Ferdinand!'. No response or apology from Ferdinand appears in the reporting we've read. All reactions are attributed to the creators; Staffy TV and TurkishLDN say they are friends of Saeed.",
+  });
+  assert.equal(ferdinand, "Saeed answered in a 15-minute video, 'Exposing Rio Ferdinand!'.");
+  assert.doesNotMatch(ferdinand, /owners!$/);
+  assert.ok(ferdinand.length <= 155, ferdinand);
+  assert.match(ferdinand, /[.!?]$/);
+
+  const clipped = seo.seoClip('Rio said "Stop yapping and call out the owners!" after the picture.', 40);
+  assert.equal(clipped, 'Rio said…');
+  assert.equal((clipped.match(/"/g) || []).length % 2, 0);
+  const curly = seo.seoClip('Rio said \u201cStop yapping and call out the owners!\u201d after the picture.', 28);
+  assert.equal(curly, 'Rio said…');
+  assert.equal((curly.match(/[\u201C\u201D"]/g) || []).length % 2, 0);
+  const previous = seo.seoClip('First sentence is done. Then Rio said "call out the owners!" and more words follow here.', 50);
+  assert.match(previous, /^First sentence is done\./);
+  assert.equal((previous.match(/"/g) || []).length % 2, 0);
+
+  const kept = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the captaincy',
+    related_team: 'chelsea',
+    summary: 'The captain had surgery on Friday. He will be out for months.',
+  });
+  assert.equal(kept, 'Chelsea fan YouTubers react. The captain had surgery on Friday.');
+
+  const named = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the captaincy',
+    related_team: 'chelsea',
+    summary: 'Chelsea confirmed the captain had surgery on Friday. He will be out for months.',
+  });
+  assert.equal(named, 'Chelsea confirmed the captain had surgery on Friday.');
+  assert.doesNotMatch(named, /^Chelsea fan YouTubers react\./);
+});
+
+test('a missing related club uses the first known /clubs/ link in the body', () => {
+  const everton = { related_team: null, body: 'Watch [Toffee TV](/clubs/everton) and [GBFC](/clubs/chelsea).' };
+  assert.equal(seo.articleMoreClub(everton), 'Everton');
+  assert.equal(seo.articleMoreLabel(seo.articleMoreClub(everton)), 'More Everton fan YouTubers');
+  const none = { related_team: 'none', body: 'Skip /clubs/none then /clubs/not-a-real-club and /clubs/chelsea.' };
+  assert.equal(seo.articleMoreClub(none), 'Chelsea');
+  assert.equal(seo.articleMoreClub({ related_team: 'none', body: 'Chelsea is named but not linked.' }), '');
+  assert.equal(seo.articleMoreClub({ related_team: null, body: 'See /clubs/none only.' }), '');
+  assert.equal(seo.articleMoreClub({ related_team: 'arsenal', body: 'See /clubs/chelsea first.' }), 'Arsenal');
 });
 
 test('static homepage shell does not say Loading', () => {

@@ -114,7 +114,12 @@ function seoClip(text, max) {
   if (t.length <= max) return t;
   const cut = t.slice(0, Math.max(0, max - 1));
   const sp = cut.lastIndexOf(' ');
-  return ((sp > 40 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '')).trim() + '…';
+  let out = ((sp > 40 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '')).trim();
+  if (unclosedQuoteIndex(out) >= 0) {
+    const retreated = retreatOpenQuote(out);
+    if (retreated && unclosedQuoteIndex(retreated) < 0) out = retreated;
+  }
+  return out + '…';
 }
 
 function seoClipWords(text, max) {
@@ -502,14 +507,101 @@ function labelPairs(a, b) {
   return pairs;
 }
 
+function isSeoWordChar(ch) {
+  return /[A-Za-z0-9]/.test(ch || '');
+}
+
+// Straight or curly double quotes, plus a single quote used as a quotation
+// mark. Apostrophes in don't / James's stay unmarked: a ' between word
+// characters is not a quote.
+function isSingleOpener(prev, next) {
+  if (isSeoWordChar(prev) && isSeoWordChar(next)) return false;
+  return isSeoWordChar(next) && (prev === '' || /[\s(\[{]/.test(prev));
+}
+
+function isSingleCloser(prev, ch, next) {
+  if (ch !== "'" && ch !== '’' && ch !== '‘') return false;
+  if (isSeoWordChar(prev) && isSeoWordChar(next)) return false;
+  return (isSeoWordChar(prev) || /[.!?]/.test(prev)) && (next === '' || !isSeoWordChar(next));
+}
+
+function unclosedQuoteIndex(text) {
+  let open = -1;
+  let kind = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charAt(i);
+    const prev = i > 0 ? text.charAt(i - 1) : '';
+    const next = i + 1 < text.length ? text.charAt(i + 1) : '';
+    if (kind === 'd') {
+      if (ch === '"' || ch === '”') { kind = ''; open = -1; }
+      continue;
+    }
+    if (kind === 's') {
+      if (isSingleCloser(prev, ch, next)) { kind = ''; open = -1; }
+      continue;
+    }
+    if (ch === '"' || ch === '“') { kind = 'd'; open = i; continue; }
+    if ((ch === "'" || ch === '‘' || ch === '’') && isSingleOpener(prev, next)) {
+      kind = 's';
+      open = i;
+    }
+  }
+  return open;
+}
+
+// A length cut or a !/?/. inside a quote leaves the opener unmatched.
+// Back up to before that opener on a word boundary, or to the previous
+// sentence when the leftover fragment is not itself a sentence.
+function retreatOpenQuote(text) {
+  let cut = String(text || '').replace(/\s+/g, ' ').trim();
+  let guard = 0;
+  while (unclosedQuoteIndex(cut) >= 0 && guard++ < 6) {
+    const openAt = unclosedQuoteIndex(cut);
+    let before = cut.slice(0, openAt);
+    if (openAt > 0 && !/\s/.test(cut.charAt(openAt - 1))) {
+      const sp = before.lastIndexOf(' ');
+      if (sp > 0) before = before.slice(0, sp);
+    }
+    before = before.replace(/\s+$/, '').replace(/[.,;:]+$/, '').trim();
+    const sentences = wholeSentences(before);
+    if (sentences.length) {
+      const last = sentences[sentences.length - 1];
+      const at = before.lastIndexOf(last);
+      const rest = before.slice(at + last.length).trim();
+      if (rest) {
+        if (last === cut) break;
+        cut = last;
+        continue;
+      }
+    }
+    if (!before || before === cut) {
+      cut = before;
+      break;
+    }
+    cut = before;
+  }
+  return cut;
+}
+
+function balanceMetaQuotes(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t || unclosedQuoteIndex(t) < 0) return t;
+  const retreated = retreatOpenQuote(t);
+  if (retreated && unclosedQuoteIndex(retreated) < 0) return retreated;
+  return t;
+}
+
 // A sentence ends on ! or ?, or on '.' at the end of the text or followed by
 // whitespace and a capital letter. Periods in £1.5m and after Mr/Mrs/Dr/St/v/vs do not end it.
+// Punctuation inside an open quote is not a boundary, so a cut never drops
+// the closing quote.
 function wholeSentences(text) {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
   const out = [];
   let start = 0;
   for (let i = 0; i < t.length; i++) {
     const ch = t.charAt(i);
+    if (unclosedQuoteIndex(t.slice(0, i)) >= 0) continue;
     let boundary = false;
     if (ch === '!' || ch === '?') boundary = true;
     else if (ch === '.') {
@@ -571,7 +663,23 @@ function articleSeoTitle(article) {
       const title = seoFill(ARTICLE_COPY.twoClub, { A: pairs[i][0], B: pairs[i][1], Score: score }) + ARTICLE_TITLE_SUFFIX;
       if (acceptTitle(title)) return title;
     }
-    return headlineTitle(headline);
+    // The "react to {Score}" line is over 60. A shorter "react: {Score}"
+    // fits some pairs; "fan" drops only when that is what keeps it in 60,
+    // same as the single-club title prefixes.
+    const fallback = headlineTitle(headline);
+    if (fallback.length > ARTICLE_TITLE_MAX) {
+      const shortTpls = [
+        '{A} and {B} fan YouTubers react: {Score}',
+        '{A} and {B} YouTubers react: {Score}',
+      ];
+      for (let t = 0; t < shortTpls.length; t++) {
+        for (let i = 0; i < pairs.length; i++) {
+          const title = seoFill(shortTpls[t], { A: pairs[i][0], B: pairs[i][1], Score: score }) + ARTICLE_TITLE_SUFFIX;
+          if (acceptTitle(title)) return title;
+        }
+      }
+    }
+    return fallback;
   }
   if (primary && !isPreview) {
     const event = curatedEventPhrase(eventFromHeadline(headline));
@@ -612,7 +720,7 @@ function previewSeoMeta(pair, sentences) {
   return usable[0] || 'Match preview.';
 }
 
-function articleSeoMeta(article) {
+function composeArticleSeoMeta(article) {
   const headline = (article && (article.title || article.headline)) || '';
   const club = articleClubName(article && (article.related_team || article.relatedTeam));
   const event = allowListEvent(eventFromHeadline(headline), headline);
@@ -631,6 +739,13 @@ function articleSeoMeta(article) {
   else if (club) lead = club + ' fan YouTubers react.';
   if (lead.length > ARTICLE_META_MAX) lead = club ? (club + ' fan YouTubers react.') : '';
   if (lead.length > ARTICLE_META_MAX) lead = '';
+  // "Chelsea fan YouTubers react." repeats the summary when that summary
+  // already says react, or already opens with the club name.
+  const genericLead = club ? (club + ' fan YouTubers react.') : '';
+  if (lead && lead === genericLead) {
+    const startsWithClub = new RegExp('^' + seoEscapeReg(club) + '\\b', 'i').test(summary);
+    if (startsWithClub || /\breact\b/i.test(summary)) lead = '';
+  }
   const sentence = sentences[0] || '';
   const stripped = parenStrippedSentence(sentence);
   const inner = thatClause(stripped || sentence);
@@ -664,10 +779,33 @@ function articleSeoMeta(article) {
   return 'Football fan YouTubers react.';
 }
 
+function articleSeoMeta(article) {
+  return balanceMetaQuotes(composeArticleSeoMeta(article));
+}
+
 function articleMoreLabel(related) {
   const club = articleClubName(related);
   if (!club) return '';
   return seoFill(ARTICLE_COPY.more, { Club: club });
+}
+
+// related_team null / none has no hub. The first /clubs/<slug> in the body
+// is used when that slug is a known club, so a two-club piece still links.
+function articleHubClubFromBody(body) {
+  const text = String(body || '');
+  const re = /\/clubs\/([A-Za-z0-9-]+)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const name = articleClubName(m[1]);
+    if (name) return name;
+  }
+  return '';
+}
+
+function articleMoreClub(article) {
+  const fromRelated = articleClubName(article && (article.related_team || article.relatedTeam));
+  if (fromRelated) return fromRelated;
+  return articleHubClubFromBody(article && article.body);
 }
 
 function articleCoverAlt(relatedOrClub, headline) {

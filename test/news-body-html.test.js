@@ -60,6 +60,32 @@ const CASES = [
   ['Read [GBFC](/creators/gbfc) here.', '<p>Read <a href="/creators/gbfc">GBFC</a> here.</p>'],
   ['[xss](data:text/html,hi)', '<p>[xss](data:text/html,hi)</p>'],
   ['[xss](//evil.example/path)', '<p>[xss](//evil.example/path)</p>'],
+  ['The score was 1 | 0 after extra time.', '<p>The score was 1 | 0 after extra time.</p>'],
+  ['| not | a table |\n| still | just text |', '<p>| not | a table |\n| still | just text |</p>'],
+  [
+    '| Club | Score |\n| --- | --- |\n| Chelsea | 2 |\n| Everton | 0 |',
+    '<div class="news-table-wrap"><table class="news-table"><thead><tr><th scope="col">Club</th><th scope="col">Score</th></tr></thead><tbody><tr><td>Chelsea</td><td>2</td></tr><tr><td>Everton</td><td>0</td></tr></tbody></table></div>',
+  ],
+  [
+    '| Player | Goals |\n| --- | ---: |\n| Neto | 2 |',
+    '<div class="news-table-wrap"><table class="news-table"><thead><tr><th scope="col">Player</th><th scope="col" style="text-align:right">Goals</th></tr></thead><tbody><tr><td>Neto</td><td style="text-align:right">2</td></tr></tbody></table></div>',
+  ],
+  [
+    '| A | B | C |\n| :--- | :---: | ---: |\n| left | mid | right |',
+    '<div class="news-table-wrap"><table class="news-table"><thead><tr><th scope="col">A</th><th scope="col" style="text-align:center">B</th><th scope="col" style="text-align:right">C</th></tr></thead><tbody><tr><td>left</td><td style="text-align:center">mid</td><td style="text-align:right">right</td></tr></tbody></table></div>',
+  ],
+  [
+    '| Channel |\n| --- |\n| [GBFC](https://fanreactionsfc.com/creators/gbfc) |',
+    `<div class="news-table-wrap"><table class="news-table"><thead><tr><th scope="col">Channel</th></tr></thead><tbody><tr><td>${NAMED_A}</td></tr></tbody></table></div>`,
+  ],
+  [
+    '| Note |\n| --- |\n| <script>alert(1)</script> |',
+    '<div class="news-table-wrap"><table class="news-table"><thead><tr><th scope="col">Note</th></tr></thead><tbody><tr><td>&lt;script&gt;alert(1)&lt;/script&gt;</td></tr></tbody></table></div>',
+  ],
+  [
+    '| A | B | C |\n| --- | --- | --- |\n| 1 | 2 |\n| 3 | 4 | 5 | 6 |',
+    '<div class="news-table-wrap"><table class="news-table"><thead><tr><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th><th scope="col"></th></tr></thead><tbody><tr><td>1</td><td>2</td><td></td><td></td></tr><tr><td>3</td><td>4</td><td>5</td><td>6</td></tr></tbody></table></div>',
+  ],
 ];
 
 for (const [input, expected] of CASES) {
@@ -95,4 +121,67 @@ test('[xss](javascript:alert(1)) does not become an href', () => {
 test('plain paragraph body is unchanged', () => {
   assert.equal(newsBodyHTML('Hello world.'), '<p>Hello world.</p>');
   assert.equal(bodyHtml('Hello world.'), '<p>Hello world.</p>');
+});
+
+function legacyBody(body) {
+  function isSafeHref(url) {
+    const u = String(url).trim();
+    return /^https?:\/\//i.test(u) || (/^\//.test(u) && !u.startsWith('//'));
+  }
+  function inline(text) {
+    const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = LINK_RE.exec(text)) !== null) {
+      out += htmlEscaper(text.slice(last, m.index));
+      const href = m[2].trim();
+      if (isSafeHref(href)) out += `<a href="${htmlEscaper(href)}">${htmlEscaper(m[1])}</a>`;
+      else out += htmlEscaper(m[0]);
+      last = m.index + m[0].length;
+    }
+    out += htmlEscaper(text.slice(last));
+    return out;
+  }
+  return String(body).split(/\n\s*\n/).map(p => {
+    const trimmed = p.trim();
+    const m = trimmed.match(/^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/);
+    if (m) return `<div class="news-video-embed"><iframe src="https://www.youtube.com/embed/${m[1]}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+    if (/^##[ \t]+/.test(trimmed) && !trimmed.includes('\n')) {
+      return `<h2>${inline(trimmed.replace(/^##[ \t]+/, '').trim())}</h2>`;
+    }
+    return `<p>${inline(trimmed)}</p>`;
+  }).join('');
+}
+
+function chunkIsTable(chunk) {
+  const lines = String(chunk).trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2 || !lines.every(l => l.charAt(0) === '|')) return false;
+  let sep = lines[1].trim();
+  if (sep.charAt(0) === '|') sep = sep.slice(1);
+  if (sep.charAt(sep.length - 1) === '|') sep = sep.slice(0, -1);
+  const cells = sep.split('|').map(c => c.trim());
+  return cells.length > 0 && cells.every(c => /^:?-{3,}:?$/.test(c));
+}
+
+function bodyHasTable(body) {
+  return String(body).split(/\n\s*\n/).some(chunkIsTable);
+}
+
+test('published article bodies without tables stay byte-identical', () => {
+  const rows = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/published-articles.json'), 'utf8'));
+  assert.ok(rows.length >= 60);
+  let checked = 0;
+  for (const row of rows) {
+    if (typeof row.body !== 'string' || bodyHasTable(row.body)) continue;
+    assert.equal(newsBodyHTML(row.body), legacyBody(row.body), row.slug);
+    assert.equal(bodyHtml(row.body), legacyBody(row.body), row.slug);
+    checked++;
+  }
+  assert.equal(checked, rows.filter(row => typeof row.body === 'string' && !bodyHasTable(row.body)).length);
+  for (const [input] of CASES) {
+    if (bodyHasTable(input)) continue;
+    assert.equal(newsBodyHTML(input), legacyBody(input));
+    assert.equal(bodyHtml(input), legacyBody(input));
+  }
 });

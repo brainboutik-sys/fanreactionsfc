@@ -123,7 +123,14 @@ test('plain paragraph body is unchanged', () => {
   assert.equal(bodyHtml('Hello world.'), '<p>Hello world.</p>');
 });
 
-function legacyBody(body) {
+// Verbatim renderers from main (304f205), before the table branch.
+// newsBodyHTML is the previous js/app.js function; bodyHtml is the previous
+// netlify/functions/news-article.js function. Indentation matches main.
+const mainNewsBodyHTML = (function () {
+function escHtml(s) { return htmlEscaper(s); }
+const YOUTUBE_URL_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/;
+
+function newsBodyHTML(body) {
   function isSafeHref(url) {
     const u = String(url).trim();
     return /^https?:\/\//i.test(u) || (/^\//.test(u) && !u.startsWith('//'));
@@ -134,18 +141,18 @@ function legacyBody(body) {
     let last = 0;
     let m;
     while ((m = LINK_RE.exec(text)) !== null) {
-      out += htmlEscaper(text.slice(last, m.index));
+      out += escHtml(text.slice(last, m.index));
       const href = m[2].trim();
-      if (isSafeHref(href)) out += `<a href="${htmlEscaper(href)}">${htmlEscaper(m[1])}</a>`;
-      else out += htmlEscaper(m[0]);
+      if (isSafeHref(href)) out += `<a href="${escHtml(href)}">${escHtml(m[1])}</a>`;
+      else out += escHtml(m[0]);
       last = m.index + m[0].length;
     }
-    out += htmlEscaper(text.slice(last));
+    out += escHtml(text.slice(last));
     return out;
   }
-  return String(body).split(/\n\s*\n/).map(p => {
+  return body.split(/\n\s*\n/).map(p => {
     const trimmed = p.trim();
-    const m = trimmed.match(/^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/);
+    const m = trimmed.match(YOUTUBE_URL_RE);
     if (m) return `<div class="news-video-embed"><iframe src="https://www.youtube.com/embed/${m[1]}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
     if (/^##[ \t]+/.test(trimmed) && !trimmed.includes('\n')) {
       return `<h2>${inline(trimmed.replace(/^##[ \t]+/, '').trim())}</h2>`;
@@ -153,6 +160,45 @@ function legacyBody(body) {
     return `<p>${inline(trimmed)}</p>`;
   }).join('');
 }
+return newsBodyHTML;
+})();
+
+const mainBodyHtml = (function () {
+function esc(s) { return htmlEscaper(s); }
+const YOUTUBE_URL_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/;
+
+function bodyHtml(body) {
+  function isSafeHref(url) {
+    const u = String(url).trim();
+    return /^https?:\/\//i.test(u) || (/^\//.test(u) && !u.startsWith('//'));
+  }
+  function inline(text) {
+    const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = LINK_RE.exec(text)) !== null) {
+      out += esc(text.slice(last, m.index));
+      const href = m[2].trim();
+      if (isSafeHref(href)) out += `<a href="${esc(href)}">${esc(m[1])}</a>`;
+      else out += esc(m[0]);
+      last = m.index + m[0].length;
+    }
+    out += esc(text.slice(last));
+    return out;
+  }
+  return body.split(/\n\s*\n/).map(p => {
+    const trimmed = p.trim();
+    const m = trimmed.match(YOUTUBE_URL_RE);
+    if (m) return `<div class="news-video-embed"><iframe src="https://www.youtube.com/embed/${m[1]}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+    if (/^##[ \t]+/.test(trimmed) && !trimmed.includes('\n')) {
+      return `<h2>${inline(trimmed.replace(/^##[ \t]+/, '').trim())}</h2>`;
+    }
+    return `<p>${inline(trimmed)}</p>`;
+  }).join('');
+}
+return bodyHtml;
+})();
 
 function chunkIsTable(chunk) {
   const lines = String(chunk).trim().split('\n').map(l => l.trim()).filter(Boolean);
@@ -168,20 +214,37 @@ function bodyHasTable(body) {
   return String(body).split(/\n\s*\n/).some(chunkIsTable);
 }
 
-test('published article bodies without tables stay byte-identical', () => {
+test('non-table bodies match the main renderers', () => {
   const rows = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/published-articles.json'), 'utf8'));
   assert.ok(rows.length >= 60);
   let checked = 0;
   for (const row of rows) {
     if (typeof row.body !== 'string' || bodyHasTable(row.body)) continue;
-    assert.equal(newsBodyHTML(row.body), legacyBody(row.body), row.slug);
-    assert.equal(bodyHtml(row.body), legacyBody(row.body), row.slug);
+    assert.equal(newsBodyHTML(row.body), mainNewsBodyHTML(row.body), row.slug);
+    assert.equal(bodyHtml(row.body), mainBodyHtml(row.body), row.slug);
     checked++;
   }
   assert.equal(checked, rows.filter(row => typeof row.body === 'string' && !bodyHasTable(row.body)).length);
+
+  const samples = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/nontable-bodies.json'), 'utf8'));
+  assert.ok(samples.length >= 6);
+  const kinds = { paragraph: false, heading: false, youtube: false, link: false, stars: false, pipes: false };
+  for (const body of samples) {
+    assert.equal(bodyHasTable(body), false, body);
+    assert.equal(newsBodyHTML(body), mainNewsBodyHTML(body), body);
+    assert.equal(bodyHtml(body), mainBodyHtml(body), body);
+    if (body.includes('\n\n') && !body.includes('##') && !body.includes('http')) kinds.paragraph = true;
+    if (body.includes('## ')) kinds.heading = true;
+    if (/youtube\.com/.test(body)) kinds.youtube = true;
+    if (body.includes('](')) kinds.link = true;
+    if (body.includes('**')) kinds.stars = true;
+    if (body.includes('|')) kinds.pipes = true;
+  }
+  assert.deepEqual(kinds, { paragraph: true, heading: true, youtube: true, link: true, stars: true, pipes: true });
+
   for (const [input] of CASES) {
     if (bodyHasTable(input)) continue;
-    assert.equal(newsBodyHTML(input), legacyBody(input));
-    assert.equal(bodyHtml(input), legacyBody(input));
+    assert.equal(newsBodyHTML(input), mainNewsBodyHTML(input));
+    assert.equal(bodyHtml(input), mainBodyHtml(input));
   }
 });

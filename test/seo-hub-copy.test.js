@@ -285,7 +285,7 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
       json: async () => [{
         title: 'Everton and Chelsea YouTubers react to a 0-2 at the Hill Dickinson',
         summary: 'Six directory channels react to the match.',
-        body: 'The rooms split.\n\nMore from [Toffee TV](/clubs/everton) and [GBFC](/clubs/chelsea).',
+        body: 'The rooms split.\n\nMore from [GBFC](/clubs/chelsea) and [Toffee TV](/clubs/everton).',
         slug: 'everton-chelsea',
         related_team: null,
         published_at: '2026-10-17T00:00:00Z',
@@ -297,9 +297,9 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
       assert.equal(res.statusCode, 200);
       const related = res.body.match(/<div class="news-article-related">[\s\S]*?<\/div>/);
       assert.ok(related, 'expected a related club link');
-      assert.match(related[0], /href="\/clubs\/everton"/);
-      assert.match(related[0], /More Everton fan YouTubers/);
-      assert.doesNotMatch(related[0], /\/clubs\/chelsea/);
+      assert.match(related[0], /href="\/clubs\/chelsea"/);
+      assert.match(related[0], /More Chelsea fan YouTubers/);
+      assert.doesNotMatch(related[0], /\/clubs\/everton/);
       assert.doesNotMatch(res.body, /\/clubs\/none/);
     });
   } finally {
@@ -474,7 +474,7 @@ test('meta keeps a quoted exclamation whole and does not repeat a react prefix',
     related_team: 'manchester-united',
     summary: "Directory channels react to the Instagram exchange between Rio Ferdinand and SaeedTV, reported on Sat 17 Oct 2026 by the Daily Mail, the Mirror and GiveMeSport. After Ferdinand shared a picture with Michael Carrick, Saeed commented 'Stop yapping and call out the owners!' and Ferdinand replied with a remark about Saeed's body, which the Daily Mail and Mirror describe as a \"fat-shaming\" row. Saeed answered in a 15-minute video, 'Exposing Rio Ferdinand!'. No response or apology from Ferdinand appears in the reporting we've read. All reactions are attributed to the creators; Staffy TV and TurkishLDN say they are friends of Saeed.",
   });
-  assert.equal(ferdinand, "Saeed answered in a 15-minute video, 'Exposing Rio Ferdinand!'.");
+  assert.equal(ferdinand, "Man United fan YouTubers react. Saeed answered in a 15-minute video, 'Exposing Rio Ferdinand!'.");
   assert.doesNotMatch(ferdinand, /owners!$/);
   assert.ok(ferdinand.length <= 155, ferdinand);
   assert.match(ferdinand, /[.!?]$/);
@@ -503,17 +503,79 @@ test('meta keeps a quoted exclamation whole and does not repeat a react prefix',
   });
   assert.equal(named, 'Chelsea confirmed the captain had surgery on Friday.');
   assert.doesNotMatch(named, /^Chelsea fan YouTubers react\./);
+
+  const nineties = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the kits',
+    related_team: 'chelsea',
+    summary: "The '90s kits are back on Friday. The away shirt follows in May.",
+  });
+  assert.equal(nineties, "Chelsea fan YouTubers react. The '90s kits are back on Friday.");
+
+  const tis = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the kits',
+    related_team: 'chelsea',
+    summary: "'Tis the season for a new kit. The launch is Friday.",
+  });
+  assert.equal(tis, "Chelsea fan YouTubers react. 'Tis the season for a new kit.");
+  assert.doesNotMatch(tis, /launch is Friday/);
+
+  const inches = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the screen',
+    related_team: 'chelsea',
+    summary: 'He bought a 6" screen for the review. The video lands Friday.',
+  });
+  assert.equal(inches, 'Chelsea fan YouTubers react. He bought a 6" screen for the review.');
+
+  const apostrophes = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the captain',
+    related_team: 'chelsea',
+    summary: "James's knee is fine and we don't expect surgery. He trains on Friday.",
+  });
+  assert.equal(apostrophes, "Chelsea fan YouTubers react. James's knee is fine and we don't expect surgery.");
 });
 
-test('a missing related club uses the first known /clubs/ link in the body', () => {
-  const everton = { related_team: null, body: 'Watch [Toffee TV](/clubs/everton) and [GBFC](/clubs/chelsea).' };
-  assert.equal(seo.articleMoreClub(everton), 'Everton');
-  assert.equal(seo.articleMoreLabel(seo.articleMoreClub(everton)), 'More Everton fan YouTubers');
-  const none = { related_team: 'none', body: 'Skip /clubs/none then /clubs/not-a-real-club and /clubs/chelsea.' };
+test('a 100KB summary resolves well under a second', () => {
+  let summary = '';
+  while (summary.length < 100000) summary += 'The captain had surgery on Friday. ';
+  const start = process.hrtime.bigint();
+  const meta = seo.articleSeoMeta({
+    title: 'Chelsea YouTubers on the captaincy',
+    related_team: 'chelsea',
+    summary: summary,
+  });
+  const ms = Number(process.hrtime.bigint() - start) / 1e6;
+  assert.ok(ms < 500, '100KB summary took ' + ms + 'ms');
+  assert.equal(meta, 'Chelsea fan YouTubers react. The captain had surgery on Friday.');
+});
+
+test('a missing related club links the first hub only for a two-club headline', () => {
+  const everton = {
+    related_team: null,
+    title: 'Everton and Chelsea YouTubers react to a 0-2 at the Hill Dickinson',
+    body: 'Watch [GBFC](/clubs/chelsea) and [Toffee TV](/clubs/everton).',
+  };
+  assert.equal(seo.articleMoreClub(everton), 'Chelsea');
+  assert.equal(seo.articleMoreLabel(seo.articleMoreClub(everton)), 'More Chelsea fan YouTubers');
+  const none = {
+    related_team: 'none',
+    title: 'Everton and Chelsea YouTubers react to a 0-2 at the Hill Dickinson',
+    body: 'Skip /clubs/none then /clubs/not-a-real-club and /clubs/chelsea.',
+  };
   assert.equal(seo.articleMoreClub(none), 'Chelsea');
-  assert.equal(seo.articleMoreClub({ related_team: 'none', body: 'Chelsea is named but not linked.' }), '');
-  assert.equal(seo.articleMoreClub({ related_team: null, body: 'See /clubs/none only.' }), '');
-  assert.equal(seo.articleMoreClub({ related_team: 'arsenal', body: 'See /clubs/chelsea first.' }), 'Arsenal');
+  assert.equal(seo.articleMoreClub({ related_team: 'none', title: 'Everton and Chelsea YouTubers react to a 0-2', body: 'Chelsea is named but not linked.' }), '');
+  assert.equal(seo.articleMoreClub({ related_team: null, title: 'Everton and Chelsea YouTubers react to a 0-2', body: 'See /clubs/none only.' }), '');
+  assert.equal(seo.articleMoreClub({ related_team: 'arsenal', title: 'Everton and Chelsea YouTubers react to a 0-2', body: 'See /clubs/chelsea first.' }), 'Arsenal');
+  const noFooter = [
+    ['323 Premier League Fan YouTubers, Counted Club by Club', '/clubs/arsenal'],
+    ['Premier League YouTubers React to Deadline Day 2026', '/clubs/chelsea'],
+    ['Premier League YouTubers react to Croatia 0–7 England in Rijeka', '/clubs/newcastle'],
+    ['Premier League YouTubers react to England 2–3 Spain at Wembley', '/clubs/liverpool'],
+    ['Premier League YouTubers react as Ronaldo leaves Portugal camp', '/clubs/manchester-united'],
+  ];
+  noFooter.forEach((row) => {
+    assert.equal(seo.articleMoreClub({ related_team: null, title: row[0], body: 'See ' + row[1] + ' in the copy.' }), '', row[0]);
+    assert.equal(seo.articleMoreClub({ related_team: 'none', title: row[0], body: 'See ' + row[1] + ' in the copy.' }), '', row[0]);
+  });
 });
 
 test('static homepage shell does not say Loading', () => {

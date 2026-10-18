@@ -3679,8 +3679,10 @@ let newsOffset = 0;
 
 // A paragraph that's nothing but a YouTube URL (pasted on its own line,
 // blank line before/after — the same convention as any other paragraph)
-// renders as a responsive embed instead of link text. Same regex as
-// bodyHtml() in netlify/functions/news-article.js — keep both in sync.
+// renders as a responsive embed instead of link text. A chunk whose lines
+// all start with | and whose second line is a separator row renders as a
+// table. Same regex and table rules as bodyHtml() in
+// netlify/functions/news-article.js — keep both in sync.
 const YOUTUBE_URL_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&]\S*)?$/;
 
 function newsBodyHTML(body) {
@@ -3703,6 +3705,45 @@ function newsBodyHTML(body) {
     out += escHtml(text.slice(last));
     return out;
   }
+  function splitCells(line) {
+    let s = line.trim();
+    if (s.charAt(0) === '|') s = s.slice(1);
+    if (s.charAt(s.length - 1) === '|') s = s.slice(0, -1);
+    return s.split('|').map(c => c.trim());
+  }
+  function isSeparatorRow(line) {
+    const cells = splitCells(line);
+    return cells.length > 0 && cells.every(c => /^:?-{3,}:?$/.test(c));
+  }
+  function alignStyle(spec) {
+    const left = spec.charAt(0) === ':';
+    const right = spec.charAt(spec.length - 1) === ':';
+    if (left && right) return ' style="text-align:center"';
+    if (right) return ' style="text-align:right"';
+    return '';
+  }
+  function tableHtml(chunk) {
+    const lines = chunk.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2 || !lines.every(l => l.charAt(0) === '|') || !isSeparatorRow(lines[1])) return '';
+    const aligns = splitCells(lines[1]);
+    const header = splitCells(lines[0]);
+    const bodyRows = lines.slice(2).map(splitCells);
+    let cols = Math.max(header.length, aligns.length);
+    bodyRows.forEach(r => { if (r.length > cols) cols = r.length; });
+    function cells(row, cellTag) {
+      let html = '';
+      for (let i = 0; i < cols; i++) {
+        const spec = aligns[i] || '';
+        const align = /^:?-{3,}:?$/.test(spec) ? alignStyle(spec) : '';
+        const scope = cellTag === 'th' ? ' scope="col"' : '';
+        html += `<${cellTag}${scope}${align}>${inline(row[i] || '')}</${cellTag}>`;
+      }
+      return html;
+    }
+    const head = `<thead><tr>${cells(header, 'th')}</tr></thead>`;
+    const rows = bodyRows.map(r => `<tr>${cells(r, 'td')}</tr>`).join('');
+    return `<div class="news-table-wrap"><table class="news-table">${head}<tbody>${rows}</tbody></table></div>`;
+  }
   return body.split(/\n\s*\n/).map(p => {
     const trimmed = p.trim();
     const m = trimmed.match(YOUTUBE_URL_RE);
@@ -3710,6 +3751,8 @@ function newsBodyHTML(body) {
     if (/^##[ \t]+/.test(trimmed) && !trimmed.includes('\n')) {
       return `<h2>${inline(trimmed.replace(/^##[ \t]+/, '').trim())}</h2>`;
     }
+    const table = tableHtml(trimmed);
+    if (table) return table;
     return `<p>${inline(trimmed)}</p>`;
   }).join('');
 }
@@ -3829,6 +3872,9 @@ async function renderNewsArticle(slug) {
   }
 
   updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), firstPartyCoverUrl(article.cover_image_url));
+  const moreClub = articleMoreClub(article);
+  const moreLabel = moreClub ? articleMoreLabel(moreClub) : '';
+  const moreHref = moreClub ? clubPath(moreClub) : '';
 
   sb.rpc('increment_article_view', { article_id: article.id }).then(() => {});
 
@@ -3848,9 +3894,9 @@ async function renderNewsArticle(slug) {
     <div class="container container-narrow section">
       ${firstPartyCoverUrl(article.cover_image_url) ? `<img src="${escHtml(firstPartyCoverUrl(article.cover_image_url))}" alt="${escHtml(articleCoverAlt(article.related_team, article.title))}" class="news-article-cover">` : ''}
       <div class="news-article-body">${newsBodyHTML(article.body)}</div>
-      ${articleMoreLabel(article.related_team) ? `
+      ${moreLabel ? `
       <div class="news-article-related">
-        <a href="${clubPath(articleClubName(article.related_team))}" onclick="event.preventDefault();navigate('${clubPath(articleClubName(article.related_team))}')">${escHtml(articleMoreLabel(article.related_team))}</a>
+        <a href="${moreHref}" onclick="event.preventDefault();navigate('${moreHref}')">${escHtml(moreLabel)}</a>
       </div>` : ''}
       ${creatorLinksHTML(article.creator_links)}
       ${newsletterSignupHTML('article')}

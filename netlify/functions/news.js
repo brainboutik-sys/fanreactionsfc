@@ -114,7 +114,12 @@ function seoClip(text, max) {
   if (t.length <= max) return t;
   const cut = t.slice(0, Math.max(0, max - 1));
   const sp = cut.lastIndexOf(' ');
-  return ((sp > 40 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '')).trim() + '…';
+  let out = ((sp > 40 ? cut.slice(0, sp) : cut).replace(/[.,;:]+$/, '')).trim();
+  if (unclosedQuoteIndex(out) >= 0) {
+    const retreated = retreatOpenQuote(out);
+    if (retreated && unclosedQuoteIndex(retreated) < 0) out = retreated;
+  }
+  return out + '…';
 }
 
 function seoClipWords(text, max) {
@@ -502,21 +507,163 @@ function labelPairs(a, b) {
   return pairs;
 }
 
+function isSeoWordChar(ch) {
+  return /[A-Za-z0-9]/.test(ch || '');
+}
+
+// A ' is a quotation mark only when it opens at a word boundary and a closer
+// follows. Apostrophes in don't / James's, and a word-initial '90s / 'Tis
+// with no closer, stay plain text. A " after a word character (6" screen)
+// is an inch mark, not an opener. A " that opens a quotation and never
+// closes is the one unclosed quote index callers retreat from.
+function isSingleOpener(prev, next) {
+  if (isSeoWordChar(prev) && isSeoWordChar(next)) return false;
+  return isSeoWordChar(next) && (prev === '' || /[\s(\[{]/.test(prev));
+}
+
+function isSingleCloser(prev, ch, next) {
+  if (ch !== "'" && ch !== '’' && ch !== '‘') return false;
+  if (isSeoWordChar(prev) && isSeoWordChar(next)) return false;
+  return (isSeoWordChar(prev) || /[.!?]/.test(prev)) && (next === '' || !isSeoWordChar(next));
+}
+
+function isDoubleOpener(ch, prev) {
+  if (ch === '“') return true;
+  return ch === '"' && !isSeoWordChar(prev);
+}
+
+// One forward pass over precomputed closer indexes. Matched pairs are spans.
+// An opening " with no partner is left hanging; an opening ' with no partner
+// is ignored. O(n), so a long summary does not rescan each prefix.
+function scanQuotes(text) {
+  const n = text.length;
+  const nextDbl = new Array(n);
+  const nextSgl = new Array(n);
+  let nd = -1;
+  let ns = -1;
+  for (let i = n - 1; i >= 0; i--) {
+    nextDbl[i] = nd;
+    nextSgl[i] = ns;
+    const ch = text.charAt(i);
+    const prev = i > 0 ? text.charAt(i - 1) : '';
+    const next = i + 1 < n ? text.charAt(i + 1) : '';
+    if (ch === '"' || ch === '”') nd = i;
+    if (isSingleCloser(prev, ch, next)) ns = i;
+  }
+  const spans = [];
+  let hanging = -1;
+  for (let i = 0; i < n; i++) {
+    const ch = text.charAt(i);
+    const prev = i > 0 ? text.charAt(i - 1) : '';
+    const next = i + 1 < n ? text.charAt(i + 1) : '';
+    if (isDoubleOpener(ch, prev)) {
+      const c = nextDbl[i];
+      if (c > i) {
+        spans.push(i, c);
+        i = c;
+        continue;
+      }
+      hanging = i;
+      break;
+    }
+    if ((ch === "'" || ch === '‘' || ch === '’') && isSingleOpener(prev, next)) {
+      const c = nextSgl[i];
+      if (c > i) {
+        spans.push(i, c);
+        i = c;
+      }
+    }
+  }
+  return { spans: spans, hanging: hanging };
+}
+
+function unclosedQuoteIndex(text) {
+  return scanQuotes(String(text || '')).hanging;
+}
+
+// A length cut or a !/?/. inside a quote leaves the opener unmatched.
+// Back up to before that opener on a word boundary, or to the previous
+// sentence when the leftover fragment is not itself a sentence.
+function retreatOpenQuote(text) {
+  let cut = String(text || '').replace(/\s+/g, ' ').trim();
+  let guard = 0;
+  while (unclosedQuoteIndex(cut) >= 0 && guard++ < 6) {
+    const openAt = unclosedQuoteIndex(cut);
+    let before = cut.slice(0, openAt);
+    if (openAt > 0 && !/\s/.test(cut.charAt(openAt - 1))) {
+      const sp = before.lastIndexOf(' ');
+      if (sp > 0) before = before.slice(0, sp);
+    }
+    before = before.replace(/\s+$/, '').replace(/[.,;:]+$/, '').trim();
+    const sentences = wholeSentences(before);
+    if (sentences.length) {
+      const last = sentences[sentences.length - 1];
+      const at = before.lastIndexOf(last);
+      const rest = before.slice(at + last.length).trim();
+      if (rest) {
+        if (last === cut) break;
+        cut = last;
+        continue;
+      }
+    }
+    if (!before || before === cut) {
+      cut = before;
+      break;
+    }
+    cut = before;
+  }
+  return cut;
+}
+
+function balanceMetaQuotes(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t || unclosedQuoteIndex(t) < 0) return t;
+  const retreated = retreatOpenQuote(t);
+  if (retreated && unclosedQuoteIndex(retreated) < 0) return retreated;
+  return t;
+}
+
 // A sentence ends on ! or ?, or on '.' at the end of the text or followed by
 // whitespace and a capital letter. Periods in £1.5m and after Mr/Mrs/Dr/St/v/vs do not end it.
+// Punctuation inside an open quote is not a boundary, so a cut never drops
+// the closing quote.
+function abbrevBefore(text, i) {
+  let word = '';
+  for (let j = i - 1; j >= 0 && word.length < 4; j--) {
+    const ch = text.charAt(j);
+    if (!/[A-Za-z]/.test(ch)) break;
+    word = ch + word;
+  }
+  if (word.length > 3) return '';
+  return word.toLowerCase();
+}
+
+function periodEndsSentence(text, i) {
+  let j = i + 1;
+  if (j >= text.length) return true;
+  if (!/\s/.test(text.charAt(j))) return false;
+  while (j < text.length && /\s/.test(text.charAt(j))) j++;
+  return j < text.length && /[A-Z]/.test(text.charAt(j));
+}
+
 function wholeSentences(text) {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
+  const scanned = scanQuotes(t);
+  const spans = scanned.spans;
+  const hanging = scanned.hanging;
   const out = [];
   let start = 0;
+  let spanAt = 0;
   for (let i = 0; i < t.length; i++) {
+    if (hanging >= 0 && i > hanging) continue;
+    while (spanAt + 1 < spans.length && spans[spanAt + 1] < i) spanAt += 2;
+    if (spanAt < spans.length && i > spans[spanAt] && i <= spans[spanAt + 1]) continue;
     const ch = t.charAt(i);
     let boundary = false;
     if (ch === '!' || ch === '?') boundary = true;
     else if (ch === '.') {
-      const word = ((t.slice(0, i).match(/[A-Za-z]+$/) || [''])[0]).toLowerCase();
-      if (SENTENCE_ABBREV[word]) continue;
-      const rest = t.slice(i + 1);
-      boundary = rest === '' || /^\s+[A-Z]/.test(rest);
+      if (SENTENCE_ABBREV[abbrevBefore(t, i)]) continue;
+      boundary = periodEndsSentence(t, i);
     }
     if (!boundary) continue;
     const sentence = t.slice(start, i + 1).trim();
@@ -571,7 +718,23 @@ function articleSeoTitle(article) {
       const title = seoFill(ARTICLE_COPY.twoClub, { A: pairs[i][0], B: pairs[i][1], Score: score }) + ARTICLE_TITLE_SUFFIX;
       if (acceptTitle(title)) return title;
     }
-    return headlineTitle(headline);
+    // The "react to {Score}" line is over 60. A shorter "react: {Score}"
+    // fits some pairs; "fan" drops only when that is what keeps it in 60,
+    // same as the single-club title prefixes.
+    const fallback = headlineTitle(headline);
+    if (fallback.length > ARTICLE_TITLE_MAX) {
+      const shortTpls = [
+        '{A} and {B} fan YouTubers react: {Score}',
+        '{A} and {B} YouTubers react: {Score}',
+      ];
+      for (let t = 0; t < shortTpls.length; t++) {
+        for (let i = 0; i < pairs.length; i++) {
+          const title = seoFill(shortTpls[t], { A: pairs[i][0], B: pairs[i][1], Score: score }) + ARTICLE_TITLE_SUFFIX;
+          if (acceptTitle(title)) return title;
+        }
+      }
+    }
+    return fallback;
   }
   if (primary && !isPreview) {
     const event = curatedEventPhrase(eventFromHeadline(headline));
@@ -612,7 +775,7 @@ function previewSeoMeta(pair, sentences) {
   return usable[0] || 'Match preview.';
 }
 
-function articleSeoMeta(article) {
+function composeArticleSeoMeta(article) {
   const headline = (article && (article.title || article.headline)) || '';
   const club = articleClubName(article && (article.related_team || article.relatedTeam));
   const event = allowListEvent(eventFromHeadline(headline), headline);
@@ -631,6 +794,27 @@ function articleSeoMeta(article) {
   else if (club) lead = club + ' fan YouTubers react.';
   if (lead.length > ARTICLE_META_MAX) lead = club ? (club + ' fan YouTubers react.') : '';
   if (lead.length > ARTICLE_META_MAX) lead = '';
+  // Drop "Club fan YouTubers react." only for the sentence that is used,
+  // and only when that sentence already starts with the club or says
+  // "react". A later sentence that does neither keeps the prefix. If the
+  // prefix would push that sentence past 155, the sentence stands alone.
+  const genericLead = club ? (club + ' fan YouTubers react.') : '';
+  const clubRe = club ? new RegExp('^' + seoEscapeReg(club) + '\\b', 'i') : null;
+  function dropsPrefix(sentence) {
+    if (!lead || lead !== genericLead) return false;
+    if (clubRe && clubRe.test(sentence)) return true;
+    return /\breact\b/i.test(sentence);
+  }
+  function takePreferred(sentence) {
+    if (!sentence) return '';
+    // A sentence that already names the club or says "react" is the one
+    // to use, with no prefix, as soon as it fits. A shorter later clause
+    // must not bring the prefix back.
+    if (dropsPrefix(sentence)) return sentence.length <= ARTICLE_META_MAX ? sentence : '';
+    if (!lead) return '';
+    const combo = lead + ' ' + sentence;
+    return combo.length <= ARTICLE_META_MAX ? combo : '';
+  }
   const sentence = sentences[0] || '';
   const stripped = parenStrippedSentence(sentence);
   const inner = thatClause(stripped || sentence);
@@ -638,20 +822,16 @@ function articleSeoMeta(article) {
   if (sentence) fromFirst.push(sentence);
   if (stripped) fromFirst.push(stripped);
   if (inner) fromFirst.push(inner);
-  if (lead) {
-    for (let i = 0; i < fromFirst.length; i++) {
-      const combo = lead + ' ' + fromFirst[i];
-      if (combo.length <= ARTICLE_META_MAX) return combo;
-    }
+  for (let i = 0; i < fromFirst.length; i++) {
+    const picked = takePreferred(fromFirst[i]);
+    if (picked) return picked;
   }
   for (let i = 0; i < fromFirst.length; i++) {
     if (fromFirst[i].length <= ARTICLE_META_MAX) return fromFirst[i];
   }
   for (let i = 1; i < sentences.length; i++) {
-    if (lead) {
-      const combo = lead + ' ' + sentences[i];
-      if (combo.length <= ARTICLE_META_MAX) return combo;
-    }
+    const picked = takePreferred(sentences[i]);
+    if (picked) return picked;
     if (sentences[i].length <= ARTICLE_META_MAX) return sentences[i];
   }
   if (lead) return lead;
@@ -664,10 +844,43 @@ function articleSeoMeta(article) {
   return 'Football fan YouTubers react.';
 }
 
+function articleSeoMeta(article) {
+  return balanceMetaQuotes(composeArticleSeoMeta(article));
+}
+
 function articleMoreLabel(related) {
   const club = articleClubName(related);
   if (!club) return '';
   return seoFill(ARTICLE_COPY.more, { Club: club });
+}
+
+function articleHubClubFromBody(body) {
+  const text = String(body || '');
+  const re = /\/clubs\/([A-Za-z0-9-]+)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const name = articleClubName(m[1]);
+    if (name) return name;
+  }
+  return '';
+}
+
+function relatedTeamUnset(article) {
+  const raw = article && (Object.prototype.hasOwnProperty.call(article, 'related_team') ? article.related_team : article.relatedTeam);
+  if (raw == null) return true;
+  return /^(none|null|n\/a|undefined)$/i.test(String(raw).trim()) || String(raw).trim() === '';
+}
+
+// related_team null / none has no hub. A body /clubs/<slug> link is used
+// only when the headline names exactly two known clubs, and then only the
+// club whose hub link appears first. Other unset articles get no footer.
+function articleMoreClub(article) {
+  const fromRelated = articleClubName(article && (article.related_team || article.relatedTeam));
+  if (fromRelated) return fromRelated;
+  if (!relatedTeamUnset(article)) return '';
+  const headline = (article && (article.title || article.headline)) || '';
+  if (clubsInHeadline(headline).length !== 2) return '';
+  return articleHubClubFromBody(article && article.body);
 }
 
 function articleCoverAlt(relatedOrClub, headline) {

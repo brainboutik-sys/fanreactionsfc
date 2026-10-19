@@ -2183,7 +2183,6 @@ async function renderProfile(slug) {
           ` : `
             <p class="cp-verified-note">Verified creators are pinned on their club page, listed first on Streamwall when they are live, and get a shareable monthly stats card.</p>
             <a href="${escHtml(VERIFIED_STRIPE_PAYMENT_LINK)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified</a>
-            <p class="cp-verified-note">Checkout is not live yet. This button uses a placeholder Stripe Payment Link. Verified status is turned on with SQL until billing is wired.</p>
           `}
         </div>
 
@@ -2260,8 +2259,7 @@ async function renderProfile(slug) {
 
 function verifiedCtaHTML() {
   return `
-    <a href="${escHtml(VERIFIED_STRIPE_PAYMENT_LINK)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${escHtml(VERIFIED_PRICE_LABEL)}</a>
-    <p class="cp-verified-note">Checkout is not live yet. This button uses a placeholder Stripe Payment Link. Verified status is turned on with SQL until billing is wired.</p>`;
+    <a href="${escHtml(VERIFIED_STRIPE_PAYMENT_LINK)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${escHtml(VERIFIED_PRICE_LABEL)}</a>`;
 }
 
 async function loadRecentUploads(c) {

@@ -9,13 +9,12 @@
    is a different admin flag and does not grant this tier.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// TODO(verified-billing): replace VERIFIED_STRIPE_PAYMENT_LINK with the live
-// Stripe Payment Link for the Verified tier. Do not create a Stripe product,
-// price, Checkout Session, or webhook in this codebase. Until that link
-// exists, Verified status is set with SQL — see
+// Live Stripe Payment Link for the Verified tier. Do not create a Stripe
+// product, price, Checkout Session, or webhook in this codebase. Verified
+// status is set with SQL — see
 // supabase/migrations/20261014120000_verified_creator_tier.sql
 const VERIFIED_PRICE_LABEL = 'CHF 4/month';
-const VERIFIED_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/TODO_REPLACE_WITH_LIVE_VERIFIED_PAYMENT_LINK';
+const VERIFIED_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/aFabJ03Rd2xw0KW4v0ffy00';
 
 function isCurrentlyVerified(row, now) {
   if (!row) return false;

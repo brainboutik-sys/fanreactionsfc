@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -59,31 +60,38 @@ test('stats share copy matches between the client helper and the stats function'
   assert.equal(lib.VERIFIED_PRICE_LABEL, 'CHF 4/month');
 });
 
-test('the Stripe Payment Link is a single placeholder constant', () => {
-  const config = statsFn.readVerifiedConfig();
-  assert.equal(config.link, lib.VERIFIED_STRIPE_PAYMENT_LINK);
-  assert.equal(config.price, lib.VERIFIED_PRICE_LABEL);
-  assert.match(config.link, /TODO_REPLACE_WITH_LIVE_VERIFIED_PAYMENT_LINK/);
+const LIVE_VERIFIED_PAYMENT_LINK = 'https://buy.stripe.com/aFabJ03Rd2xw0KW4v0ffy00';
+// Split so this file does not contain the forbidden placeholder string.
+const VERIFIED_PAYMENT_PLACEHOLDER = 'TODO_REPLACE_WITH_LIVE_VERIFIED_' + 'PAYMENT_LINK';
 
+function trackedRepoFiles() {
   const root = path.join(__dirname, '..');
+  const out = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' });
+  return out.split('\0').filter(Boolean).map(rel => ({
+    rel,
+    full: path.join(root, rel),
+  }));
+}
+
+test('the live Stripe Payment Link replaced the placeholder everywhere', () => {
+  const config = statsFn.readVerifiedConfig();
+  assert.equal(lib.VERIFIED_STRIPE_PAYMENT_LINK, LIVE_VERIFIED_PAYMENT_LINK);
+  assert.equal(config.link, LIVE_VERIFIED_PAYMENT_LINK);
+  assert.equal(config.price, lib.VERIFIED_PRICE_LABEL);
+
   const hits = [];
-  for (const dir of ['js', 'netlify']) {
-    const walk = (current) => {
-      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-        if (entry.name === 'node_modules') continue;
-        const full = path.join(current, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith('.js')) {
-          const text = fs.readFileSync(full, 'utf8');
-          if (text.includes('https://buy.stripe.com/TODO_REPLACE_WITH_LIVE_VERIFIED_PAYMENT_LINK')) {
-            hits.push(path.relative(root, full));
-          }
-        }
-      }
-    };
-    walk(path.join(root, dir));
+  const assignments = [];
+  for (const file of trackedRepoFiles()) {
+    const source = fs.readFileSync(file.full, 'latin1');
+    if (source.includes(VERIFIED_PAYMENT_PLACEHOLDER)) hits.push(file.rel);
+    for (const match of source.matchAll(/const VERIFIED_STRIPE_PAYMENT_LINK = '(https:\/\/[^']+)'/g)) {
+      assignments.push({ file: file.rel, link: match[1] });
+    }
   }
-  assert.deepEqual(hits, ['js/lib/verified.js']);
+  assert.deepEqual(hits, []);
+  assert.deepEqual(assignments, [
+    { file: 'js/lib/verified.js', link: LIVE_VERIFIED_PAYMENT_LINK },
+  ]);
 });
 
 test('the YouTube sync patch does not write the paid Verified columns', () => {
@@ -232,7 +240,8 @@ test('stats card stays locked when the creator is not verified, including before
       assert.ok(creatorCalls >= 2);
       assert.match(res.body, /name="robots" content="noindex, follow"/);
       assert.match(res.body, /Get Verified — CHF 4\/month/);
-      assert.match(res.body, /TODO_REPLACE_WITH_LIVE_VERIFIED_PAYMENT_LINK/);
+      assert.ok(res.body.includes(LIVE_VERIFIED_PAYMENT_LINK));
+      assert.equal(res.body.includes('Checkout is not live ' + 'yet'), false);
       assert.doesNotMatch(res.body, /99,999|99999|100\.0K/);
       assert.doesNotMatch(res.body, /id="creator-stats-card"/);
     });

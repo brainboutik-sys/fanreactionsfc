@@ -201,8 +201,7 @@ function notFoundHtml(html, reqPath) {
 function getVerifiedCta(config) {
   if (!config.link) return '';
   return `
-    <a href="${esc(config.link)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${esc(config.price)}</a>
-    <p class="cp-verified-note">Checkout is not live yet. This button uses a placeholder Stripe Payment Link. Verified status is turned on with SQL until billing is wired.</p>`;
+    <a href="${esc(config.link)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${esc(config.price)}</a>`;
 }
 
 const CREATOR_SELECT = 'id,name,slug,team,avatar_url,subscriber_count,video_count,latest_video_id,latest_video_title,latest_video_date,latest_video_views,latest_video_thumbnail,last_youtube_sync,is_verified,verified_until';

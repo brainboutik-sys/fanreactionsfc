@@ -4,10 +4,10 @@
 // (frfc_streamers.latest_video_* plus frfc_video_metrics). No analytics.
 //
 // Self-contained: do not require another function or js/lib module.
-// isCurrentlyVerified / statsShareCopy / statsMonthLabel must stay in
-// lockstep with js/lib/verified.js (see test/verified.test.js). The
-// Stripe Payment Link is read from that file so the URL lives in one
-// constant.
+// isCurrentlyVerified / statsShareCopy / statsMonthLabel / verifiedPaymentUrl
+// must stay in lockstep with js/lib/verified.js (see test/verified.test.js).
+// The Stripe Payment Link is read from that file so the URL lives in one
+// constant. This function passes the creator id only — never an email.
 
 const fs = require('fs');
 const path = require('path');
@@ -100,6 +100,20 @@ function readVerifiedConfig() {
     } catch { /* try the next location */ }
   }
   return { link: '', price: 'CHF 4/month' };
+}
+
+// Mirror of js/lib/verified.js verifiedPaymentUrl. The base URL is read
+// from that file. Do not pass an email from this server render.
+function verifiedPaymentUrl(creatorId, email) {
+  const base = readVerifiedConfig().link;
+  if (!base) return '';
+  const id = creatorId == null ? '' : String(creatorId).trim();
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(id)) return base;
+  const params = new URLSearchParams();
+  params.set('client_reference_id', id);
+  const mail = typeof email === 'string' ? email.trim() : '';
+  if (mail) params.set('prefilled_email', mail);
+  return base + '?' + params.toString();
 }
 
 function esc(s) {
@@ -198,10 +212,11 @@ function notFoundHtml(html, reqPath) {
   });
 }
 
-function getVerifiedCta(config) {
-  if (!config.link) return '';
+function getVerifiedCta(config, creatorId) {
+  const url = verifiedPaymentUrl(creatorId);
+  if (!url) return '';
   return `
-    <a href="${esc(config.link)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${esc(config.price)}</a>`;
+    <a href="${esc(url)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${esc(config.price)}</a>`;
 }
 
 const CREATOR_SELECT = 'id,name,slug,team,avatar_url,subscriber_count,video_count,latest_video_id,latest_video_title,latest_video_date,latest_video_views,latest_video_thumbnail,last_youtube_sync,is_verified,verified_until';
@@ -322,7 +337,7 @@ exports.handler = async (event) => {
       </div>
       <div class="container section">
         <div class="stats-locked">
-          ${getVerifiedCta(config)}
+          ${getVerifiedCta(config, creator.id)}
           <p><a href="${profileUrl}">Back to ${esc(creator.name)}</a></p>
         </div>
       </div>
@@ -406,3 +421,5 @@ exports.isCurrentlyVerified = isCurrentlyVerified;
 exports.statsShareCopy = statsShareCopy;
 exports.statsMonthLabel = statsMonthLabel;
 exports.readVerifiedConfig = readVerifiedConfig;
+exports.verifiedPaymentUrl = verifiedPaymentUrl;
+exports.esc = esc;

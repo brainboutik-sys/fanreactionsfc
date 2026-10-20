@@ -2,7 +2,8 @@
    FanReactionsFC — paid Verified creator tier
    Loaded before app.js (see index.html). Netlify functions must not
    require this file; they keep an equivalent copy of isCurrentlyVerified
-   / sortVerifiedFirst / statsShareCopy. Tests assert those copies match.
+   / statsShareCopy / statsMonthLabel / verifiedPaymentUrl. Tests assert
+   those copies match.
 
    A creator counts as verified when the paid flag is true AND
    verified_until is null or in the future. The legacy `verified` column
@@ -15,6 +16,22 @@
 // supabase/migrations/20261014120000_verified_creator_tier.sql
 const VERIFIED_PRICE_LABEL = 'CHF 4/month';
 const VERIFIED_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/aFabJ03Rd2xw0KW4v0ffy00';
+
+// client_reference_id ties the Payment Link to one frfc_streamers row.
+// Stripe accepts alphanumerics, dashes, and underscores, up to 200 characters.
+// prefilled_email is the signed-in viewer's own address, and only the
+// client passes it. No creator id means the bare link.
+function verifiedPaymentUrl(creatorId, email) {
+  const base = VERIFIED_STRIPE_PAYMENT_LINK;
+  if (!base) return '';
+  const id = creatorId == null ? '' : String(creatorId).trim();
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(id)) return base;
+  const params = new URLSearchParams();
+  params.set('client_reference_id', id);
+  const mail = typeof email === 'string' ? email.trim() : '';
+  if (mail) params.set('prefilled_email', mail);
+  return base + '?' + params.toString();
+}
 
 function isCurrentlyVerified(row, now) {
   if (!row) return false;
@@ -75,6 +92,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VERIFIED_PRICE_LABEL,
     VERIFIED_STRIPE_PAYMENT_LINK,
+    verifiedPaymentUrl,
     isCurrentlyVerified,
     sortVerifiedFirst,
     verifiedBadgeHTML,

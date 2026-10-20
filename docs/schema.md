@@ -43,6 +43,12 @@ YouTube-synced: `youtube_channel_id`, `subscriber_count`, `total_view_count`,
 applied on production): `is_verified` (boolean, default false), `verified_until`
 (timestamptz, null means no expiry). A creator counts as verified when
 `is_verified` is true and `verified_until` is null or in the future.
+`netlify/functions/stripe-webhook.js` sets those columns from Stripe
+`invoice.paid` (and does not clear them on subscription deletion). The
+link from a Stripe subscription to a creator lives in
+`frfc_verified_subscriptions` (migration
+`supabase/migrations/20261020160000_verified_stripe_webhook.sql`,
+**not applied by deploy**).
 Ranking snapshot: `subscriber_count_prev`,
 `avg_rating_prev`, `rank_snapshot_at`. Audit: `created_by`, `created_at`, `updated_at`.
 
@@ -75,6 +81,28 @@ this row only fills the separate sponsored card.
 
 Writes are the SQL editor or the service role. See the migration file for
 `insert` / `update` / `delete` examples.
+
+#### `frfc_verified_subscriptions` — Stripe customer and subscription per creator
+Migration `supabase/migrations/20261020160000_verified_stripe_webhook.sql`.
+**Not applied by deploy** — run it in the SQL editor before the webhook
+can store anything.
+
+`stripe_subscription_id` (PK), `stripe_customer_id`, `creator_id` →
+`frfc_streamers`, `status` (`active` | `past_due` | `canceled`). Written
+by `stripe-webhook.js` with the service-role key. `checkout.session.completed`
+inserts the row from `client_reference_id`. `invoice.paid` sets
+`frfc_streamers.is_verified` and extends `verified_until`. Deletion marks
+`canceled` and leaves the streamer columns alone so the paid period lapses
+on its own.
+
+| Op | Role | Rule |
+|----|------|------|
+| SELECT / INSERT / UPDATE / DELETE | anon, authenticated | no policy (revoked) |
+
+#### `frfc_stripe_events` — webhook idempotency
+Same migration. `event_id` (Stripe `evt_...`, PK), `event_type`,
+`processed_at`. A duplicate delivery is acknowledged and not applied again.
+Same RLS: no anon or authenticated policy; service role only.
 
 #### `frfc_subscriber_history` — subscriber time series (~3,375 rows)
 One row per creator per sync (`creator_id`, `subscriber_count`, `recorded_at`). Powers

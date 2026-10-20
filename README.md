@@ -140,7 +140,8 @@ Set in **Netlify → Project configuration → Environment variables** (never co
 | Variable | Used by | Notes |
 |---|---|---|
 | `YOUTUBE_API_KEY` | youtube-proxy, live-check, live-check-fixtures-background, sync-background, claim-creator | YouTube Data API v3 key, server-side only |
-| `SUPABASE_SERVICE_ROLE_KEY` | sitemap, creator-og, live-check, live-check-fixtures-background, fixtures-sync, sync-background, rank-snapshot, claim-creator | Supabase secret key — bypasses RLS for server writes. **Never expose client-side.** |
+| `SUPABASE_SERVICE_ROLE_KEY` | sitemap, creator-og, live-check, live-check-fixtures-background, fixtures-sync, sync-background, rank-snapshot, claim-creator, stripe-webhook | Supabase secret key — bypasses RLS for server writes. **Never expose client-side.** |
+| `STRIPE_WEBHOOK_SECRET` | stripe-webhook | Signing secret for the Verified webhook endpoint (`whsec_...`). HMAC key only — the function does not call the Stripe API and has no Stripe secret key. |
 | `FOOTBALL_DATA_API_KEY` | fixtures-sync | Free-tier key from football-data.org — pulls fixtures for every league/competition covered |
 | `SUPABASE_URL` | all functions | Optional; falls back to the hardcoded project URL |
 
@@ -175,10 +176,16 @@ fired a live-check for, so each kickoff only triggers once.
   defined in `supabase/migrations/20261014120000_verified_creator_tier.sql`.
   Those columns are already on production. CI does not re-run the file. A creator is verified when
   `is_verified` is true and `verified_until` is null or in the future.
-  Turn it on with the `UPDATE` examples in that file. The admin checkbox
-  still writes the legacy `verified` column and does not grant the tier.
   The "Get Verified" button uses `VERIFIED_STRIPE_PAYMENT_LINK` in
-  `js/lib/verified.js` (placeholder, no Stripe webhook).
+  `js/lib/verified.js` and passes the creator id as `client_reference_id`.
+  `netlify/functions/stripe-webhook.js` turns the tier on from
+  `invoice.paid` and leaves it to lapse at `verified_until` when the
+  subscription is deleted or a renewal fails. That function needs
+  `STRIPE_WEBHOOK_SECRET` plus the service-role key, and the tables in
+  `supabase/migrations/20261020160000_verified_stripe_webhook.sql` (run
+  that file in the SQL editor; deploy does not apply it). Comps are still
+  the `UPDATE` examples in the earlier migration. The admin checkbox
+  still writes the legacy `verified` column and does not grant the tier.
 - `frfc_contact_messages` and `frfc_creator_reports` allow public INSERT only — no
   public SELECT policy, so submissions are only readable via the Supabase dashboard,
   the `/admin` panel, or the email a trigger sends (see Edge Functions above).

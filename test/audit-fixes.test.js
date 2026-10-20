@@ -220,6 +220,8 @@ test('legal copy discloses Stripe the same way in privacy, cookies and terms', a
     const cook = await require('../netlify/functions/cookies.js').handler({ path: '/cookies' });
     assert.ok(priv.body.includes('<td>Stripe</td>'));
     assert.ok(priv.body.includes('Payment records for the Verified tier'));
+    assert.ok(priv.body.includes('passes Stripe the email of the account you are signed in with'));
+    assert.ok(appJs.includes('passes Stripe the email of the account you are signed in with'));
     assert.ok(cook.body.includes('Stripe-hosted checkout'));
     assert.doesNotMatch(priv.body + cook.body, /do not use Stripe|any other payment processor/);
     const lastUpdated = /Last updated ([A-Za-z]+ \d+, \d{4})/;

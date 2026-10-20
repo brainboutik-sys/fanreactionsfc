@@ -222,6 +222,15 @@ test('legal copy discloses Stripe the same way in privacy, cookies and terms', a
     assert.ok(priv.body.includes('Payment records for the Verified tier'));
     assert.ok(priv.body.includes('passes Stripe the email of the account you are signed in with'));
     assert.ok(appJs.includes('passes Stripe the email of the account you are signed in with'));
+    const storedIds = 'We store the Stripe customer ID and subscription ID against that creator profile so Verified status can follow the subscription.';
+    assert.ok(priv.body.includes(storedIds));
+    assert.ok(appJs.includes(storedIds));
+    assert.ok(priv.body.includes('Stripe customer and subscription IDs'));
+    assert.ok(appJs.includes('Stripe customer and subscription IDs'));
+    assert.ok(appJs.includes('we switch on Verified status automatically when Stripe confirms your payment'));
+    assert.doesNotMatch(appJs, /switch on Verified status manually/);
+    assert.doesNotMatch(priv.body, /switch on Verified status manually/);
+    assert.doesNotMatch(cook.body, /switch on Verified status manually/);
     assert.ok(cook.body.includes('Stripe-hosted checkout'));
     assert.doesNotMatch(priv.body + cook.body, /do not use Stripe|any other payment processor/);
     const lastUpdated = /Last updated ([A-Za-z]+ \d+, \d{4})/;

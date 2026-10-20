@@ -10,9 +10,9 @@
    is a different admin flag and does not grant this tier.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// Live Stripe Payment Link for the Verified tier. Do not create a Stripe
-// product, price, Checkout Session, or webhook in this codebase. Verified
-// status is set with SQL — see
+// Live Stripe Payment Link for the Verified tier. This file only builds
+// the link. Subscription state is applied by netlify/functions/stripe-webhook.js.
+// Manual comps are still SQL — see
 // supabase/migrations/20261014120000_verified_creator_tier.sql
 const VERIFIED_PRICE_LABEL = 'CHF 4/month';
 const VERIFIED_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/aFabJ03Rd2xw0KW4v0ffy00';

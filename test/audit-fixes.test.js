@@ -173,7 +173,7 @@ test('creator and stats prerenders set twitter:title and og:site_name', async ()
 });
 
 test('/privacy and /cookies are real documents, not the homepage shell', async () => {
-  const phrases = ['Supabase', 'Netlify', 'YouTube Data API', 'do not use Stripe'];
+  const phrases = ['Supabase', 'Netlify', 'YouTube Data API', 'hosted by Stripe'];
   for (const phrase of phrases) {
     assert.ok(appJs.includes(phrase), phrase);
   }
@@ -205,8 +205,26 @@ test('/privacy and /cookies are real documents, not the homepage shell', async (
     assert.doesNotMatch(cook.body, /<p class="subtitle">Loading/);
     assert.match(cook.body, /YouTube/);
     assert.match(cook.body, /Supabase/);
-    assert.match(cook.body, /do not use Stripe/);
+    assert.match(cook.body, /Stripe-hosted checkout/);
     assert.notEqual(priv.body, cook.body);
+  });
+});
+
+test('legal copy discloses Stripe the same way in privacy, cookies and terms', async () => {
+  assert.doesNotMatch(appJs, /do not use Stripe|any other payment processor/);
+  for (const phrase of ['<td>Stripe</td>', 'Stripe-hosted checkout', '7. Verified creator tier', '9. Contact']) {
+    assert.ok(appJs.includes(phrase), phrase);
+  }
+  await withCwd(async () => {
+    const priv = await require('../netlify/functions/privacy.js').handler({ path: '/privacy' });
+    const cook = await require('../netlify/functions/cookies.js').handler({ path: '/cookies' });
+    assert.ok(priv.body.includes('<td>Stripe</td>'));
+    assert.ok(priv.body.includes('Payment records for the Verified tier'));
+    assert.ok(cook.body.includes('Stripe-hosted checkout'));
+    assert.doesNotMatch(priv.body + cook.body, /do not use Stripe|any other payment processor/);
+    const lastUpdated = /Last updated ([A-Za-z]+ \d+, \d{4})/;
+    assert.equal(priv.body.match(lastUpdated)[1], cook.body.match(lastUpdated)[1]);
+    assert.ok(appJs.includes(`const LEGAL_LAST_UPDATED = '${priv.body.match(lastUpdated)[1]}'`));
   });
 });
 

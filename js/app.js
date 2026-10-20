@@ -3646,7 +3646,7 @@ async function submitContact() {
 // tables, localStorage keys, GTM/GA4, YouTube embeds) — not boilerplate.
 // These are informational drafts; have counsel review before relying on them
 // as your sole compliance basis.
-const LEGAL_LAST_UPDATED = 'October 15, 2026';
+const LEGAL_LAST_UPDATED = 'October 20, 2026';
 
 function legalPageShell(eyebrow, title, bodyHtml) {
   document.getElementById('app').innerHTML = `
@@ -3922,12 +3922,14 @@ function renderPrivacyPolicy() {
       <tr><td>Name, email, message subject/body</td><td>You submit the Contact form or report/claim a creator profile</td><td>To respond to your request</td></tr>
       <tr><td>Anonymous device identifier (random UUID, no personal info)</td><td>Automatically, stored in your browser</td><td>To prevent repeat voting abuse in Creator Battle</td></tr>
       <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
-      <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr>
+      <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr><tr><td>Payment details (card, billing name, email) and subscription status</td><td>Only if you buy the paid Verified tier. You enter card details on Stripe's checkout page, never on our site</td><td>To take payment, switch on Verified status, and keep the records the law requires</td></tr>
     </table>
-    <p>We do not collect payment information, and we do not use Stripe or any other payment processor. We do not collect government IDs or sensitive categories of data (health, religion, etc.). Public YouTube data — channel names, subscriber counts, and video links — is read with the YouTube Data API to build the directory. That is public creator information, not information about you as a visitor.</p>
+    <p>We never see or store your card number. If you buy the paid Verified tier you pay on a page hosted by Stripe; in Stripe we can see the name and email you paid with, the amount, and your subscription status. We do not collect government IDs or sensitive categories of data (health, religion, etc.). Public YouTube data — channel names, subscriber counts, and video links — is read with the YouTube Data API to build the directory. That is public creator information, not information about you as a visitor.</p>
 
     <h2>2. Legal basis for processing</h2>
     <p>We process account and profile data under <strong>contract</strong> (to provide the service you signed up for), contact/report data under <strong>legitimate interest</strong> (responding to inquiries), and both analytics cookies and the email newsletter under your <strong>consent</strong>. Newsletter consent is separate from cookie consent: it requires its own explicit, unticked opt-in and a confirmation email (double opt-in) before we send anything, and you can withdraw either consent at any time — analytics via the cookie banner or the "Cookie preferences" link in the footer, the newsletter via the unsubscribe link in every email or the <a href="/newsletter/preferences">newsletter preferences</a> page.</p>
+
+    <p>If you buy the paid Verified tier, we process your payment details under <strong>contract</strong> (to provide what you bought) and keep payment records under a <strong>legal obligation</strong> (accounting and tax law).</p>
 
     <h2>3. Who we share data with (subprocessors)</h2>
     <table class="legal-table">
@@ -3938,14 +3940,15 @@ function renderPrivacyPolicy() {
       <tr><td>MailerLite</td><td>Newsletter delivery and subscriber management (only if you opt in) — see <a href="https://www.mailerlite.com/legal/privacy-policy" target="_blank" rel="noopener">MailerLite's Privacy Policy</a></td></tr>
       <tr><td>Google (Sign-In, YouTube embeds, YouTube Data API, Tag Manager/Analytics)</td><td>Authentication, video embeds, public channel data, analytics (analytics only with consent)</td></tr>
       <tr><td>football-data.org</td><td>Match fixture data used to detect live streams</td></tr>
+      <tr><td>Stripe</td><td>Payment processing for the paid Verified tier (only if you buy it) — see <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's Privacy Policy</a></td></tr>
     </table>
-    <p>We do not sell your personal data. MailerLite acts as our data processor for the newsletter under a signed data processing agreement.</p>
+    <p>We do not sell your personal data. MailerLite acts as our data processor for the newsletter under a signed data processing agreement. Stripe processes payment details under its own terms and privacy policy.</p>
 
     <h2>4. International transfers</h2>
-    <p>Some of the providers above (Google, Resend, MailerLite, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
+    <p>Some of the providers above (Google, Resend, MailerLite, Stripe, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. You can request earlier deletion at any time — see Section 10.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. Payment records for the Verified tier are kept for as long as accounting and tax law require. Except where the law requires us to keep it, you can request earlier deletion at any time — see Section 10.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>
@@ -3994,7 +3997,7 @@ function renderCookiePolicy() {
 
     <h2>Third-party embeds</h2>
     <p>Creator videos and live streams are embedded from YouTube (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>) using its privacy-enhanced <code>youtube-nocookie.com</code> domain. Promotional and preview videos show a static thumbnail and only load the YouTube player after you click play, so no request reaches Google just from viewing those pages. The one exception is Streamwall: clicking "Open Streamwall" is itself the action that loads the video players you selected, since that page's whole purpose is watching those streams. Once a YouTube player loads, YouTube/Google may set cookies under Google's own policy.</p>
-    <p>Looking up public channel information with the YouTube Data API happens on our servers and does not set a cookie in your browser. We do not use Stripe, so the site sets no payment cookies.</p>
+    <p>Looking up public channel information with the YouTube Data API happens on our servers and does not set a cookie in your browser. Paying for the Verified tier happens on a Stripe-hosted checkout page that opens in a new tab. Stripe may set cookies there under <a href="https://stripe.com/privacy" target="_blank" rel="noopener">its own policy</a>; no Stripe code runs on fanreactionsfc.com itself, so the site sets no payment cookies.</p>
 
     <h2>Managing cookies</h2>
     <p>You can change your analytics choice anytime via the "Cookie preferences" link in the site footer, or clear cookies/localStorage in your browser settings.</p>
@@ -4023,10 +4026,16 @@ function renderTermsOfService() {
     <h2>6. Limitation of liability</h2>
     <p>To the extent permitted by law, FanReactionsFC is not liable for indirect or consequential damages arising from your use of the site.</p>
 
-    <h2>7. Changes</h2>
+    <h2>7. Verified creator tier</h2>
+    <p>Verified is an optional paid subscription for creators, currently CHF 4 per month. Verified creators are pinned on their club page, listed first on Streamwall when they are live, and get a shareable monthly stats card.</p>
+    <p>Payment is taken by Stripe on its own checkout page. The subscription renews every month until you cancel, and we switch on Verified status manually once your payment is confirmed.</p>
+    <p>You can cancel at any time by emailing <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a>. Cancelling stops future renewals, and Verified status stays on until the end of the period you have already paid for. Payments are not refunded, except where the law requires otherwise.</p>
+    <p>Verified is a paid listing feature, not an endorsement of a creator's content. We may remove Verified status, and cancel the subscription, if a profile is claimed falsely or the site is misused.</p>
+
+    <h2>8. Changes</h2>
     <p>We may update these terms as the site evolves; the "Last updated" date above reflects the current version.</p>
 
-    <h2>8. Contact</h2>
+    <h2>9. Contact</h2>
     <p><a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a></p>
 
     <p class="legal-disclaimer">This page is provided for transparency and is not a substitute for legal advice.</p>

@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SITE_URL = 'https://fanreactionsfc.com';
-const LAST_UPDATED = 'October 15, 2026';
+const LAST_UPDATED = 'October 20, 2026';
 
 let indexHtmlCache = null;
 function readIndexHtml() {
@@ -99,12 +99,14 @@ const BODY = `
       <tr><td>Name, email, message subject/body</td><td>You submit the Contact form or report/claim a creator profile</td><td>To respond to your request</td></tr>
       <tr><td>Anonymous device identifier (random UUID, no personal info)</td><td>Automatically, stored in your browser</td><td>To prevent repeat voting abuse in Creator Battle</td></tr>
       <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
-      <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr>
+      <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr><tr><td>Payment details (card, billing name, email) and subscription status</td><td>Only if you buy the paid Verified tier. You enter card details on Stripe's checkout page, never on our site</td><td>To take payment, switch on Verified status, and keep the records the law requires</td></tr>
     </table>
-    <p>We do not collect payment information, and we do not use Stripe or any other payment processor. We do not collect government IDs or sensitive categories of data (health, religion, etc.). Public YouTube data — channel names, subscriber counts, and video links — is read with the YouTube Data API to build the directory. That is public creator information, not information about you as a visitor.</p>
+    <p>We never see or store your card number. If you buy the paid Verified tier you pay on a page hosted by Stripe; in Stripe we can see the name and email you paid with, the amount, and your subscription status. We do not collect government IDs or sensitive categories of data (health, religion, etc.). Public YouTube data — channel names, subscriber counts, and video links — is read with the YouTube Data API to build the directory. That is public creator information, not information about you as a visitor.</p>
 
     <h2>2. Legal basis for processing</h2>
     <p>We process account and profile data under <strong>contract</strong> (to provide the service you signed up for), contact/report data under <strong>legitimate interest</strong> (responding to inquiries), and both analytics cookies and the email newsletter under your <strong>consent</strong>. Newsletter consent is separate from cookie consent: it requires its own explicit, unticked opt-in and a confirmation email (double opt-in) before we send anything, and you can withdraw either consent at any time — analytics via the cookie banner or the "Cookie preferences" link in the footer, the newsletter via the unsubscribe link in every email or the <a href="/newsletter/preferences">newsletter preferences</a> page.</p>
+
+    <p>If you buy the paid Verified tier, we process your payment details under <strong>contract</strong> (to provide what you bought) and keep payment records under a <strong>legal obligation</strong> (accounting and tax law).</p>
 
     <h2>3. Who we share data with (subprocessors)</h2>
     <table class="legal-table">
@@ -115,14 +117,15 @@ const BODY = `
       <tr><td>MailerLite</td><td>Newsletter delivery and subscriber management (only if you opt in) — see <a href="https://www.mailerlite.com/legal/privacy-policy" target="_blank" rel="noopener">MailerLite's Privacy Policy</a></td></tr>
       <tr><td>Google (Sign-In, YouTube embeds, YouTube Data API, Tag Manager/Analytics)</td><td>Authentication, video embeds, public channel data, analytics (analytics only with consent)</td></tr>
       <tr><td>football-data.org</td><td>Match fixture data used to detect live streams</td></tr>
+      <tr><td>Stripe</td><td>Payment processing for the paid Verified tier (only if you buy it) — see <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's Privacy Policy</a></td></tr>
     </table>
-    <p>We do not sell your personal data. MailerLite acts as our data processor for the newsletter under a signed data processing agreement.</p>
+    <p>We do not sell your personal data. MailerLite acts as our data processor for the newsletter under a signed data processing agreement. Stripe processes payment details under its own terms and privacy policy.</p>
 
     <h2>4. International transfers</h2>
-    <p>Some of the providers above (Google, Resend, MailerLite, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
+    <p>Some of the providers above (Google, Resend, MailerLite, Stripe, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. You can request earlier deletion at any time — see Section 10.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. Payment records for the Verified tier are kept for as long as accounting and tax law require. Except where the law requires us to keep it, you can request earlier deletion at any time — see Section 10.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>

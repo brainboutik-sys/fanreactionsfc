@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SITE_URL = 'https://fanreactionsfc.com';
-const LAST_UPDATED = 'October 15, 2026';
+const LAST_UPDATED = 'October 20, 2026';
 
 let indexHtmlCache = null;
 function readIndexHtml() {
@@ -105,7 +105,7 @@ const BODY = `
 
     <h2>Third-party embeds</h2>
     <p>Creator videos and live streams are embedded from YouTube (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>) using its privacy-enhanced <code>youtube-nocookie.com</code> domain. Promotional and preview videos show a static thumbnail and only load the YouTube player after you click play, so no request reaches Google just from viewing those pages. The one exception is Streamwall: clicking "Open Streamwall" is itself the action that loads the video players you selected, since that page's whole purpose is watching those streams. Once a YouTube player loads, YouTube/Google may set cookies under Google's own policy.</p>
-    <p>Looking up public channel information with the YouTube Data API happens on our servers and does not set a cookie in your browser. We do not use Stripe, so the site sets no payment cookies.</p>
+    <p>Looking up public channel information with the YouTube Data API happens on our servers and does not set a cookie in your browser. Paying for the Verified tier happens on a Stripe-hosted checkout page that opens in a new tab. Stripe may set cookies there under <a href="https://stripe.com/privacy" target="_blank" rel="noopener">its own policy</a>; no Stripe code runs on fanreactionsfc.com itself, so the site sets no payment cookies.</p>
 
     <h2>Managing cookies</h2>
     <p>You can change your analytics choice anytime via the "Cookie preferences" link in the site footer, or clear cookies/localStorage in your browser settings. See the <a href="/privacy">Privacy Policy</a> for how this relates to accounts stored in Supabase and hosting on Netlify.</p>

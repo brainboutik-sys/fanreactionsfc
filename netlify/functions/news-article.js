@@ -93,6 +93,7 @@ const SEO_HEADLINE_ALIASES = [
   ['Wolverhampton', 'Wolves'],
   ['Spurs', 'Tottenham'],
   ['Leeds', 'Leeds United'],
+  ['Bayern', 'Bayern Munich'],
 ];
 
 function seoFill(template, vars) {
@@ -266,17 +267,27 @@ function articleClubName(related) {
   return '';
 }
 
-function clubsInHeadline(headline) {
+// For each display name, keep the earliest match across its labels and
+// aliases, then sort. A later "Tottenham" must not beat an earlier "Spurs".
+function clubHits(headline) {
   const text = String(headline || '');
-  const found = [];
+  const best = Object.create(null);
   seoClubMatchList().forEach(function (row) {
-    if (found.some(function (f) { return f.display === row.display; })) return;
     const re = new RegExp('\\b' + seoEscapeReg(row.label) + '\\b', 'i');
     const idx = text.search(re);
-    if (idx >= 0) found.push({ display: row.display, index: idx });
+    if (idx < 0) return;
+    const prev = best[row.display];
+    if (!prev || idx < prev.index) {
+      best[row.display] = { display: row.display, index: idx, label: row.label };
+    }
   });
-  found.sort(function (a, b) { return a.index - b.index; });
-  return found.map(function (f) { return f.display; });
+  return Object.keys(best).map(function (key) { return best[key]; }).sort(function (a, b) {
+    return a.index - b.index;
+  });
+}
+
+function clubsInHeadline(headline) {
+  return clubHits(headline).map(function (hit) { return hit.display; });
 }
 
 function eventFromHeadline(headline) {
@@ -479,23 +490,32 @@ function curatedEventPhrase(event) {
   return '';
 }
 
-function articleTitlePrefixes(club) {
-  const names = [club];
-  const short = shorterClubLabel(club);
-  if (short && short !== club) names.push(short);
-  const prefixes = [];
-  names.forEach(function (name) {
-    prefixes.push(name + ' fan YouTubers react: ');
-    prefixes.push(name + ' YouTubers react: ');
+// Headline wording first when it is a shorter alias ("Spurs", "Bayern"),
+// then the directory name, then the existing short label.
+function labelChoices(name, surface) {
+  const names = [];
+  function add(n) {
+    if (n && names.indexOf(n) < 0) names.push(n);
+  }
+  if (surface && surface.length < String(name || '').length) add(surface);
+  add(name);
+  const short = shorterClubLabel(name);
+  if (short && short !== name) add(short);
+  return names;
+}
+
+function articleTitlePrefixes(club, surface) {
+  return labelChoices(club, surface).map(function (name) {
+    return name + ' fan YouTubers react: ';
   });
-  return prefixes;
 }
 
 // Pack the whole event or nothing. Never drop words off the front of it.
-function packArticleTitle(club, event) {
+// "fan" stays. A title that only fits by dropping it is not a candidate.
+function packArticleTitle(club, event, surface) {
   const phrase = String(event || '').trim();
   if (!phrase) return '';
-  const prefixes = articleTitlePrefixes(club);
+  const prefixes = articleTitlePrefixes(club, surface);
   for (let i = 0; i < prefixes.length; i++) {
     const title = prefixes[i] + phrase + ARTICLE_TITLE_SUFFIX;
     if (acceptTitle(title)) return title;
@@ -503,13 +523,9 @@ function packArticleTitle(club, event) {
   return '';
 }
 
-function labelPairs(a, b) {
-  const as = [a];
-  const bs = [b];
-  const sa = shorterClubLabel(a);
-  const sb = shorterClubLabel(b);
-  if (sa && sa !== a) as.push(sa);
-  if (sb && sb !== b) bs.push(sb);
+function labelPairs(a, b, surfaces) {
+  const as = labelChoices(a, surfaces && surfaces[a]);
+  const bs = labelChoices(b, surfaces && surfaces[b]);
   const pairs = [];
   as.forEach(function (aa) {
     bs.forEach(function (bb) { pairs.push([aa, bb]); });
@@ -703,10 +719,108 @@ function thatClause(sentence) {
   return '';
 }
 
+function surfaceMap(hits) {
+  const map = Object.create(null);
+  hits.forEach(function (hit) { map[hit.display] = hit.label; });
+  return map;
+}
+
+function twoClubTitles(a, b, score, surfaces, template) {
+  return labelPairs(a, b, surfaces).map(function (pair) {
+    return seoFill(template, { A: pair[0], B: pair[1], Score: score }) + ARTICLE_TITLE_SUFFIX;
+  });
+}
+
+function fanPackedTitles(club, event, surface) {
+  const phrase = String(event || '').trim();
+  if (!club || !phrase) return [];
+  return labelChoices(club, surface).map(function (name) {
+    return name + ' fan YouTubers react: ' + phrase + ARTICLE_TITLE_SUFFIX;
+  });
+}
+
+function firstFanTitle(titles) {
+  for (let i = 0; i < titles.length; i++) {
+    if (titles[i] && titles[i].indexOf('fan YouTubers') !== -1 && acceptTitle(titles[i])) return titles[i];
+  }
+  return '';
+}
+
+function rememberTitles(bucket, titles) {
+  titles.forEach(function (title) {
+    if (title && bucket.indexOf(title) < 0) bucket.push(title);
+  });
+}
+
+function shortestFanTitle(titles) {
+  let best = '';
+  for (let i = 0; i < titles.length; i++) {
+    const title = titles[i];
+    if (!title || title.indexOf('fan YouTubers') === -1 || !title.endsWith(ARTICLE_TITLE_SUFFIX)) continue;
+    if (!best || title.length < best.length) best = title;
+  }
+  return best;
+}
+
+function forceFanTitle(headline) {
+  let s = String(headline || '').replace(/\s+/g, ' ').trim()
+    .replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+  if (!s) s = 'Fan reactions';
+  if (!/fan YouTubers/i.test(s)) {
+    if (/YouTubers/i.test(s)) s = s.replace(/YouTubers/i, 'fan YouTubers');
+    else s += ' fan YouTubers';
+  }
+  return s + ARTICLE_TITLE_SUFFIX;
+}
+
+// No curated event. Keep the headline, swap in a shorter club label when the
+// headline used a longer one, and always add "fan YouTubers" plus the suffix.
+function fanHeadlineTitles(headline, club, surface) {
+  const base = String(headline || '').replace(/\s+/g, ' ').trim()
+    .replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+  const titles = [];
+  function add(text) {
+    const title = forceFanTitle(text);
+    if (title && titles.indexOf(title) < 0) titles.push(title);
+  }
+  if (!club) {
+    add(base);
+    return titles;
+  }
+  const names = labelChoices(club, surface);
+  const needles = [];
+  function pushNeedle(n) {
+    if (n && needles.indexOf(n) < 0) needles.push(n);
+  }
+  pushNeedle(surface);
+  pushNeedle(club);
+  names.forEach(pushNeedle);
+  needles.sort(function (a, b) { return b.length - a.length; });
+  let matched = '';
+  for (let i = 0; i < needles.length; i++) {
+    if (new RegExp('\\b' + seoEscapeReg(needles[i]) + '\\b', 'i').test(base)) {
+      matched = needles[i];
+      break;
+    }
+  }
+  if (!matched) {
+    add(base);
+    return titles;
+  }
+  const re = new RegExp('\\b' + seoEscapeReg(matched) + '\\b', 'i');
+  names.forEach(function (name) {
+    add(name.toLowerCase() === matched.toLowerCase() ? base : base.replace(re, name));
+  });
+  add(base);
+  return titles;
+}
+
 function articleSeoTitle(article) {
   const headline = (article && (article.title || article.headline)) || '';
   const primary = articleClubName(article && (article.related_team || article.relatedTeam));
-  const mentioned = clubsInHeadline(headline);
+  const hits = clubHits(headline);
+  const mentioned = hits.map(function (hit) { return hit.display; });
+  const surfaces = surfaceMap(hits);
   const other = mentioned.filter(function (name) { return name !== primary; })[0] || '';
   const pair = !primary && mentioned.length >= 2 ? mentioned : null;
   const a = primary || (pair ? pair[0] : '');
@@ -715,48 +829,51 @@ function articleSeoTitle(article) {
   const score = scoreMatch ? scoreMatch[0].replace(/\s+/g, '') : '';
   const isPreview = /\bpreview\b/i.test(headline);
   if (a && b && isPreview) {
-    const pairs = labelPairs(a, b);
-    for (let i = 0; i < pairs.length; i++) {
-      const title = seoFill(ARTICLE_COPY.preview, { A: pairs[i][0], B: pairs[i][1] }) + ARTICLE_TITLE_SUFFIX;
-      if (acceptTitle(title)) return title;
-    }
-    return headlineTitle(headline);
+    const titles = labelPairs(a, b, surfaces).map(function (pair) {
+      return seoFill(ARTICLE_COPY.preview, { A: pair[0], B: pair[1] }) + ARTICLE_TITLE_SUFFIX;
+    });
+    const fit = firstFanTitle(titles);
+    if (fit) return fit;
+    // The preview template stays intact when it is over 60. It is shorter
+    // than rewriting the whole headline, and it keeps "fan YouTubers".
+    const over = shortestFanTitle(titles);
+    if (over) return over;
+    return forceFanTitle(headline);
   }
-  if (a && b && score && /\breact\b/i.test(headline)) {
-    const pairs = labelPairs(a, b);
-    for (let i = 0; i < pairs.length; i++) {
-      const title = seoFill(ARTICLE_COPY.twoClub, { A: pairs[i][0], B: pairs[i][1], Score: score }) + ARTICLE_TITLE_SUFFIX;
-      if (acceptTitle(title)) return title;
-    }
-    // The "react to {Score}" line is over 60. A shorter "react: {Score}"
-    // fits some pairs; "fan" drops only when that is what keeps it in 60,
-    // same as the single-club title prefixes.
-    const fallback = headlineTitle(headline);
-    if (fallback.length > ARTICLE_TITLE_MAX) {
-      const shortTpls = [
-        '{A} and {B} fan YouTubers react: {Score}',
-        '{A} and {B} YouTubers react: {Score}',
-      ];
-      for (let t = 0; t < shortTpls.length; t++) {
-        for (let i = 0; i < pairs.length; i++) {
-          const title = seoFill(shortTpls[t], { A: pairs[i][0], B: pairs[i][1], Score: score }) + ARTICLE_TITLE_SUFFIX;
-          if (acceptTitle(title)) return title;
-        }
-      }
-    }
-    return fallback;
+  const candidates = [];
+  function take(titles) {
+    rememberTitles(candidates, titles);
+    return firstFanTitle(titles);
   }
-  if (primary && !isPreview) {
+  // related_team set is a single-club article, even if the opponent is named.
+  const twoClub = !primary && pair && score && /\breact\b/i.test(headline);
+  if (twoClub) {
+    const fitTo = take(twoClubTitles(pair[0], pair[1], score, surfaces, ARTICLE_COPY.twoClub));
+    if (fitTo) return fitTo;
+    const fitColon = take(twoClubTitles(pair[0], pair[1], score, surfaces, '{A} and {B} fan YouTubers react: {Score}'));
+    if (fitColon) return fitColon;
+  }
+  const packClub = (primary || (twoClub ? pair[0] : '') || (mentioned.length === 1 ? mentioned[0] : ''));
+  if (packClub && !isPreview) {
     const event = curatedEventPhrase(eventFromHeadline(headline));
-    const packed = packArticleTitle(primary, event);
-    if (packed) return packed;
+    const surface = surfaces[packClub] || '';
+    const fit = take(fanPackedTitles(packClub, event, surface));
+    if (fit) return fit;
     const bare = String(event || '').replace(/^(?:a|an)\s+/i, '');
     if (bare && bare !== event) {
-      const packedBare = packArticleTitle(primary, bare);
-      if (packedBare) return packedBare;
+      const fitBare = take(fanPackedTitles(packClub, bare, surface));
+      if (fitBare) return fitBare;
     }
   }
-  return headlineTitle(headline);
+  const over = shortestFanTitle(candidates);
+  if (over) return over;
+  const leadClub = primary || (mentioned.length === 1 ? mentioned[0] : '');
+  const rewritten = fanHeadlineTitles(headline, leadClub && !isPreview ? leadClub : '', leadClub ? (surfaces[leadClub] || '') : '');
+  const fitLead = firstFanTitle(rewritten);
+  if (fitLead) return fitLead;
+  const shortLead = shortestFanTitle(rewritten);
+  if (shortLead) return shortLead;
+  return forceFanTitle(headline);
 }
 
 function previewNamePair(headline, a, b) {

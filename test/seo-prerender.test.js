@@ -430,3 +430,165 @@ test('index.html sitewide JSON-LD includes Organization.sameAs', () => {
   assert.match(indexHtml, /instagram.com\/fanreactionsfc/);
   assert.match(indexHtml, /club-slugs.js/);
 });
+
+const seoCopy = require('../js/lib/seo-copy.js');
+
+test('clubsInHeadline keeps the earliest alias in headline order', () => {
+  assert.deepEqual(
+    seoCopy.clubsInHeadline('Spurs and Coventry YouTubers react to a 3-1 at Tottenham'),
+    ['Tottenham', 'Coventry']
+  );
+  assert.deepEqual(
+    seoCopy.clubsInHeadline('Bayern and Arsenal YouTubers react to a 2-2 at the Allianz Arena'),
+    ['Bayern Munich', 'Arsenal']
+  );
+  assert.deepEqual(
+    seoCopy.clubsInHeadline('Nottingham Forest and Arsenal YouTubers react to a 0-1 at the City Ground'),
+    ['Nottm Forest', 'Arsenal']
+  );
+});
+
+test('articleSeoTitle uses fan YouTubers and the suffix on the five headlines', () => {
+  const cases = [
+    [{ title: 'Spurs and Coventry YouTubers react to a 3-1 at Tottenham', related_team: null },
+      'Spurs and Coventry fan YouTubers react: 3-1 | FanReactionsFC'],
+    [{ title: 'Bayern and Arsenal YouTubers react to a 2-2 at the Allianz Arena', related_team: null },
+      'Bayern and Arsenal fan YouTubers react: 2-2 | FanReactionsFC'],
+    [{ title: 'Nottingham Forest and Arsenal YouTubers react to a 0-1 at the City Ground', related_team: null },
+      'Forest and Arsenal fan YouTubers react: 0-1 | FanReactionsFC'],
+    [{ title: 'Liverpool YouTubers react to a 4-3 win over Villarreal', related_team: 'liverpool' },
+      'Liverpool fan YouTubers react: 4-3 win over Villarreal | FanReactionsFC'],
+    [{ title: 'Manchester United YouTubers react as Ten Hag turns on INEOS', related_team: 'manchester-united' },
+      'Man Utd fan YouTubers react as Ten Hag turns on INEOS | FanReactionsFC'],
+  ];
+  for (const [article, expected] of cases) {
+    const title = seoCopy.articleSeoTitle(article);
+    assert.equal(title, expected);
+    assert.match(title, /fan YouTubers/);
+    assert.match(title, / \| FanReactionsFC$/);
+  }
+  const preview = seoCopy.articleSeoTitle({
+    title: 'Manchester City v Liverpool preview: Wednesday night',
+    related_team: 'manchester-city',
+  });
+  assert.equal(preview, 'Man City v Liverpool preview: fan YouTubers | FanReactionsFC');
+});
+
+test('article H1 render uses the stored title, not the SEO title', async () => {
+  const { handler } = require('../netlify/functions/news-article.js');
+  const stored = 'Spurs and Coventry YouTubers react to a 3-1 at Tottenham';
+  const seoTitle = 'Spurs and Coventry fan YouTubers react: 3-1 | FanReactionsFC';
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [{
+      title: stored,
+      dek: '',
+      summary: 'A summary.',
+      body: 'Body text.',
+      cover_image_url: null,
+      tags: [],
+      related_team: null,
+      published_at: '2026-10-20T00:00:00Z',
+      updated_at: '2026-10-20T00:00:00Z',
+      slug: 'spurs-coventry',
+    }],
+  });
+  try {
+    await withCwd(async () => {
+      const res = await handler({ path: '/news/spurs-coventry' });
+      assert.equal(res.statusCode, 200);
+      assert.match(res.body, new RegExp('<h1 class="page-hero-title">' + stored + '</h1>'));
+      assert.match(res.body, new RegExp('<title>' + seoTitle.replace(/[|]/g, '\\|') + '</title>'));
+      assert.doesNotMatch(res.body, new RegExp('<h1 class="page-hero-title">' + seoTitle.replace(/[|]/g, '\\|') + '</h1>'));
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+  }
+});
+
+test('club hub FAQPage matches the visible FAQ and omits watchalongs when none are tagged', async () => {
+  const { handler } = require('../netlify/functions/club-og.js');
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  const clubs = [
+    ['arsenal', 'Arsenal', 'AFTV'],
+    ['liverpool', 'Liverpool', 'Anfield Voice'],
+    ['manchester-city', 'Man City', 'CityXtra'],
+  ];
+  global.fetch = async (url) => {
+    const team = clubs.find((row) => String(url).includes('team=eq.' + encodeURIComponent(row[1])));
+    if (String(url).includes('frfc_streamers')) {
+      return {
+        ok: true,
+        json: async () => clubs.map((row, i) => ({
+          id: 'c' + i,
+          name: row[2],
+          slug: row[0] + '-tv',
+          team: row[1],
+          subscriber_count: 1500000 - i,
+          content_types: ['Reactions'],
+          description: 'Match reactions.',
+        })),
+      };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  function decodeEntities(s) {
+    return String(s)
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+  try {
+    await withCwd(async () => {
+      for (const [slug, club] of clubs) {
+        const res = await handler({ path: '/clubs/' + slug });
+        assert.equal(res.statusCode, 200, slug);
+        const scripts = [...res.body.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+        const pages = [];
+        for (const script of scripts) {
+          const json = JSON.parse(script[1]);
+          const nodes = json['@graph'] || [json];
+          nodes.forEach((node) => {
+            if (node && node['@type'] === 'FAQPage') pages.push(node);
+          });
+        }
+        assert.equal(pages.length, 1, slug + ' FAQPage count');
+        const questions = pages[0].mainEntity;
+        assert.equal(questions.some((q) => /watchalong/i.test(q.name)), false, slug);
+        const block = res.body.match(/<dl class="hub-faq">([\s\S]*?)<\/dl>/);
+        assert.ok(block, slug + ' visible FAQ');
+        const visible = [...block[1].matchAll(/<dt>([\s\S]*?)<\/dt><dd>([\s\S]*?)<\/dd>/g)].map((m) => ({
+          q: decodeEntities(m[1].replace(/<[^>]+>/g, '')),
+          a: decodeEntities(m[2].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim(),
+        }));
+        assert.equal(visible.length, questions.length, slug);
+        questions.forEach((q, i) => {
+          assert.equal(visible[i].q, q.name, slug);
+          assert.equal(visible[i].a, q.acceptedAnswer.text, slug);
+        });
+        assert.match(res.body, new RegExp('Best ' + club.replace(/ /g, ' ') + ' Fan YouTubers'));
+      }
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+  }
+});
+
+test('netlify.toml 301s /creators/shane-gooner to /clubs/arsenal before the creators splat', () => {
+  const toml = fs.readFileSync(path.join(__dirname, '..', 'netlify.toml'), 'utf8');
+  const from = toml.indexOf('from = "/creators/shane-gooner"');
+  const splat = toml.indexOf('from = "/creators/*"');
+  assert.ok(from > 0 && splat > from);
+  assert.match(toml, /from = "\/creators\/shane-gooner"\s+to = "\/clubs\/arsenal"\s+status = 301\s+force = true/);
+});

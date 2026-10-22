@@ -766,9 +766,8 @@ function forceFanTitle(headline) {
   let s = String(headline || '').replace(/\s+/g, ' ').trim()
     .replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
   if (!s) s = 'Fan reactions';
-  if (!/fan YouTubers/i.test(s)) {
-    if (/YouTubers/i.test(s)) s = s.replace(/YouTubers/i, 'fan YouTubers');
-    else s += ' fan YouTubers';
+  if (!/fan YouTubers/i.test(s) && /YouTubers/i.test(s)) {
+    s = s.replace(/YouTubers/i, 'fan YouTubers');
   }
   return s + ARTICLE_TITLE_SUFFIX;
 }

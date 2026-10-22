@@ -123,7 +123,7 @@ test('NewsArticle JSON-LD names FanReactionsFC as the author', async () => {
       assert.equal(article.author['@type'], 'Organization');
       assert.equal(article.author.name, 'FanReactionsFC');
       assert.equal(article.author.url, 'https://fanreactionsfc.com');
-      assert.match(res.body, /<meta name="twitter:title" content="Arsenal watchalong roundup fan YouTubers \| FanReactionsFC">/);
+      assert.match(res.body, /<meta name="twitter:title" content="Arsenal watchalong roundup \| FanReactionsFC">/);
       assert.match(res.body, /property="og:site_name" content="FanReactionsFC"/);
     });
   } finally {

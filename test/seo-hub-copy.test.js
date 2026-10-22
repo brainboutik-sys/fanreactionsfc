@@ -136,7 +136,7 @@ test('article titles use the club display name and keep fan YouTubers', () => {
   assert.match(preview, /^Man City v Liverpool preview: fan YouTubers \| FanReactionsFC$/);
 
   const none = seo.articleSeoTitle({ title: 'Arsenal watchalong roundup', related_team: 'none' });
-  assert.equal(none, 'Arsenal watchalong roundup fan YouTubers | FanReactionsFC');
+  assert.equal(none, 'Arsenal watchalong roundup | FanReactionsFC');
   assert.equal(seo.articleMoreLabel('none'), '');
   assert.equal(seo.articleMoreLabel(''), '');
   assert.equal(seo.articleMoreLabel('multi-club'), '');
@@ -377,7 +377,8 @@ test('article titles and metas stay clean on the published catalogue', () => {
     assert.ok(shape, row.slug + ' title is not a whole headline, clause boundary, or complete template: ' + title);
     assert.ok(core.length >= 20, row.slug + ' title event is under 20 characters: ' + title);
     if (shape === 'boundary') assert.ok(core.length >= 25, row.slug + ' boundary cut is under 25: ' + title);
-    assert.ok(title.length <= 120, row.slug + ' title ' + title.length + ' ' + title);
+    // Sanity cap, not the 60-character SEO target.
+    assert.ok(title.length <= 110, row.slug + ' title ' + title.length + ' ' + title);
     if (shape === 'headline') assert.equal(core, headline, row.slug);
     if (shape === 'boundary') {
       assert.equal(headline.indexOf(core), 0, row.slug);
@@ -450,7 +451,7 @@ test('article titles and metas stay clean on the published catalogue', () => {
   assert.equal(seo.articleSeoTitle(germany), 'Arsenal fan YouTubers react to Havertz injury on Germany duty | FanReactionsFC');
 
   const draw = at('arsenal-face-real-madrid-and-bayern-as-fan-channels-react-to-the-ucl-draw');
-  assert.equal(seo.articleSeoTitle(draw), 'Arsenal Face Real Madrid and Bayern as Fan Channels React to the UCL Draw fan YouTubers | FanReactionsFC');
+  assert.equal(seo.articleSeoTitle(draw), 'Arsenal Face Real Madrid and Bayern as Fan Channels React to the UCL Draw | FanReactionsFC');
 
   const arteta = at('arsenal-youtubers-react-as-arteta-agrees-a-new-long-term-deal');
   assert.equal(seo.articleSeoTitle(arteta), 'Arsenal fan YouTubers react: Arteta new long-term deal | FanReactionsFC');

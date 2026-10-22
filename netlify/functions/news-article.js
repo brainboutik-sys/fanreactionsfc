@@ -762,6 +762,13 @@ function shortestFanTitle(titles) {
   return best;
 }
 
+// Keep "fan" only when the full title, suffix included, fits in 60.
+// Dropping it is the whole adjustment. The event text stays intact.
+function applyFanCap(title) {
+  if (!title || title.length <= ARTICLE_TITLE_MAX || !/fan YouTubers/i.test(title)) return title;
+  return title.replace(/fan YouTubers/ig, 'YouTubers');
+}
+
 function forceFanTitle(headline) {
   let s = String(headline || '').replace(/\s+/g, ' ').trim()
     .replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
@@ -833,11 +840,9 @@ function articleSeoTitle(article) {
     });
     const fit = firstFanTitle(titles);
     if (fit) return fit;
-    // The preview template stays intact when it is over 60. It is shorter
-    // than rewriting the whole headline, and it keeps "fan YouTubers".
     const over = shortestFanTitle(titles);
-    if (over) return over;
-    return forceFanTitle(headline);
+    if (over) return applyFanCap(over);
+    return applyFanCap(forceFanTitle(headline));
   }
   const candidates = [];
   function take(titles) {
@@ -864,15 +869,15 @@ function articleSeoTitle(article) {
       if (fitBare) return fitBare;
     }
   }
-  const over = shortestFanTitle(candidates);
+  const over = applyFanCap(shortestFanTitle(candidates));
   if (over) return over;
   const leadClub = primary || (mentioned.length === 1 ? mentioned[0] : '');
   const rewritten = fanHeadlineTitles(headline, leadClub && !isPreview ? leadClub : '', leadClub ? (surfaces[leadClub] || '') : '');
   const fitLead = firstFanTitle(rewritten);
   if (fitLead) return fitLead;
-  const shortLead = shortestFanTitle(rewritten);
+  const shortLead = applyFanCap(shortestFanTitle(rewritten));
   if (shortLead) return shortLead;
-  return forceFanTitle(headline);
+  return applyFanCap(forceFanTitle(headline));
 }
 
 function previewNamePair(headline, a, b) {

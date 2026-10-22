@@ -448,7 +448,7 @@ test('clubsInHeadline keeps the earliest alias in headline order', () => {
   );
 });
 
-test('articleSeoTitle uses fan YouTubers and the suffix on the five headlines', () => {
+test('articleSeoTitle keeps fan only when the suffixed title fits in 60', () => {
   const cases = [
     [{ title: 'Spurs and Coventry YouTubers react to a 3-1 at Tottenham', related_team: null },
       'Spurs and Coventry fan YouTubers react: 3-1 | FanReactionsFC'],
@@ -457,15 +457,16 @@ test('articleSeoTitle uses fan YouTubers and the suffix on the five headlines', 
     [{ title: 'Nottingham Forest and Arsenal YouTubers react to a 0-1 at the City Ground', related_team: null },
       'Forest and Arsenal fan YouTubers react: 0-1 | FanReactionsFC'],
     [{ title: 'Liverpool YouTubers react to a 4-3 win over Villarreal', related_team: 'liverpool' },
-      'Liverpool fan YouTubers react: 4-3 win over Villarreal | FanReactionsFC'],
+      'Liverpool YouTubers react: 4-3 win over Villarreal | FanReactionsFC'],
     [{ title: 'Manchester United YouTubers react as Ten Hag turns on INEOS', related_team: 'manchester-united' },
-      'Man Utd fan YouTubers react as Ten Hag turns on INEOS | FanReactionsFC'],
+      'Man Utd YouTubers react as Ten Hag turns on INEOS | FanReactionsFC'],
   ];
   for (const [article, expected] of cases) {
     const title = seoCopy.articleSeoTitle(article);
     assert.equal(title, expected);
-    assert.match(title, /fan YouTubers/);
     assert.match(title, / \| FanReactionsFC$/);
+    if (title.length <= 60) assert.match(title, /fan YouTubers/);
+    else assert.doesNotMatch(title, /fan YouTubers/);
   }
   const preview = seoCopy.articleSeoTitle({
     title: 'Manchester City v Liverpool preview: Wednesday night',

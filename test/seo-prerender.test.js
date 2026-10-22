@@ -448,6 +448,25 @@ test('clubsInHeadline keeps the earliest alias in headline order', () => {
   );
 });
 
+test('a derby nickname is not Derby County and a headline Fan is kept', () => {
+  const derby = 'United and City YouTubers React to a 0-1 Manchester Derby';
+  assert.deepEqual(seoCopy.clubsInHeadline(derby), []);
+  assert.deepEqual(
+    seoCopy.clubsInHeadline('Arsenal and Chelsea YouTubers React to a 2-1 Emirates Derby'),
+    ['Arsenal', 'Chelsea']
+  );
+  assert.deepEqual(seoCopy.clubsInHeadline('Derby YouTubers react to a 1-0'), ['Derby']);
+  assert.equal(
+    seoCopy.articleSeoTitle({ title: derby, related_team: null }),
+    derby + ' | FanReactionsFC'
+  );
+  const counted = '323 Premier League Fan YouTubers, Counted Club by Club';
+  assert.equal(
+    seoCopy.articleSeoTitle({ title: counted, related_team: null }),
+    counted + ' | FanReactionsFC'
+  );
+});
+
 test('articleSeoTitle keeps fan only when the suffixed title fits in 60', () => {
   const cases = [
     [{ title: 'Spurs and Coventry YouTubers react to a 3-1 at Tottenham', related_team: null },

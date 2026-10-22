@@ -262,18 +262,27 @@ function articleClubName(related) {
   return '';
 }
 
+// "Manchester Derby" and "Emirates Derby" name the fixture, not Derby County.
+function derbyNickname(text, index) {
+  return /(?:Manchester|Emirates)\s+$/i.test(String(text || '').slice(0, index));
+}
+
 // For each display name, keep the earliest match across its labels and
 // aliases, then sort. A later "Tottenham" must not beat an earlier "Spurs".
 function clubHits(headline) {
   const text = String(headline || '');
   const best = Object.create(null);
   seoClubMatchList().forEach(function (row) {
-    const re = new RegExp('\\b' + seoEscapeReg(row.label) + '\\b', 'i');
-    const idx = text.search(re);
-    if (idx < 0) return;
-    const prev = best[row.display];
-    if (!prev || idx < prev.index) {
-      best[row.display] = { display: row.display, index: idx, label: row.label };
+    const re = new RegExp('\\b' + seoEscapeReg(row.label) + '\\b', 'ig');
+    let match;
+    while ((match = re.exec(text))) {
+      if ((row.display === 'Derby' || row.label === 'Derby') && derbyNickname(text, match.index)) continue;
+      const idx = match.index;
+      const prev = best[row.display];
+      if (!prev || idx < prev.index) {
+        best[row.display] = { display: row.display, index: idx, label: row.label };
+      }
+      break;
     }
   });
   return Object.keys(best).map(function (key) { return best[key]; }).sort(function (a, b) {
@@ -758,10 +767,15 @@ function shortestFanTitle(titles) {
 }
 
 // Keep "fan" only when the full title, suffix included, fits in 60.
-// Dropping it is the whole adjustment. The event text stays intact.
-function applyFanCap(title) {
-  if (!title || title.length <= ARTICLE_TITLE_MAX || !/fan YouTubers/i.test(title)) return title;
-  return title.replace(/fan YouTubers/ig, 'YouTubers');
+// Only the lowercase "fan" this code inserted is removed. A "Fan" the
+// headline already had stays, and the event text stays intact.
+function applyFanCap(title, headline) {
+  if (!title || title.length <= ARTICLE_TITLE_MAX || title.indexOf('fan YouTubers') === -1) return title;
+  const base = String(headline || '').replace(/\s+/g, ' ').trim()
+    .replace(/\s*\|\s*FanReactionsFC\s*$/, '');
+  const core = String(title).replace(/\s*\|\s*FanReactionsFC\s*$/, '').trim();
+  if (core === base && base.indexOf('fan YouTubers') !== -1) return title;
+  return title.replace(/fan YouTubers/g, 'YouTubers');
 }
 
 function forceFanTitle(headline) {
@@ -836,8 +850,8 @@ function articleSeoTitle(article) {
     const fit = firstFanTitle(titles);
     if (fit) return fit;
     const over = shortestFanTitle(titles);
-    if (over) return applyFanCap(over);
-    return applyFanCap(forceFanTitle(headline));
+    if (over) return applyFanCap(over, headline);
+    return applyFanCap(forceFanTitle(headline), headline);
   }
   const candidates = [];
   function take(titles) {
@@ -864,15 +878,15 @@ function articleSeoTitle(article) {
       if (fitBare) return fitBare;
     }
   }
-  const over = applyFanCap(shortestFanTitle(candidates));
+  const over = applyFanCap(shortestFanTitle(candidates), headline);
   if (over) return over;
   const leadClub = primary || (mentioned.length === 1 ? mentioned[0] : '');
   const rewritten = fanHeadlineTitles(headline, leadClub && !isPreview ? leadClub : '', leadClub ? (surfaces[leadClub] || '') : '');
   const fitLead = firstFanTitle(rewritten);
   if (fitLead) return fitLead;
-  const shortLead = applyFanCap(shortestFanTitle(rewritten));
+  const shortLead = applyFanCap(shortestFanTitle(rewritten), headline);
   if (shortLead) return shortLead;
-  return applyFanCap(forceFanTitle(headline));
+  return applyFanCap(forceFanTitle(headline), headline);
 }
 
 function previewNamePair(headline, a, b) {

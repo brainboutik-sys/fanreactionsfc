@@ -378,7 +378,7 @@ test('article titles and metas stay clean on the published catalogue', () => {
     assert.ok(core.length >= 20, row.slug + ' title event is under 20 characters: ' + title);
     if (shape === 'boundary') assert.ok(core.length >= 25, row.slug + ' boundary cut is under 25: ' + title);
     // Sanity cap, not the 60-character SEO target.
-    assert.ok(title.length <= 110, row.slug + ' title ' + title.length + ' ' + title);
+    assert.ok(title.length <= 100, row.slug + ' title ' + title.length + ' ' + title);
     if (shape === 'headline') assert.equal(core, headline, row.slug);
     if (shape === 'boundary') {
       assert.equal(headline.indexOf(core), 0, row.slug);

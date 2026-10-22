@@ -185,6 +185,14 @@ schedule = "0 5 * * *"
   to = "/.netlify/functions/creator-stats"
   status = 200
 
+# Removed Shane Gooner profile (channel gone from frfc_streamers). Must sit
+# above the /creators/* rewrite or that splat serves a 404 instead of 301.
+[[redirects]]
+  from = "/creators/shane-gooner"
+  to = "/clubs/arsenal"
+  status = 301
+  force = true
+
 # Per-creator SSR — unique H1/body/ProfilePage JSON-LD; trailing slash 301s
 # and unknown slugs 404 inside the function.
 [[redirects]]

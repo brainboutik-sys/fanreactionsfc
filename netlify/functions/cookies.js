@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SITE_URL = 'https://fanreactionsfc.com';
-const LAST_UPDATED = 'October 20, 2026';
+const LAST_UPDATED = 'October 22, 2026';
 
 let indexHtmlCache = null;
 function readIndexHtml() {

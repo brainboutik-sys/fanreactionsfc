@@ -220,7 +220,7 @@ test('legal copy discloses Stripe the same way in privacy, cookies and terms', a
     const cook = await require('../netlify/functions/cookies.js').handler({ path: '/cookies' });
     assert.ok(priv.body.includes('<td>Stripe</td>'));
     assert.ok(priv.body.includes('Payment records for the Verified tier'));
-    assert.ok(priv.body.includes('passes Stripe the email of the account you are signed in with'));
+    assert.ok(priv.body.includes('passes Stripe the email of the account you are signed in with')); assert.ok(priv.body.includes('channel URL you enter at checkout')); assert.ok(appJs.includes('channel URL you enter at checkout'));
     assert.ok(appJs.includes('passes Stripe the email of the account you are signed in with'));
     const storedIds = 'We store the Stripe customer ID and subscription ID against that creator profile so Verified status can follow the subscription.';
     assert.ok(priv.body.includes(storedIds));

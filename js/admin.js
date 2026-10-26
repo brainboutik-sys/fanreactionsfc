@@ -164,7 +164,7 @@ function renderPage() {
     content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Access Denied</h1><div class="admin-page-subtitle">Your role doesn\'t include the &ldquo;' + requiredPermission + '&rdquo; permission.</div></div></div>';
     return;
   }
-  if (adminPage === 'dashboard') { content.innerHTML = toggle + renderDashboard(); loadUnlinkedPayments(); }
+  if (adminPage === 'dashboard') { content.innerHTML = toggle + renderDashboard(); loadUnlinkedPayments(); loadLinkClicks(); }
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
@@ -222,7 +222,9 @@ function renderDashboard() {
     renderActivityList(adminLog.slice(0, 10)) +
   '</div></div>' +
 
-  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Unlinked Verified payments</span></div><div class="admin-card-body" id="adminUnlinkedBody">Loading…</div></div>';
+  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Unlinked Verified payments</span></div><div class="admin-card-body" id="adminUnlinkedBody">Loading…</div></div>' +
+
+  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Channel and watch-live clicks</span></div><div class="admin-card-body" id="adminLinkClicksBody">Loading…</div></div>';
 }
 
 async function loadUnlinkedPayments() {
@@ -254,6 +256,38 @@ async function loadUnlinkedPayments() {
       '</tbody></table>';
   } catch (e) {
     body.textContent = 'Could not load unlinked payments.';
+  }
+}
+
+async function loadLinkClicks() {
+  var body = document.getElementById('adminLinkClicksBody');
+  if (!body) return;
+  try {
+    var session = (await sb.auth.getSession()).data.session;
+    var res = await fetch('/.netlify/functions/admin-link-clicks', {
+      headers: { Authorization: 'Bearer ' + (session && session.access_token ? session.access_token : '') },
+    });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) {
+      body.textContent = data.error || 'Could not load link clicks.';
+      return;
+    }
+    if (data.pendingMigration) {
+      body.innerHTML = 'The click table is not in the database yet. Apply <code>supabase/migrations/20261026110000_frfc_link_clicks.sql</code> in the Supabase SQL editor.';
+      return;
+    }
+    var rows = data.counts || [];
+    if (!rows.length) {
+      body.textContent = 'No channel or watch-live clicks in the last 30 days.';
+      return;
+    }
+    body.innerHTML = '<table class="admin-table"><thead><tr><th>Creator</th><th>Club</th><th>Link</th><th>7 days</th><th>30 days</th></tr></thead><tbody>' +
+      rows.map(function(row) {
+        return '<tr><td>' + escHtml(row.creator_slug || '') + '</td><td>' + escHtml(row.club || '') + '</td><td>' + escHtml(row.link_type || '') + '</td><td>' + escHtml(String(row.clicks_7d || 0)) + '</td><td>' + escHtml(String(row.clicks_30d || 0)) + '</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+  } catch (e) {
+    body.textContent = 'Could not load link clicks.';
   }
 }
 

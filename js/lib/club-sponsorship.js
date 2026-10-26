@@ -85,7 +85,7 @@ function sponsoredSlotHtml(clubName, creator) {
     : '';
   const blurbLine = blurb ? `<p class="sponsored-slot-blurb">${sponsorshipEscape(blurb)}</p>` : '';
   const youtubeLink = youtube
-    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener">Watch on YouTube</a>`
+    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener"${slug ? ` data-frfc-link="channel" data-frfc-creator="${sponsorshipEscape(slug)}" data-frfc-club="${sponsorshipEscape(clubName)}"` : ''}>Watch on YouTube</a>`
     : '';
   return `<section class="sponsored-slot" aria-label="Sponsored">
   <div class="sponsored-slot-labels">

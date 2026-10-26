@@ -38,17 +38,63 @@ function event() {
   return { httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } };
 }
 
-test('unlinked payments are admin-only and report a missing review table', async () => {
-  const denied = await withEnv(async (url) => {
+function isPermissionCheck(url) {
+  return String(url).includes('/rest/v1/rpc/frfc_has_permission');
+}
+
+test('a caller without settings.manage is refused and the table is never read', async () => {
+  let asked = null;
+  let tableQueried = false;
+  const denied = await withEnv(async (url, init) => {
     if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
-    if (String(url).includes('frfc_admin_roles')) return json(200, []);
+    if (isPermissionCheck(url)) {
+      asked = JSON.parse(init.body);
+      return json(200, false);
+    }
+    if (String(url).includes('frfc_stripe_unlinked_invoices')) tableQueried = true;
     return json(500, { message: 'unexpected' });
   }, () => admin.handler(event()));
   assert.equal(denied.statusCode, 403);
+  assert.deepEqual(asked, { p_user_id: USER, p_permission: 'settings.manage' });
+  assert.match(JSON.parse(denied.body).error, /settings\.manage/);
+  assert.equal(tableQueried, false);
+});
 
+test('a failed permission lookup is refused, not treated as allowed', async () => {
+  let tableQueried = false;
+  const failed = await withEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) return json(500, { message: 'down' });
+    if (String(url).includes('frfc_stripe_unlinked_invoices')) tableQueried = true;
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler(event()));
+  assert.equal(failed.statusCode, 502);
+  assert.equal(tableQueried, false);
+
+  const notTrue = await withEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) return json(200, null);
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler(event()));
+  assert.equal(notTrue.statusCode, 403);
+});
+
+test('a missing or invalid token is a 401', async () => {
+  const noToken = await withEnv(async () => json(500, { message: 'unexpected' }),
+    () => admin.handler({ httpMethod: 'GET', headers: {} }));
+  assert.equal(noToken.statusCode, 401);
+
+  const badToken = await withEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(401, { message: 'bad jwt' });
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler(event()));
+  assert.equal(badToken.statusCode, 401);
+});
+
+test('a permitted caller sees a missing review table reported and the rows listed', async () => {
   const pending = await withEnv(async (url) => {
     if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
-    if (String(url).includes('frfc_admin_roles')) return json(200, [{ role: 'owner' }]);
+    if (isPermissionCheck(url)) return json(200, true);
     if (String(url).includes('frfc_stripe_unlinked_invoices')) {
       return json(404, { code: 'PGRST205', message: 'Could not find the table frfc_stripe_unlinked_invoices' });
     }
@@ -67,7 +113,7 @@ test('unlinked payments are admin-only and report a missing review table', async
   };
   const listed = await withEnv(async (url) => {
     if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
-    if (String(url).includes('frfc_admin_roles')) return json(200, [{ role: 'owner' }]);
+    if (isPermissionCheck(url)) return json(200, true);
     if (String(url).includes('frfc_stripe_unlinked_invoices')) return json(200, [row]);
     return json(500, { message: 'unexpected' });
   }, () => admin.handler(event()));

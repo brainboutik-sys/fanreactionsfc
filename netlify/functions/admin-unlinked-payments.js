@@ -2,10 +2,12 @@
 // GET /.netlify/functions/admin-unlinked-payments
 //   Authorization: Bearer <supabase access token>
 //
-// Any admin role can read it. The table is service-role only, so the
-// browser cannot query it directly. Nothing here writes.
+// Needs the settings.manage permission (admin and super_admin by default,
+// not editor). The table is service-role only, so the browser cannot
+// query it directly. Nothing here writes.
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
+const REQUIRED_PERMISSION = 'settings.manage';
 
 function res(statusCode, body) {
   return {
@@ -35,13 +37,19 @@ exports.handler = async (event) => {
   const caller = await callerRes.json();
   if (!caller || !caller.id) return res(401, { error: 'Could not identify user' });
 
-  const roleRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${encodeURIComponent(caller.id)}&limit=1`,
-    { headers: sbHeaders }
-  );
-  if (!roleRes.ok) return res(502, { error: 'Could not check admin role' });
-  const roles = await roleRes.json();
-  if (!Array.isArray(roles) || !roles.length) return res(403, { error: 'Admin only' });
+  // Same check the other admin functions use. frfc_has_permission() is
+  // SECURITY DEFINER and takes an explicit user id, so it works with the
+  // service-role key on the caller's behalf. An editor, or a role with no
+  // permissions, is refused. A failed lookup is refused too.
+  const permRes = await fetch(`${supabaseUrl}/rest/v1/rpc/frfc_has_permission`, {
+    method: 'POST',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, sbHeaders),
+    body: JSON.stringify({ p_user_id: caller.id, p_permission: REQUIRED_PERMISSION }),
+  });
+  if (!permRes.ok) return res(502, { error: 'Could not check permission' });
+  if ((await permRes.json()) !== true) {
+    return res(403, { error: `Permission required: ${REQUIRED_PERMISSION}` });
+  }
 
   const listRes = await fetch(
     `${supabaseUrl}/rest/v1/frfc_stripe_unlinked_invoices?select=event_id,stripe_subscription_id,stripe_customer_id,invoice_id,event_created_at,logged_at&order=logged_at.desc&limit=100`,

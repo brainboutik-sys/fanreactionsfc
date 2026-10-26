@@ -9,7 +9,7 @@ const PORTAL_LOGIN_URL = 'https://billing.stripe.com/p/login/aFabJ03Rd2xw0KW4v0f
 const TERMS_CANCEL_LINE = 'You can cancel at any time from Manage subscription on your account settings page, which opens the Stripe customer portal. If you need help, email <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a>.';
 
 function manageSubscriptionMarkup(appSource, url) {
-  const match = appSource.match(/\$\{STRIPE_PORTAL_LOGIN_URL \? (`[\s\S]*?`) : ''\}/);
+  const match = appSource.match(/\$\{(STRIPE_PORTAL_LOGIN_URL \? `[\s\S]*?` : '')\}/);
   assert.ok(match, 'Manage subscription markup conditional');
   const STRIPE_PORTAL_LOGIN_URL = url;
   return eval(match[1]);

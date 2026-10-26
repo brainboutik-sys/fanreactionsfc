@@ -783,11 +783,14 @@ function isShortClubLabel(display, label, surfaces) {
 }
 
 // Deterministic order for a two-club score title. The suffix is always
-// attached. Within each event line:
-//   1. both clubs, with "fan" (react to, then colon)
-//   2. both clubs, without "fan" (colon, then react to — colon is what
-//      already fits for Everton–Chelsea, Brighton–Arsenal, Liverpool–Spurs)
-//   3. shorter club names, same templates
+// attached. Within each event line, a "fan" form that fits is tried with
+// the short name ("Man Utd") before "fan" is dropped or a longer name is
+// used to make a plain title fit:
+//   1. both clubs, with "fan", directory name then short name
+//      (react to, then colon)
+//   2. both clubs, without "fan", same name order
+//      (colon, then react to — colon is what already fits for
+//      Everton–Chelsea, Brighton–Arsenal, Liverpool–Spurs)
 // The venue-bearing line is tried before the score on its own, so the
 // venue is the last thing dropped. Nothing here clips the event text.
 function twoClubCandidateTitles(a, b, score, tail, surfaces, extras) {
@@ -811,18 +814,18 @@ function twoClubCandidateTitles(a, b, score, tail, surfaces, extras) {
     '{A} and {B} YouTubers react to {Score}',
   ];
   const out = [];
-  function emit(line, pairList) {
-    [fanTemplates, plainTemplates].forEach(function (templates) {
-      pairList.forEach(function (pair) {
-        templates.forEach(function (template) {
-          rememberTitle(out, seoFill(template, { A: pair[0], B: pair[1], Score: line }) + ARTICLE_TITLE_SUFFIX);
-        });
+  function emit(line, templates, pairList) {
+    pairList.forEach(function (pair) {
+      templates.forEach(function (template) {
+        rememberTitle(out, seoFill(template, { A: pair[0], B: pair[1], Score: line }) + ARTICLE_TITLE_SUFFIX);
       });
     });
   }
   lines.forEach(function (line) {
-    emit(line, primary);
-    emit(line, shortened);
+    emit(line, fanTemplates, primary);
+    emit(line, fanTemplates, shortened);
+    emit(line, plainTemplates, primary);
+    emit(line, plainTemplates, shortened);
   });
   return out;
 }

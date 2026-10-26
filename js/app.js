@@ -31,6 +31,9 @@
 // ── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_iq6Dv3b9IYfNktis7WeZ-g_y7_DV0gm';
+// Stripe's no-code Customer Portal login page. The visitor signs in with
+// the email they used at checkout. Empty hides Manage subscription.
+const STRIPE_PORTAL_LOGIN_URL = '';
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
 catch (_) { /* initialized in DOMContentLoaded fallback */ }
@@ -287,6 +290,37 @@ function firstPartyCoverUrl(coverImageUrl) {
   return m ? `https://fanreactionsfc.com/article-covers/${m[1]}` : null;
 }
 
+function articleShareImage(coverImageUrl) {
+  const first = firstPartyCoverUrl(coverImageUrl);
+  if (first) return first;
+  const raw = String(coverImageUrl || '');
+  if (/^https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\//i.test(raw)) return raw.replace(/[?#].*$/, '');
+  return '';
+}
+
+// First-party covers and the site card are 1200x630. YouTube thumbnails
+// are not, so those tags are removed instead of claiming the card size.
+function syncOgDimensions(image) {
+  const youtube = /^https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\//i.test(image || '');
+  const sized = !youtube && (/\/article-covers\//.test(image || '') || /\/img\/og-social-card\./.test(image || ''));
+  function setMeta(prop, content) {
+    let el = document.querySelector('meta[property="' + prop + '"]');
+    if (!content) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute('property', prop);
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', content);
+  }
+  if (!sized && !youtube) return;
+  setMeta('og:image:width', sized ? '1200' : '');
+  setMeta('og:image:height', sized ? '630' : '');
+}
+
 // image is optional — omit it (or pass a falsy value) to reset to the
 // default site logo, e.g. when navigating away from a news article to a
 // page with no image of its own. Only news articles pass one today (see
@@ -308,6 +342,7 @@ function updatePageMeta(title, description, image, opts) {
   if (ogImage) ogImage.setAttribute('content', resolvedImage);
   const twitterImage = document.querySelector('meta[name="twitter:image"]');
   if (twitterImage) twitterImage.setAttribute('content', resolvedImage);
+  syncOgDimensions(resolvedImage);
   let ogSite = document.querySelector('meta[property="og:site_name"]');
   if (!ogSite) {
     ogSite = document.createElement('meta');
@@ -2182,7 +2217,7 @@ async function renderProfile(slug) {
             <a href="/creators/${escHtml(c.slug || slugify(c.name))}/stats" class="btn btn-primary btn-sm" onclick="event.preventDefault();navigate('/creators/${c.slug || slugify(c.name)}/stats')">Monthly stats card</a>
           ` : `
             <p class="cp-verified-note">Verified creators are pinned on their club page, listed first on Streamwall when they are live, and get a shareable monthly stats card.</p>
-            <a href="${escHtml(verifiedPaymentUrl(c.id, currentUser && currentUser.email))}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified</a>
+            <a href="${escHtml(verifiedPaymentUrl(c.id, currentUser && currentUser.email))}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified, ${escHtml(VERIFIED_PRICE_LABEL)}</a>
           `}
         </div>
 
@@ -3870,7 +3905,7 @@ async function renderNewsArticle(slug) {
     return;
   }
 
-  updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), firstPartyCoverUrl(article.cover_image_url));
+  updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), articleShareImage(article.cover_image_url));
   const moreClub = articleMoreClub(article);
   const moreLabel = moreClub ? articleMoreLabel(moreClub) : '';
   const moreHref = moreClub ? clubPath(moreClub) : '';
@@ -4261,6 +4296,7 @@ async function renderAccount() {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change email</button>
           <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change password</button>
+          ${STRIPE_PORTAL_LOGIN_URL ? `<a href="${escHtml(STRIPE_PORTAL_LOGIN_URL)}" class="btn btn-secondary btn-sm" id="manageSubscriptionLink" target="_blank" rel="noopener">Manage subscription</a>` : ''}
         </div>
       </div>
     </div>

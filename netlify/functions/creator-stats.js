@@ -164,6 +164,12 @@ function applyPage(html, { title, description, url, image, bodyHtml, noindex }) 
   if (image) {
     out = out.replace(/<meta property="og:image"[^>]*>/, () => `<meta property="og:image" content="${esc(image)}">`);
     out = out.replace(/<meta name="twitter:image"[^>]*>/, () => `<meta name="twitter:image" content="${esc(image)}">`);
+    // YouTube thumbnails are not 1200x630. Drop the homepage dimensions
+    // rather than claim them for hqdefault / mqdefault.
+    if (/^https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\//i.test(image)) {
+      out = out.replace(/\n?[ \t]*<meta property="og:image:width"[^>]*>/g, '');
+      out = out.replace(/\n?[ \t]*<meta property="og:image:height"[^>]*>/g, '');
+    }
   }
   if (noindex) {
     out = out.replace('<head>', '<head>\n  <meta name="robots" content="noindex, follow">');

@@ -57,7 +57,7 @@ const ARTICLE_COPY = {
   twoClub: '{A} and {B} fan YouTubers react to {Score}',
   preview: '{A} v {B} preview: fan YouTubers',
   metaLead: '{Club} fan YouTubers react to {Event}.',
-  more: 'More {Club} fan YouTubers',
+  more: 'More from the rooms: {Club} fan YouTubers',
   coverAlt: '{Club} fan YouTubers react: {Headline}',
   updated: 'Updated {Date}',
   published: 'Published {Date}',
@@ -94,6 +94,10 @@ const SEO_HEADLINE_ALIASES = [
   ['Spurs', 'Tottenham'],
   ['Leeds', 'Leeds United'],
   ['Bayern', 'Bayern Munich'],
+  // Bare "United" / "City" in a headline are Man United / Man City.
+  // Longer club names ("Leeds United", "Hull City") win by span.
+  ['United', 'Man United'],
+  ['City', 'Man City'],
 ];
 
 function seoFill(template, vars) {
@@ -272,23 +276,45 @@ function derbyNickname(text, index) {
   return /(?:Manchester|Emirates)\s+$/i.test(String(text || '').slice(0, index));
 }
 
-// For each display name, keep the earliest match across its labels and
-// aliases, then sort. A later "Tottenham" must not beat an earlier "Spurs".
+// "City Ground" is Nottingham Forest's stadium, not Man City.
+function cityGround(text, index, length) {
+  return /^\s+Ground\b/i.test(String(text || '').slice(index + length));
+}
+
+// For each display name, keep the earliest match that is not strictly inside
+// a longer club name ("United" inside "Leeds United", "City" inside "Hull
+// City"), then sort. A later "Tottenham" must not beat an earlier "Spurs".
 function clubHits(headline) {
   const text = String(headline || '');
-  const best = Object.create(null);
+  const found = [];
   seoClubMatchList().forEach(function (row) {
     const re = new RegExp('\\b' + seoEscapeReg(row.label) + '\\b', 'ig');
     let match;
     while ((match = re.exec(text))) {
       if ((row.display === 'Derby' || row.label === 'Derby') && derbyNickname(text, match.index)) continue;
-      const idx = match.index;
-      const prev = best[row.display];
-      if (!prev || idx < prev.index) {
-        best[row.display] = { display: row.display, index: idx, label: row.label };
-      }
-      break;
+      if (row.label === 'City' && cityGround(text, match.index, match[0].length)) continue;
+      // Bare United/City name the club. They are not the title label:
+      // "Man Utd" already fits on live single-club titles.
+      const bare = (row.label === 'United' || row.label === 'City') ? row.label : '';
+      found.push({
+        display: row.display,
+        index: match.index,
+        end: match.index + match[0].length,
+        label: bare ? row.display : row.label,
+        bare: bare,
+      });
     }
+  });
+  const visible = found.filter(function (hit) {
+    return !found.some(function (other) {
+      const longer = (other.end - other.index) > (hit.end - hit.index);
+      return longer && other.index <= hit.index && other.end >= hit.end;
+    });
+  });
+  const best = Object.create(null);
+  visible.forEach(function (hit) {
+    const prev = best[hit.display];
+    if (!prev || hit.index < prev.index) best[hit.display] = hit;
   });
   return Object.keys(best).map(function (key) { return best[key]; }).sort(function (a, b) {
     return a.index - b.index;
@@ -500,8 +526,9 @@ function curatedEventPhrase(event) {
 }
 
 // Headline wording first when it is a shorter alias ("Spurs", "Bayern"),
-// then the directory name, then the existing short label.
-function labelChoices(name, surface) {
+// then the directory name, then the existing short label. extra is only
+// the bare headline word ("United", "City") and only for two-club titles.
+function labelChoices(name, surface, extra) {
   const names = [];
   function add(n) {
     if (n && names.indexOf(n) < 0) names.push(n);
@@ -510,6 +537,7 @@ function labelChoices(name, surface) {
   add(name);
   const short = shorterClubLabel(name);
   if (short && short !== name) add(short);
+  if (extra) add(extra);
   return names;
 }
 
@@ -532,9 +560,9 @@ function packArticleTitle(club, event, surface) {
   return '';
 }
 
-function labelPairs(a, b, surfaces) {
-  const as = labelChoices(a, surfaces && surfaces[a]);
-  const bs = labelChoices(b, surfaces && surfaces[b]);
+function labelPairs(a, b, surfaces, extras) {
+  const as = labelChoices(a, surfaces && surfaces[a], extras && extras[a]);
+  const bs = labelChoices(b, surfaces && surfaces[b], extras && extras[b]);
   const pairs = [];
   as.forEach(function (aa) {
     bs.forEach(function (bb) { pairs.push([aa, bb]); });
@@ -734,10 +762,107 @@ function surfaceMap(hits) {
   return map;
 }
 
-function twoClubTitles(a, b, score, surfaces, template) {
-  return labelPairs(a, b, surfaces).map(function (pair) {
-    return seoFill(template, { A: pair[0], B: pair[1], Score: score }) + ARTICLE_TITLE_SUFFIX;
+function bareAliasMap(hits) {
+  const map = Object.create(null);
+  hits.forEach(function (hit) {
+    if (hit.bare) map[hit.display] = hit.bare;
   });
+  return map;
+}
+
+// Words after the score ("at Anfield", "Carabao at Anfield"). Dropped only
+// after the with-venue lines have been tried.
+function scoreTail(event, score) {
+  const source = String(event || '').replace(/\s+/g, ' ').trim();
+  if (!score || !source) return '';
+  const at = source.indexOf(score);
+  if (at < 0) return '';
+  return source.slice(at + score.length).replace(/^[\s,.:;\-–]+/, '').trim();
+}
+
+function rememberTitle(out, title) {
+  if (title && out.indexOf(title) < 0) out.push(title);
+}
+
+// A label is the extra short form ("Man Utd", "Palace") rather than the
+// headline alias or the directory name.
+function isShortClubLabel(display, label, surfaces) {
+  if (!label || label === display) return false;
+  const surface = surfaces && surfaces[display];
+  if (surface && String(surface).toLowerCase() === String(label).toLowerCase()) return false;
+  return true;
+}
+
+// Deterministic order for a two-club score title. The suffix is always
+// attached. Within each event line, a "fan" form that fits is tried with
+// the short name ("Man Utd") before "fan" is dropped or a longer name is
+// used to make a plain title fit:
+//   1. both clubs, with "fan", directory name then short name
+//      (react to, then colon)
+//   2. both clubs, without "fan", same name order
+//      (colon, then react to — colon is what already fits for
+//      Everton–Chelsea, Brighton–Arsenal, Liverpool–Spurs)
+// The venue-bearing line is tried before the score on its own, so the
+// venue is the last thing dropped. Nothing here clips the event text.
+function twoClubCandidateTitles(a, b, score, tail, surfaces, extras) {
+  const pairs = labelPairs(a, b, surfaces, extras);
+  const primary = [];
+  const shortened = [];
+  pairs.forEach(function (pair) {
+    const short = isShortClubLabel(a, pair[0], surfaces) || isShortClubLabel(b, pair[1], surfaces);
+    (short ? shortened : primary).push(pair);
+  });
+  const lines = [];
+  const withVenue = tail ? (score + ' ' + tail).replace(/\s+/g, ' ').trim() : '';
+  if (withVenue) lines.push(withVenue);
+  if (score && lines.indexOf(score) < 0) lines.push(score);
+  const fanTemplates = [
+    '{A} and {B} fan YouTubers react to {Score}',
+    '{A} and {B} fan YouTubers react: {Score}',
+  ];
+  const plainTemplates = [
+    '{A} and {B} YouTubers react: {Score}',
+    '{A} and {B} YouTubers react to {Score}',
+  ];
+  const out = [];
+  function emit(line, templates, pairList) {
+    pairList.forEach(function (pair) {
+      templates.forEach(function (template) {
+        rememberTitle(out, seoFill(template, { A: pair[0], B: pair[1], Score: line }) + ARTICLE_TITLE_SUFFIX);
+      });
+    });
+  }
+  lines.forEach(function (line) {
+    emit(line, fanTemplates, primary);
+    emit(line, fanTemplates, shortened);
+    emit(line, plainTemplates, primary);
+    emit(line, plainTemplates, shortened);
+  });
+  return out;
+}
+
+function firstFittingTitle(titles) {
+  for (let i = 0; i < titles.length; i++) {
+    if (acceptTitle(titles[i])) return titles[i];
+  }
+  return '';
+}
+
+// Shortest suffixed candidate. Used when nothing fits in 60. The suffix
+// stays on, and the event text is not truncated.
+function shortestSuffixedTitle(titles) {
+  let best = '';
+  for (let i = 0; i < titles.length; i++) {
+    const title = titles[i];
+    if (!title || !String(title).endsWith(ARTICLE_TITLE_SUFFIX)) continue;
+    if (!best || title.length < best.length) best = title;
+  }
+  return best;
+}
+
+// The brand suffix is never removed. "fan" is capped separately.
+function settleTitle(title) {
+  return title || '';
 }
 
 function fanPackedTitles(club, event, surface) {
@@ -841,6 +966,7 @@ function articleSeoTitle(article) {
   const hits = clubHits(headline);
   const mentioned = hits.map(function (hit) { return hit.display; });
   const surfaces = surfaceMap(hits);
+  const bareAliases = bareAliasMap(hits);
   const other = mentioned.filter(function (name) { return name !== primary; })[0] || '';
   const pair = !primary && mentioned.length >= 2 ? mentioned : null;
   const a = primary || (pair ? pair[0] : '');
@@ -855,8 +981,8 @@ function articleSeoTitle(article) {
     const fit = firstFanTitle(titles);
     if (fit) return fit;
     const over = shortestFanTitle(titles);
-    if (over) return applyFanCap(over, headline);
-    return applyFanCap(forceFanTitle(headline), headline);
+    if (over) return settleTitle(applyFanCap(over, headline));
+    return settleTitle(applyFanCap(forceFanTitle(headline), headline));
   }
   const candidates = [];
   function take(titles) {
@@ -866,10 +992,12 @@ function articleSeoTitle(article) {
   // related_team set is a single-club article, even if the opponent is named.
   const twoClub = !primary && pair && score && /\breact\b/i.test(headline);
   if (twoClub) {
-    const fitTo = take(twoClubTitles(pair[0], pair[1], score, surfaces, ARTICLE_COPY.twoClub));
-    if (fitTo) return fitTo;
-    const fitColon = take(twoClubTitles(pair[0], pair[1], score, surfaces, '{A} and {B} fan YouTubers react: {Score}'));
-    if (fitColon) return fitColon;
+    const tail = scoreTail(eventFromHeadline(headline), score);
+    const titles = twoClubCandidateTitles(pair[0], pair[1], score, tail, surfaces, bareAliases);
+    const fit = firstFittingTitle(titles);
+    if (fit) return fit;
+    const over = shortestSuffixedTitle(titles);
+    if (over) return over;
   }
   const packClub = (primary || (twoClub ? pair[0] : '') || (mentioned.length === 1 ? mentioned[0] : ''));
   if (packClub && !isPreview) {
@@ -883,15 +1011,15 @@ function articleSeoTitle(article) {
       if (fitBare) return fitBare;
     }
   }
-  const over = applyFanCap(shortestFanTitle(candidates), headline);
+  const over = settleTitle(applyFanCap(shortestFanTitle(candidates), headline));
   if (over) return over;
   const leadClub = primary || (mentioned.length === 1 ? mentioned[0] : '');
   const rewritten = fanHeadlineTitles(headline, leadClub && !isPreview ? leadClub : '', leadClub ? (surfaces[leadClub] || '') : '');
   const fitLead = firstFanTitle(rewritten);
   if (fitLead) return fitLead;
-  const shortLead = applyFanCap(shortestFanTitle(rewritten), headline);
+  const shortLead = settleTitle(applyFanCap(shortestFanTitle(rewritten), headline));
   if (shortLead) return shortLead;
-  return applyFanCap(forceFanTitle(headline), headline);
+  return settleTitle(applyFanCap(forceFanTitle(headline), headline));
 }
 
 function previewNamePair(headline, a, b) {
@@ -1111,6 +1239,40 @@ function firstPartyCoverUrl(coverImageUrl) {
   return m ? `${SITE_URL}/article-covers/${m[1]}` : null;
 }
 
+function youtubeThumbnailUrl(coverImageUrl) {
+  const raw = String(coverImageUrl || '');
+  if (!/^https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\//i.test(raw)) return '';
+  return raw.replace(/[?#].*$/, '');
+}
+
+// First-party covers and the default site card are 1200x630. A YouTube
+// thumbnail is not, so those dimension tags are removed instead of being
+// left in place from the homepage shell.
+function applyOgImageTags(html, image, imageType, sized) {
+  let out = html;
+  out = out.replace(/<meta property="og:image:secure_url"[^>]*>/, () => `<meta property="og:image:secure_url" content="${esc(image)}">`);
+  out = out.replace(/<meta property="og:image:type"[^>]*>/, () => `<meta property="og:image:type" content="${esc(imageType)}">`);
+  out = out.replace(/<meta property="og:image"[^>]*>/, () => `<meta property="og:image" content="${esc(image)}">`);
+  const width = '<meta property="og:image:width" content="1200">';
+  const height = '<meta property="og:image:height" content="630">';
+  if (sized) {
+    if (/property="og:image:width"/.test(out)) {
+      out = out.replace(/<meta property="og:image:width"[^>]*>/, () => width);
+    } else {
+      out = out.replace(/<meta property="og:image:type"[^>]*>/, (tag) => tag + '\n  ' + width);
+    }
+    if (/property="og:image:height"/.test(out)) {
+      out = out.replace(/<meta property="og:image:height"[^>]*>/, () => height);
+    } else {
+      out = out.replace(/<meta property="og:image:width"[^>]*>/, (tag) => tag + '\n  ' + height);
+    }
+  } else {
+    out = out.replace(/\n?[ \t]*<meta property="og:image:width"[^>]*>/g, '');
+    out = out.replace(/\n?[ \t]*<meta property="og:image:height"[^>]*>/g, '');
+  }
+  return out;
+}
+
 // Same paragraph-splitting convention as newsBodyHTML() in js/app.js — body
 // is stored as plain text. A | chunk with a separator row renders as a
 // table; everything else stays a paragraph, heading, or YouTube embed.
@@ -1308,7 +1470,8 @@ exports.handler = async (event) => {
   const title = articleSeoTitle(article);
   const description = articleSeoMeta(article);
   const firstPartyCover = firstPartyCoverUrl(article.cover_image_url);
-  const image = firstPartyCover || `${SITE_URL}/img/og-social-card.jpg`;
+  const youtubeCover = firstPartyCover ? '' : youtubeThumbnailUrl(article.cover_image_url);
+  const image = firstPartyCover || youtubeCover || `${SITE_URL}/img/og-social-card.jpg`;
   const imageExt = (image.split('.').pop() || '').toLowerCase();
   const imageType = COVER_CONTENT_TYPES[imageExt] || 'image/png';
   const url = `${SITE_URL}/news/${article.slug}`;
@@ -1370,19 +1533,11 @@ exports.handler = async (event) => {
   out = out.replace(/<meta property="og:description"[^>]*>/, () => `<meta property="og:description" content="${esc(description)}">`);
   out = out.replace(/<meta property="og:type"[^>]*>/, () => `<meta property="og:type" content="article">`);
   out = out.replace(/<meta property="og:url"[^>]*>/, () => `<meta property="og:url" content="${esc(url)}">`);
-  // Two separate, single-match replacements — one per pre-existing tag in
-  // index.html — rather than one combined block, so there's no risk of an
-  // inserted tag colliding with (and being mistaken for) the original one
-  // it sits next to. Replacer is a function, not a string, so a literal $
-  // in the title/image can't be misread as a String.replace backreference.
-  const ogImageTags = [
-    `<meta property="og:image" content="${esc(image)}">`,
-    `<meta property="og:image:secure_url" content="${esc(image)}">`,
-    `<meta property="og:image:type" content="${imageType}">`,
-    firstPartyCover ? '<meta property="og:image:width" content="1200">' : '',
-    firstPartyCover ? '<meta property="og:image:height" content="630">' : '',
-  ].filter(Boolean).join('\n  ');
-  out = out.replace(/<meta property="og:image"[^>]*>/, () => ogImageTags);
+  // Replace each pre-existing tag on its own. Inserting secure_url next to
+  // og:image left the homepage secure_url in place, so article pages shipped
+  // two og:image:secure_url tags. Width and height stay 1200x630 for a
+  // first-party cover or the site card, and are dropped for a YouTube thumbnail.
+  out = applyOgImageTags(out, image, imageType, !youtubeCover);
 
   const twitterImageTags = [
     `<meta name="twitter:image" content="${esc(image)}">`,

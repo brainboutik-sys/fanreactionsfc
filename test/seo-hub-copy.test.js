@@ -140,7 +140,8 @@ test('article titles use the club display name and keep fan only inside 60', () 
   assert.equal(seo.articleMoreLabel('none'), '');
   assert.equal(seo.articleMoreLabel(''), '');
   assert.equal(seo.articleMoreLabel('multi-club'), '');
-  assert.equal(seo.articleMoreLabel('chelsea'), 'More Chelsea fan YouTubers');
+  assert.equal(seo.articleMoreLabel('chelsea'), 'More from the rooms: Chelsea fan YouTubers');
+  assert.equal(seo.articleMoreLabel('manchester-united'), 'More from the rooms: Man United fan YouTubers');
   assert.equal(seo.articleClubName('leeds-united'), 'Leeds United');
   assert.equal(seo.articleCoverAlt('chelsea', 'Reece James out'), 'Chelsea fan YouTubers react: Reece James out');
   assert.equal(
@@ -148,6 +149,75 @@ test('article titles use the club display name and keep fan only inside 60', () 
     'Chelsea YouTubers react as Reece James faces three months out'
   );
   assert.equal(seo.articleCoverAlt('', 'No club here'), 'No club here');
+});
+
+test('two-club score titles keep both clubs inside 60 before dropping a club', () => {
+  const liverpool = seo.articleSeoTitle({
+    title: 'Liverpool and Brighton YouTubers react to a 2-0 at Anfield',
+    related_team: null,
+  });
+  assert.equal(liverpool, 'Liverpool and Brighton YouTubers react: 2-0 | FanReactionsFC');
+  assert.equal(liverpool.length, 60);
+  assert.match(liverpool, /Liverpool/);
+  assert.match(liverpool, /Brighton/);
+  assert.doesNotMatch(liverpool, /fan YouTubers/);
+  assert.doesNotMatch(liverpool, /Anfield/);
+
+  const united = seo.articleSeoTitle({
+    title: 'Manchester United and Bournemouth YouTubers react to a 0-3 at Old Trafford',
+    related_team: null,
+  });
+  assert.equal(united, 'Man Utd and Bournemouth YouTubers react: 0-3 | FanReactionsFC');
+  assert.equal(united.length, 61);
+  assert.match(united, /Man Utd/);
+  assert.match(united, /Bournemouth/);
+  assert.match(united, / \| FanReactionsFC$/);
+
+  const bruno = seo.articleSeoTitle({
+    title: 'Manchester United YouTubers react as Bruno turns on Carrick after Como',
+    related_team: 'manchester-united',
+  });
+  assert.equal(bruno, 'Man Utd YouTubers react as Bruno turns on Carrick after Como | FanReactionsFC');
+  assert.match(bruno, /Bruno/);
+  assert.match(bruno, /Carrick/);
+  assert.match(bruno, /Como/);
+  assert.match(bruno, / \| FanReactionsFC$/);
+});
+
+test('bare United and City aliases keep both clubs when a score title fits in 60', () => {
+  const fulham = seo.articleSeoTitle({
+    title: 'Fulham and United YouTubers react to a 1–1 at Craven Cottage',
+    related_team: null,
+  });
+  assert.equal(fulham, 'Fulham and Man Utd fan YouTubers react: 1–1 | FanReactionsFC');
+  assert.equal(fulham.length, 60);
+  assert.match(fulham, /Fulham/);
+  assert.match(fulham, /Man Utd/);
+
+  const city = seo.articleSeoTitle({
+    title: 'City and Sunderland YouTubers react to a 5–3 at the Etihad',
+    related_team: null,
+  });
+  assert.equal(city, 'City and Sunderland YouTubers react: 5–3 | FanReactionsFC');
+  assert.ok(city.length <= 60, city + ' (' + city.length + ')');
+  assert.match(city, /City/);
+  assert.match(city, /Sunderland/);
+
+  const carabao = seo.articleSeoTitle({
+    title: 'United and Brighton YouTubers React to a 2-3 Carabao at Old Trafford',
+    related_team: null,
+  });
+  assert.equal(carabao, 'Man Utd and Brighton YouTubers react: 2-3 | FanReactionsFC');
+  assert.ok(carabao.length <= 60, carabao + ' (' + carabao.length + ')');
+  assert.match(carabao, /Man Utd/);
+  assert.match(carabao, /Brighton/);
+
+  assert.deepEqual(seo.clubsInHeadline('Leeds United and Newcastle YouTubers react to a 4-1'), ['Leeds United', 'Newcastle']);
+  assert.deepEqual(seo.clubsInHeadline('Hull City and Everton YouTubers react to a 2-2'), ['Hull City', 'Everton']);
+  assert.deepEqual(
+    seo.clubsInHeadline('Nottingham Forest and Arsenal YouTubers react to a 0-1 at the City Ground'),
+    ['Nottm Forest', 'Arsenal']
+  );
 });
 
 test('article meta leads with the club and the visible date flips when the article was edited', () => {
@@ -298,7 +368,7 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
       const related = res.body.match(/<div class="news-article-related">[\s\S]*?<\/div>/);
       assert.ok(related, 'expected a related club link');
       assert.match(related[0], /href="\/clubs\/chelsea"/);
-      assert.match(related[0], /More Chelsea fan YouTubers/);
+      assert.match(related[0], /More from the rooms: Chelsea fan YouTubers/);
       assert.doesNotMatch(related[0], /\/clubs\/everton/);
       assert.doesNotMatch(res.body, /\/clubs\/none/);
     });
@@ -357,8 +427,8 @@ function titleShape(title, headline) {
     if (marks.some((mark) => rest.toLowerCase().startsWith(mark.toLowerCase()))) return 'boundary';
   }
   if (/ v .+ preview: (?:fan )?YouTubers \| FanReactionsFC$/.test(title)) return 'preview';
-  if (/ fan YouTubers react to \S+ \| FanReactionsFC$/.test(title)) return 'two-club';
-  if (/ YouTubers react: \S.+ \| FanReactionsFC$/.test(title)) return 'curated';
+  if (/YouTubers react to \S/.test(core)) return 'two-club';
+  if (/YouTubers react: \S/.test(core)) return 'curated';
   if (/fan YouTubers/.test(title) && / \| FanReactionsFC$/.test(title)) return 'fan-title';
   return '';
 }
@@ -425,8 +495,8 @@ test('article titles and metas stay clean on the published catalogue', () => {
   assert.doesNotMatch(seo.articleSeoMeta(ward), /\bto\.$/);
 
   const spursReact = at('united-and-spurs-youtubers-react-as-ten-man-spurs-snatch-a-1-1-at-old-trafford');
-  assert.equal(seo.articleSeoTitle(spursReact), 'United and Spurs YouTubers react as ten-man Spurs snatch a 1-1 at Old Trafford | FanReactionsFC');
-  assert.equal(titleShape(seo.articleSeoTitle(spursReact), spursReact.title), 'headline');
+  assert.equal(seo.articleSeoTitle(spursReact), 'Man Utd and Spurs fan YouTubers react: 1-1 | FanReactionsFC');
+  assert.equal(titleShape(seo.articleSeoTitle(spursReact), spursReact.title), 'curated');
 
   const burwell = at('sunderland-youtubers-react-to-tom-burwells-sudden-exit');
   assert.equal(seo.articleSeoTitle(burwell), "Sunderland YouTubers react to Tom Burwell's sudden exit | FanReactionsFC");
@@ -441,8 +511,8 @@ test('article titles and metas stay clean on the published catalogue', () => {
   assert.equal(seo.articleSeoMeta(bridge), 'Chelsea v Bournemouth preview.');
 
   const derby = at('united-and-city-youtubers-preview-the-manchester-derby');
-  assert.equal(seo.articleSeoTitle(derby), 'United and City YouTubers Preview the Manchester Derby | FanReactionsFC');
-  assert.match(seo.articleSeoMeta(derby), /^United v City preview:/);
+  assert.equal(seo.articleSeoTitle(derby), 'Man Utd v Man City preview: fan YouTubers | FanReactionsFC');
+  assert.match(seo.articleSeoMeta(derby), /^Man United v Man City preview:/);
   assert.doesNotMatch(seo.articleSeoMeta(derby), /\breact/i);
 
   const greece = at('arsenal-youtubers-react-to-tzolis-injury-on-greece-duty');
@@ -459,7 +529,7 @@ test('article titles and metas stay clean on the published catalogue', () => {
   assert.equal(seo.articleSeoTitle(villa), 'Chelsea YouTubers React as Villa Agree £7.5m Martinez Move | FanReactionsFC');
 
   const spursPreview = at('united-and-spurs-youtubers-preview-saturday-evening-at-old-trafford');
-  assert.equal(seo.articleSeoMeta(spursPreview), 'United v Spurs preview.');
+  assert.equal(seo.articleSeoMeta(spursPreview), 'Man United v Tottenham preview.');
 
   const brighton = at('brighton-and-arsenal-youtubers-react-to-a-3-0-at-the-amex');
   assert.equal(seo.articleSeoTitle(brighton), 'Brighton and Arsenal YouTubers react: 3–0 | FanReactionsFC');
@@ -559,7 +629,7 @@ test('a missing related club links the first hub only for a two-club headline', 
     body: 'Watch [GBFC](/clubs/chelsea) and [Toffee TV](/clubs/everton).',
   };
   assert.equal(seo.articleMoreClub(everton), 'Chelsea');
-  assert.equal(seo.articleMoreLabel(seo.articleMoreClub(everton)), 'More Chelsea fan YouTubers');
+  assert.equal(seo.articleMoreLabel(seo.articleMoreClub(everton)), 'More from the rooms: Chelsea fan YouTubers');
   const none = {
     related_team: 'none',
     title: 'Everton and Chelsea YouTubers react to a 0-2 at the Hill Dickinson',
@@ -580,6 +650,70 @@ test('a missing related club links the first hub only for a two-club headline', 
     assert.equal(seo.articleMoreClub({ related_team: null, title: row[0], body: 'See ' + row[1] + ' in the copy.' }), '', row[0]);
     assert.equal(seo.articleMoreClub({ related_team: 'none', title: row[0], body: 'See ' + row[1] + ' in the copy.' }), '', row[0]);
   });
+});
+
+test('every fixture title is locked against the live title wording', () => {
+  const rows = JSON.parse(fs.readFileSync(path.join(root, 'test/fixtures/published-articles.json'), 'utf8'));
+  const locked = JSON.parse(fs.readFileSync(path.join(root, 'test/fixtures/live-title-old-new.json'), 'utf8'));
+  assert.equal(locked.length, rows.length);
+  // These are the only live titles that differ from the title code on main.
+  // `old` is that live wording. Leeds–Man Utd is absent: its fan form still fits.
+  const changedSlugs = [
+    'liverpool-and-brighton-youtubers-react-to-a-2-0-at-anfield',
+    'brentford-and-liverpool-youtubers-react-to-a-1-2-at-the-gtech',
+    'city-and-psg-youtubers-preview-wednesday-night-at-the-etihad',
+    'liverpool-and-city-youtubers-react-to-a-0-3-at-anfield',
+    'united-and-spurs-youtubers-react-as-ten-man-spurs-snatch-a-1-1-at-old-trafford',
+    'united-and-spurs-youtubers-preview-saturday-evening-at-old-trafford',
+    'fulham-and-manchester-united-youtubers-react-to-a-1-1-at-craven-cottage',
+    'city-and-sunderland-youtubers-react-to-a-5-3',
+    'united-and-brighton-youtubers-react-to-a-2-3-carabao-at-old-trafford',
+    'united-and-city-youtubers-react-to-a-0-1-manchester-derby',
+    'united-and-city-youtubers-preview-the-manchester-derby',
+    'united-and-everton-youtubers-react-to-a-2-2-at-hill-dickinson',
+  ];
+  const changed = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const expect = locked[i];
+    assert.equal(expect.slug, row.slug);
+    const title = seo.articleSeoTitle(row);
+    assert.equal(title, expect.new, row.slug);
+    assert.match(title, / \| FanReactionsFC$/, row.slug);
+    if (expect.old !== title) changed.push(row.slug);
+    else assert.equal(title, expect.old, row.slug);
+  }
+  assert.deepEqual(changed, changedSlugs);
+
+  const at = (slug) => locked.find((row) => row.slug === slug);
+  const leeds = at('leeds-and-manchester-united-youtubers-react-to-a-1-1-at-elland-road');
+  assert.equal(leeds.old, 'Leeds and Man Utd fan YouTubers react: 1-1 | FanReactionsFC');
+  assert.equal(leeds.new, leeds.old);
+  assert.equal(leeds.new.length, 59);
+
+  const brighton = at('liverpool-and-brighton-youtubers-react-to-a-2-0-at-anfield');
+  assert.equal(brighton.old, 'Liverpool YouTubers react: 2-0 at Anfield | FanReactionsFC');
+  assert.equal(brighton.new, 'Liverpool and Brighton YouTubers react: 2-0 | FanReactionsFC');
+  assert.equal(brighton.new.length, 60);
+
+  const brentford = at('brentford-and-liverpool-youtubers-react-to-a-1-2-at-the-gtech');
+  assert.equal(brentford.old, 'Brentford YouTubers react: 1-2 at the Gtech | FanReactionsFC');
+  assert.equal(brentford.new, 'Brentford and Liverpool YouTubers react: 1-2 | FanReactionsFC');
+  assert.equal(brentford.new.length, 61);
+});
+
+test('titles that already fit in 60 stay on the live wording', () => {
+  const rows = JSON.parse(fs.readFileSync(path.join(root, 'test/fixtures/published-articles.json'), 'utf8'));
+  const expected = JSON.parse(fs.readFileSync(path.join(root, 'test/fixtures/live-titles-60.json'), 'utf8'));
+  assert.ok(expected.length >= 20, 'expected the live 60-character snapshot');
+  for (const row of expected) {
+    const article = rows.find((item) => item.slug === row.slug);
+    assert.ok(article, row.slug);
+    const title = seo.articleSeoTitle(article);
+    assert.equal(title, row.title, row.slug);
+    assert.ok(title.length <= 60, row.slug + ' ' + title.length);
+    assert.match(title, / \| FanReactionsFC$/);
+  }
 });
 
 test('static homepage shell does not say Loading', () => {

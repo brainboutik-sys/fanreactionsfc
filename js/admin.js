@@ -164,7 +164,7 @@ function renderPage() {
     content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Access Denied</h1><div class="admin-page-subtitle">Your role doesn\'t include the &ldquo;' + requiredPermission + '&rdquo; permission.</div></div></div>';
     return;
   }
-  if (adminPage === 'dashboard')  content.innerHTML = toggle + renderDashboard();
+  if (adminPage === 'dashboard') { content.innerHTML = toggle + renderDashboard(); loadUnlinkedPayments(); }
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
@@ -220,7 +220,41 @@ function renderDashboard() {
 
   '<div class="admin-card"><div class="admin-card-header"><span class="admin-card-title">Recent Activity</span></div><div class="admin-card-body no-pad">' +
     renderActivityList(adminLog.slice(0, 10)) +
-  '</div></div>';
+  '</div></div>' +
+
+  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Unlinked Verified payments</span></div><div class="admin-card-body" id="adminUnlinkedBody">Loading…</div></div>';
+}
+
+async function loadUnlinkedPayments() {
+  var body = document.getElementById('adminUnlinkedBody');
+  if (!body) return;
+  try {
+    var session = (await sb.auth.getSession()).data.session;
+    var res = await fetch('/.netlify/functions/admin-unlinked-payments', {
+      headers: { Authorization: 'Bearer ' + (session && session.access_token ? session.access_token : '') },
+    });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) {
+      body.textContent = data.error || 'Could not load unlinked payments.';
+      return;
+    }
+    if (data.pendingMigration) {
+      body.innerHTML = 'The review table is not in the database yet. Apply <code>supabase/migrations/20261026100000_stripe_unlinked_invoices.sql</code> in the Supabase SQL editor. Until then, stale unlinked invoices are only in the stripe-webhook function log.';
+      return;
+    }
+    var rows = data.payments || [];
+    if (!rows.length) {
+      body.textContent = 'No unlinked invoice.paid events waiting for review.';
+      return;
+    }
+    body.innerHTML = '<table class="admin-table"><thead><tr><th>When</th><th>Subscription</th><th>Customer</th><th>Invoice</th><th>Logged</th></tr></thead><tbody>' +
+      rows.map(function(row) {
+        return '<tr><td class="row-dim">' + escHtml(row.event_created_at || '') + '</td><td>' + escHtml(row.stripe_subscription_id || '') + '</td><td>' + escHtml(row.stripe_customer_id || '') + '</td><td>' + escHtml(row.invoice_id || '') + '</td><td class="row-dim">' + escHtml(row.logged_at || '') + '</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+  } catch (e) {
+    body.textContent = 'Could not load unlinked payments.';
+  }
 }
 
 function stat(label, value, sub) {

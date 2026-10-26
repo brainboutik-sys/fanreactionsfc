@@ -450,7 +450,7 @@ test('clubsInHeadline keeps the earliest alias in headline order', () => {
 
 test('a derby nickname is not Derby County and a headline Fan is kept', () => {
   const derby = 'United and City YouTubers React to a 0-1 Manchester Derby';
-  assert.deepEqual(seoCopy.clubsInHeadline(derby), []);
+  assert.deepEqual(seoCopy.clubsInHeadline(derby), ['Man United', 'Man City']);
   assert.deepEqual(
     seoCopy.clubsInHeadline('Arsenal and Chelsea YouTubers React to a 2-1 Emirates Derby'),
     ['Arsenal', 'Chelsea']
@@ -458,7 +458,7 @@ test('a derby nickname is not Derby County and a headline Fan is kept', () => {
   assert.deepEqual(seoCopy.clubsInHeadline('Derby YouTubers react to a 1-0'), ['Derby']);
   assert.equal(
     seoCopy.articleSeoTitle({ title: derby, related_team: null }),
-    derby + ' | FanReactionsFC'
+    'Man Utd and City fan YouTubers react to 0-1 | FanReactionsFC'
   );
   const counted = '323 Premier League Fan YouTubers, Counted Club by Club';
   assert.equal(
@@ -475,17 +475,26 @@ test('articleSeoTitle keeps fan only when the suffixed title fits in 60', () => 
       'Bayern and Arsenal fan YouTubers react: 2-2 | FanReactionsFC'],
     [{ title: 'Nottingham Forest and Arsenal YouTubers react to a 0-1 at the City Ground', related_team: null },
       'Forest and Arsenal fan YouTubers react: 0-1 | FanReactionsFC'],
+  ];
+  for (const [article, expected] of cases) {
+    const title = seoCopy.articleSeoTitle(article);
+    assert.equal(title, expected);
+    assert.ok(title.length <= 60, title + ' (' + title.length + ')');
+    assert.match(title, / \| FanReactionsFC$/);
+    assert.match(title, /fan YouTubers/);
+  }
+  const over = [
     [{ title: 'Liverpool YouTubers react to a 4-3 win over Villarreal', related_team: 'liverpool' },
       'Liverpool YouTubers react: 4-3 win over Villarreal | FanReactionsFC'],
     [{ title: 'Manchester United YouTubers react as Ten Hag turns on INEOS', related_team: 'manchester-united' },
       'Man Utd YouTubers react as Ten Hag turns on INEOS | FanReactionsFC'],
   ];
-  for (const [article, expected] of cases) {
+  for (const [article, expected] of over) {
     const title = seoCopy.articleSeoTitle(article);
     assert.equal(title, expected);
+    assert.ok(title.length > 60, title);
     assert.match(title, / \| FanReactionsFC$/);
-    if (title.length <= 60) assert.match(title, /fan YouTubers/);
-    else assert.doesNotMatch(title, /fan YouTubers/);
+    assert.doesNotMatch(title, /fan YouTubers/);
   }
   const preview = seoCopy.articleSeoTitle({
     title: 'Manchester City v Liverpool preview: Wednesday night',
@@ -611,4 +620,106 @@ test('netlify.toml 301s /creators/shane-gooner to /clubs/arsenal before the crea
   const splat = toml.indexOf('from = "/creators/*"');
   assert.ok(from > 0 && splat > from);
   assert.match(toml, /from = "\/creators\/shane-gooner"\s+to = "\/clubs\/arsenal"\s+status = 301\s+force = true/);
+});
+
+test('article og:image and og:image:secure_url are the cover, once each', async () => {
+  const { handler } = require('../netlify/functions/news-article.js');
+  const cover = 'https://fanreactionsfc.com/article-covers/news/liverpool.jpg';
+  const storedCover = 'https://dsxijgrpxsfywxuffbmt.supabase.co/storage/v1/object/public/article-covers/news/liverpool.jpg?t=1';
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [{
+      title: 'Liverpool and Brighton YouTubers react to a 2-0 at Anfield',
+      dek: '',
+      summary: 'A summary.',
+      body: 'Body text.',
+      cover_image_url: storedCover,
+      tags: [],
+      related_team: null,
+      published_at: '2026-10-20T00:00:00Z',
+      updated_at: '2026-10-20T00:00:00Z',
+      slug: 'liverpool-brighton',
+    }],
+  });
+  try {
+    await withCwd(async () => {
+      const res = await handler({ path: '/news/liverpool-brighton' });
+      assert.equal(res.statusCode, 200);
+      const images = [...res.body.matchAll(/<meta property="og:image" content="([^"]*)"/g)];
+      const secure = [...res.body.matchAll(/<meta property="og:image:secure_url" content="([^"]*)"/g)];
+      assert.equal(images.length, 1);
+      assert.equal(secure.length, 1);
+      assert.equal(images[0][1], cover);
+      assert.equal(secure[0][1], cover);
+      assert.equal(res.body.includes('og-social-card.jpg'), false);
+      const widths = [...res.body.matchAll(/<meta property="og:image:width" content="([^"]*)"/g)];
+      const heights = [...res.body.matchAll(/<meta property="og:image:height" content="([^"]*)"/g)];
+      assert.equal(widths.length, 1);
+      assert.equal(heights.length, 1);
+      assert.equal(widths[0][1], '1200');
+      assert.equal(heights[0][1], '630');
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+  }
+});
+
+test('a YouTube thumbnail cover is the og:image and is not claimed as 1200x630', async () => {
+  const { handler } = require('../netlify/functions/news-article.js');
+  const thumb = 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg';
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [{
+      title: 'Liverpool YouTubers react to a 2-0 at Anfield',
+      dek: '',
+      summary: 'A summary.',
+      body: 'Body text.',
+      cover_image_url: thumb + '?t=1',
+      tags: [],
+      related_team: 'liverpool',
+      published_at: '2026-10-20T00:00:00Z',
+      updated_at: '2026-10-20T00:00:00Z',
+      slug: 'liverpool-thumb',
+    }],
+  });
+  try {
+    await withCwd(async () => {
+      const res = await handler({ path: '/news/liverpool-thumb' });
+      assert.equal(res.statusCode, 200);
+      const images = [...res.body.matchAll(/<meta property="og:image" content="([^"]*)"/g)];
+      const secure = [...res.body.matchAll(/<meta property="og:image:secure_url" content="([^"]*)"/g)];
+      assert.equal(images.length, 1);
+      assert.equal(secure.length, 1);
+      assert.equal(images[0][1], thumb);
+      assert.equal(secure[0][1], thumb);
+      assert.doesNotMatch(res.body, /property="og:image:width"/);
+      assert.doesNotMatch(res.body, /property="og:image:height"/);
+      assert.equal(res.body.includes('og-social-card.jpg'), false);
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+  }
+});
+
+test('netlify.toml 301s /creators/thatsfootball to overlap-daily above the creator rewrites', () => {
+  const toml = fs.readFileSync(path.join(__dirname, '..', 'netlify.toml'), 'utf8');
+  const statsFrom = toml.indexOf('from = "/creators/thatsfootball/stats"');
+  const statsSplat = toml.indexOf('from = "/creators/*/stats"');
+  const shane = toml.indexOf('from = "/creators/shane-gooner"');
+  const profile = toml.indexOf('from = "/creators/thatsfootball"\n');
+  const splat = toml.indexOf('from = "/creators/*"\n');
+  assert.ok(statsFrom > 0 && statsSplat > statsFrom, 'stats 301 must precede the stats rewrite');
+  assert.ok(shane > 0 && profile > shane && splat > profile, 'profile 301 follows shane-gooner and precedes /creators/*');
+  assert.match(toml, /from = "\/creators\/thatsfootball\/stats"\s+to = "\/creators\/overlap-daily\/stats"\s+status = 301\s+force = true/);
+  assert.match(toml, /from = "\/creators\/thatsfootball"\s+to = "\/creators\/overlap-daily"\s+status = 301\s+force = true/);
 });

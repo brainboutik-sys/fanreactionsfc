@@ -4,6 +4,7 @@
 // Retention:
 //   frfc_contact_messages  — 12 months from submission
 //   frfc_creator_reports   — 12 months from submission (whether resolved or not)
+//   frfc_link_clicks       — 90 days (click counts, not personal data)
 //
 // These are the only tables holding data collected from non-account free-text
 // forms (name/email/message); account-linked data (profile, favourites, etc.)
@@ -18,6 +19,7 @@ exports.config = { schedule: '0 5 * * *' };
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const RETENTION_DAYS = 365;
+const CLICK_RETENTION_DAYS = 90;
 
 exports.handler = async () => {
   const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
@@ -38,7 +40,19 @@ exports.handler = async () => {
     }
   }
 
-  return ok({ cutoff, results });
+  const clickCutoff = new Date(Date.now() - CLICK_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_link_clicks?created_at=lt.${encodeURIComponent(clickCutoff)}`,
+      { method: 'DELETE', headers }
+    );
+    const deleted = res.ok ? await res.json().catch(() => []) : [];
+    results.frfc_link_clicks = { ok: res.ok, deletedCount: Array.isArray(deleted) ? deleted.length : 0, status: res.status };
+  } catch (e) {
+    results.frfc_link_clicks = { ok: false, error: String(e) };
+  }
+
+  return ok({ cutoff, clickCutoff, results });
 };
 
 function ok(body, statusCode = 200) {

@@ -576,6 +576,52 @@ function handleRoute() {
   }
 }
 
+// One row per click on a creator channel or watch-live link. The body is
+// slug, club, link type, and the page path. No account, no cookie, no
+// storage id. credentials: 'omit' so the browser does not attach cookies.
+// sendBeacon cannot omit cookies, so this uses fetch keepalive instead.
+function creatorLinkTrackAttrs(slug, type, club) {
+  const safeSlug = String(slug || '').trim();
+  if (!safeSlug) return '';
+  const kind = type === 'live' ? 'live' : 'channel';
+  return ` data-frfc-link="${kind}" data-frfc-creator="${escHtml(safeSlug)}" data-frfc-club="${escHtml(club || '')}"`;
+}
+
+function sendCreatorLinkClick(slug, link, club) {
+  const safeSlug = String(slug || '').trim();
+  if (!safeSlug || (link !== 'live' && link !== 'channel')) return;
+  let path = '/';
+  try { path = String(location.pathname || '/'); } catch (e) { path = '/'; }
+  if (!path.startsWith('/')) path = '/';
+  path = path.slice(0, 200);
+  const body = JSON.stringify({
+    slug: safeSlug,
+    club: String(club || '').slice(0, 80),
+    link: link,
+    path: path,
+  });
+  fetch('/.netlify/functions/link-click', {
+    method: 'POST',
+    body: body,
+    headers: { 'Content-Type': 'application/json' },
+    keepalive: true,
+    credentials: 'omit',
+  }).catch(function () {});
+}
+
+function onCreatorLinkClick(e) {
+  if (e.type === 'auxclick' && e.button !== 1) return;
+  const a = e.target && e.target.closest && e.target.closest('a[data-frfc-link]');
+  if (!a) return;
+  sendCreatorLinkClick(
+    a.getAttribute('data-frfc-creator'),
+    a.getAttribute('data-frfc-link'),
+    a.getAttribute('data-frfc-club')
+  );
+}
+document.addEventListener('click', onCreatorLinkClick, true);
+document.addEventListener('auxclick', onCreatorLinkClick, true);
+
 // Click handler for internal links
 document.addEventListener('click', e => {
   // Let the browser handle modified clicks natively (Ctrl/Cmd/Shift/Alt +
@@ -1291,7 +1337,7 @@ function renderHome() {
         <div class="sc-body">
           <div class="live-strip">
             ${liveNow.slice(0, 4).map(c => `
-              <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card" title="${escHtml(c.name)} — Live on YouTube">
+              <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="live-card"${creatorLinkTrackAttrs(c.slug, 'live', c.team)} title="${escHtml(c.name)} — Live on YouTube">
                 <div class="live-thumb-wrap">
                   <img class="live-thumb" src="https://i.ytimg.com/vi/${safeId(c.liveVideoId)}/mqdefault.jpg" alt="" loading="lazy" onerror="this.style.display='none'">
                   <span class="live-badge"><span class="live-badge-dot"></span>LIVE</span>
@@ -2087,8 +2133,8 @@ async function renderProfile(slug) {
               ${socialLinkHTML(c.socialTiktok, 'tiktok', 'TikTok')}
             </div>` : ''}
             <div class="cp-hero-actions">
-              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-accent cp-cta">▶ Watch on YouTube</a>` : ''}
-              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-on-dark"><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
+              ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="btn btn-accent cp-cta"${creatorLinkTrackAttrs(c.slug, 'channel', c.team)}>▶ Watch on YouTube</a>` : ''}
+              ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="btn btn-on-dark"${creatorLinkTrackAttrs(c.slug, 'live', c.team)}><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
               <button class="btn btn-on-dark${isFav ? ' btn-favourited' : ''}" onclick="handleFavorite('${c.id}')" id="favBtn" aria-pressed="${isFav}">${isFav ? '★ Favourited' : '☆ Favourite'}${(favouriteCounts.get(c.id) || 0) > 0 ? ' <span class="fav-count-badge" id="favCount">' + (favouriteCounts.get(c.id)) + '</span>' : ''}</button>
               <button class="cp-report-link" onclick="openReportModal('${c.id}','${jsAttrStr(c.name)}')">Report issue</button>
               ${c.claimedBy && currentUser && c.claimedBy === currentUser.id
@@ -2145,7 +2191,7 @@ async function renderProfile(slug) {
         <div class="cp-live-alert">
           <span class="live-dot-sm"></span>
           <strong>${escHtml(c.name)} is streaming live right now</strong>
-          <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:var(--red);color:#fff;margin-left:auto;flex-shrink:0">Watch Live &rarr;</a>
+          <a href="https://youtube.com/watch?v=${safeId(c.liveVideoId)}" target="_blank" rel="noopener" class="btn btn-sm"${creatorLinkTrackAttrs(c.slug, 'live', c.team)} style="background:var(--red);color:#fff;margin-left:auto;flex-shrink:0">Watch Live &rarr;</a>
         </div>` : ''}
 
         ${c.featuredVideoId ? `
@@ -2236,8 +2282,8 @@ async function renderProfile(slug) {
         <div class="cp-sidebar-card">
           <div class="cp-sidebar-title">Links</div>
           <div class="cp-links">
-            ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-yt">▶ YouTube Channel</a>` : ''}
-            ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-live"><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
+            ${c.channel ? `<a href="${safeUrl(c.channel)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-yt"${creatorLinkTrackAttrs(c.slug, 'channel', c.team)}>▶ YouTube Channel</a>` : ''}
+            ${c.live ? `<a href="${safeUrl(c.live)}" target="_blank" rel="noopener" class="cp-link-btn cp-link-live"${creatorLinkTrackAttrs(c.slug, 'live', c.team)}><img src="/img/icons/live-now.png" alt="" class="btn-ico" onerror="this.style.display='none'"> Live / Streams</a>` : ''}
           </div>
         </div>` : ''}
       </aside>
@@ -2624,7 +2670,7 @@ function hubCreatorCard(c, rank, club) {
   const blurb = hubOneSentence(c.description);
   const country = countryName(c.channelCountry);
   const yt = c.channel && /^https?:\/\//i.test(c.channel)
-    ? `<a class="hub-yt" href="${escHtml(c.channel)}" target="_blank" rel="noopener">YouTube</a>` : '';
+    ? `<a class="hub-yt" href="${escHtml(c.channel)}" target="_blank" rel="noopener"${creatorLinkTrackAttrs(c.slug, 'channel', club || c.team)}>YouTube</a>` : '';
   return `
     <div class="hub-card">
       <span class="hub-rank">#${rank}</span>
@@ -5616,6 +5662,8 @@ function swRenderGrid(isClone) {
     tb.appendChild(sp);
 
     tb.appendChild(swMakeTBtn('newtab', 'Open in new tab', () => {
+      const match = creators.find(c => c.liveVideoId && c.liveVideoId === s.videoId);
+      if (match) sendCreatorLinkClick(match.slug, 'live', match.team);
       window.open(`https://www.youtube.com/watch?v=${safeId(s.videoId)}`, '_blank');
     }));
 

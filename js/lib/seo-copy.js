@@ -46,7 +46,7 @@ const ARTICLE_COPY = {
   twoClub: '{A} and {B} fan YouTubers react to {Score}',
   preview: '{A} v {B} preview: fan YouTubers',
   metaLead: '{Club} fan YouTubers react to {Event}.',
-  more: 'More {Club} fan YouTubers',
+  more: 'More from the rooms: {Club} fan YouTubers',
   coverAlt: '{Club} fan YouTubers react: {Headline}',
   updated: 'Updated {Date}',
   published: 'Published {Date}',
@@ -729,6 +729,90 @@ function twoClubTitles(a, b, score, surfaces, template) {
   });
 }
 
+// Words after the score ("at Anfield", "Carabao at Anfield"). Dropped only
+// after the with-venue lines have been tried.
+function scoreTail(event, score) {
+  const source = String(event || '').replace(/\s+/g, ' ').trim();
+  if (!score || !source) return '';
+  const at = source.indexOf(score);
+  if (at < 0) return '';
+  return source.slice(at + score.length).replace(/^[\s,.:;\-–]+/, '').trim();
+}
+
+function scoreEventLines(score, tail) {
+  const lines = [];
+  if (tail) lines.push((score + ' ' + tail).replace(/\s+/g, ' ').trim());
+  if (score && lines.indexOf(score) < 0) lines.push(score);
+  return lines;
+}
+
+function rememberTitle(out, title) {
+  if (title && out.indexOf(title) < 0) out.push(title);
+}
+
+// Deterministic order for a two-club score title:
+//   1. both clubs, with "fan"
+//   2. both clubs, without "fan"
+//   3. shorter club names (labelPairs walks those after the directory name)
+//   4. the same list again with the venue dropped
+// labelPairs already puts the headline alias, then the directory name,
+// then the short label. Venue-bearing lines are attempted before the
+// score on its own, so the venue is the last thing dropped.
+function twoClubCandidateTitles(a, b, score, tail, surfaces) {
+  const pairs = labelPairs(a, b, surfaces);
+  const lines = scoreEventLines(score, tail);
+  const fanTemplates = [
+    '{A} and {B} fan YouTubers react to {Score}',
+    '{A} and {B} fan YouTubers react: {Score}',
+  ];
+  const plainTemplates = [
+    '{A} and {B} YouTubers react to {Score}',
+    '{A} and {B} YouTubers react: {Score}',
+  ];
+  const out = [];
+  lines.forEach(function (line) {
+    [fanTemplates, plainTemplates].forEach(function (templates) {
+      pairs.forEach(function (pair) {
+        templates.forEach(function (template) {
+          rememberTitle(out, seoFill(template, { A: pair[0], B: pair[1], Score: line }) + ARTICLE_TITLE_SUFFIX);
+        });
+      });
+    });
+  });
+  return out;
+}
+
+// The brand suffix stays when the whole title fits in 60. When it does
+// not, "fan" is dropped and the event text is left intact. A core that
+// itself fits in 60 is used without the suffix rather than clipping it.
+function titleWithinSixty(title) {
+  if (!title || !String(title).endsWith(ARTICLE_TITLE_SUFFIX)) return '';
+  let core = String(title).slice(0, -ARTICLE_TITLE_SUFFIX.length).trim();
+  if (core.indexOf('fan YouTubers') !== -1) {
+    core = core.replace(/fan YouTubers/g, 'YouTubers').replace(/\s+/g, ' ').trim();
+  }
+  if (!core || core.length > ARTICLE_TITLE_MAX) return '';
+  if (!isNameOut(core) && isDanglingWord(core.split(/\s+/).pop())) return '';
+  return core;
+}
+
+function firstTitleWithinSixty(titles) {
+  for (let i = 0; i < titles.length; i++) {
+    if (acceptTitle(titles[i])) return titles[i];
+  }
+  for (let i = 0; i < titles.length; i++) {
+    const bare = titleWithinSixty(titles[i]);
+    if (bare) return bare;
+  }
+  return '';
+}
+
+function settleTitle(title) {
+  if (!title) return '';
+  if (title.length <= ARTICLE_TITLE_MAX) return title;
+  return titleWithinSixty(title) || title;
+}
+
 function fanPackedTitles(club, event, surface) {
   const phrase = String(event || '').trim();
   if (!club || !phrase) return [];
@@ -844,8 +928,8 @@ function articleSeoTitle(article) {
     const fit = firstFanTitle(titles);
     if (fit) return fit;
     const over = shortestFanTitle(titles);
-    if (over) return applyFanCap(over, headline);
-    return applyFanCap(forceFanTitle(headline), headline);
+    if (over) return settleTitle(applyFanCap(over, headline));
+    return settleTitle(applyFanCap(forceFanTitle(headline), headline));
   }
   const candidates = [];
   function take(titles) {
@@ -855,10 +939,9 @@ function articleSeoTitle(article) {
   // related_team set is a single-club article, even if the opponent is named.
   const twoClub = !primary && pair && score && /\breact\b/i.test(headline);
   if (twoClub) {
-    const fitTo = take(twoClubTitles(pair[0], pair[1], score, surfaces, ARTICLE_COPY.twoClub));
-    if (fitTo) return fitTo;
-    const fitColon = take(twoClubTitles(pair[0], pair[1], score, surfaces, '{A} and {B} fan YouTubers react: {Score}'));
-    if (fitColon) return fitColon;
+    const tail = scoreTail(eventFromHeadline(headline), score);
+    const picked = firstTitleWithinSixty(twoClubCandidateTitles(pair[0], pair[1], score, tail, surfaces));
+    if (picked) return picked;
   }
   const packClub = (primary || (twoClub ? pair[0] : '') || (mentioned.length === 1 ? mentioned[0] : ''));
   if (packClub && !isPreview) {
@@ -872,15 +955,15 @@ function articleSeoTitle(article) {
       if (fitBare) return fitBare;
     }
   }
-  const over = applyFanCap(shortestFanTitle(candidates), headline);
+  const over = settleTitle(applyFanCap(shortestFanTitle(candidates), headline));
   if (over) return over;
   const leadClub = primary || (mentioned.length === 1 ? mentioned[0] : '');
   const rewritten = fanHeadlineTitles(headline, leadClub && !isPreview ? leadClub : '', leadClub ? (surfaces[leadClub] || '') : '');
   const fitLead = firstFanTitle(rewritten);
   if (fitLead) return fitLead;
-  const shortLead = applyFanCap(shortestFanTitle(rewritten), headline);
+  const shortLead = settleTitle(applyFanCap(shortestFanTitle(rewritten), headline));
   if (shortLead) return shortLead;
-  return applyFanCap(forceFanTitle(headline), headline);
+  return settleTitle(applyFanCap(forceFanTitle(headline), headline));
 }
 
 function previewNamePair(headline, a, b) {

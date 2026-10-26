@@ -45,6 +45,10 @@ const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EVENT_ID_RE = /^evt_[A-Za-z0-9_]+$/;
+// invoice.paid with no creator link is retried while it is fresh, so a
+// checkout.session.completed that arrives second can still attach it.
+// After this age Stripe is told 200 and the invoice is logged for review.
+const UNLINKED_INVOICE_AGE_MS = 60 * 60 * 1000;
 const SUBSCRIPTION_ID_RE = /^sub_[A-Za-z0-9]+$/;
 const CUSTOMER_ID_RE = /^cus_[A-Za-z0-9]+$/;
 
@@ -301,13 +305,60 @@ async function handleCheckout(supabaseUrl, sbKey, session) {
   return { ok: true, meta: { linked: creatorId } };
 }
 
-async function handleInvoicePaid(supabaseUrl, sbKey, invoice) {
+function eventAgeMs(payload, nowMs) {
+  const created = payload && payload.created;
+  if (typeof created !== 'number' || !Number.isFinite(created)) return 0;
+  return (typeof nowMs === 'number' ? nowMs : Date.now()) - (created * 1000);
+}
+
+// Service-role insert into frfc_stripe_unlinked_invoices. The migration is
+// applied by hand; if the table is not there yet the function log still
+// has the ids and the webhook returns 200 so Stripe stops retrying.
+async function logUnlinkedInvoice(supabaseUrl, sbKey, payload, invoice, subscriptionId) {
+  const customerId = stripeId(invoice && invoice.customer, CUSTOMER_ID_RE);
+  const invoiceId = invoice && typeof invoice.id === 'string' ? invoice.id.slice(0, 80) : '';
+  const created = payload && typeof payload.created === 'number'
+    ? new Date(payload.created * 1000).toISOString()
+    : null;
+  console.error(
+    'stripe-webhook invoice.paid unlinked after retry window',
+    payload && payload.id,
+    subscriptionId,
+    customerId || '',
+    invoiceId || ''
+  );
+  try {
+    const inserted = await supabaseFetch(`${supabaseUrl}/rest/v1/frfc_stripe_unlinked_invoices`, sbKey, {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: {
+        event_id: payload.id,
+        stripe_subscription_id: subscriptionId,
+        stripe_customer_id: customerId || null,
+        invoice_id: invoiceId || null,
+        event_created_at: created,
+      },
+    });
+    if (inserted.status === 409) return;
+    if (!inserted.ok) console.error('stripe-webhook unlinked invoice log failed', inserted.status);
+  } catch (e) {
+    console.error('stripe-webhook unlinked invoice log failed', e && e.message);
+  }
+}
+
+async function handleInvoicePaid(supabaseUrl, sbKey, invoice, payload) {
   const subscriptionId = subscriptionIdFromInvoice(invoice);
   if (!subscriptionId) return { ok: true, meta: { skipped: 'no_subscription' } };
   const periodEnd = billingPeriodEndUnix(invoice);
   if (periodEnd == null) return { ok: false, status: 500, error: 'Invoice missing billing period end' };
   const link = await findSubscription(supabaseUrl, sbKey, subscriptionId);
-  if (!link) return { ok: false, status: 500, error: 'Subscription not linked yet' };
+  if (!link) {
+    if (eventAgeMs(payload, Date.now()) >= UNLINKED_INVOICE_AGE_MS) {
+      await logUnlinkedInvoice(supabaseUrl, sbKey, payload, invoice, subscriptionId);
+      return { ok: true, meta: { skipped: 'unlinked_subscription', review: true } };
+    }
+    return { ok: false, status: 500, error: 'Subscription not linked yet' };
+  }
   const creator = await findCreator(supabaseUrl, sbKey, link.creator_id);
   if (!creator) {
     console.error('stripe-webhook invoice.paid skipped: creator missing', link.creator_id);
@@ -343,7 +394,7 @@ async function dispatch(supabaseUrl, sbKey, payload) {
     case 'checkout.session.completed':
       return handleCheckout(supabaseUrl, sbKey, obj);
     case 'invoice.paid':
-      return handleInvoicePaid(supabaseUrl, sbKey, obj);
+      return handleInvoicePaid(supabaseUrl, sbKey, obj, payload);
     case 'invoice.payment_failed':
       return handleInvoicePaymentFailed(supabaseUrl, sbKey, obj);
     case 'customer.subscription.deleted':
@@ -396,3 +447,5 @@ exports.SIGNATURE_TOLERANCE_SECONDS = SIGNATURE_TOLERANCE_SECONDS;
 exports.extendVerifiedUntil = extendVerifiedUntil;
 exports.subscriptionIdFromInvoice = subscriptionIdFromInvoice;
 exports.billingPeriodEndUnix = billingPeriodEndUnix;
+exports.UNLINKED_INVOICE_AGE_MS = UNLINKED_INVOICE_AGE_MS;
+exports.eventAgeMs = eventAgeMs;

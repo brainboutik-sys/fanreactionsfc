@@ -171,6 +171,15 @@ schedule = "0 5 * * *"
   status = 200
   force = true
 
+# thatsfootball was renamed overlap-daily. This 301 has to sit above the
+# stats splat or /creators/thatsfootball/stats is rewritten to creator-stats
+# instead of moving. The profile 301 is with the other creator 301s below.
+[[redirects]]
+  from = "/creators/thatsfootball/stats"
+  to = "/creators/overlap-daily/stats"
+  status = 301
+  force = true
+
 # Monthly Verified stats card. Must sit above the /creators/* splat or
 # /creators/:slug/stats is swallowed by creator-og.
 [functions."creator-stats"]
@@ -190,6 +199,14 @@ schedule = "0 5 * * *"
 [[redirects]]
   from = "/creators/shane-gooner"
   to = "/clubs/arsenal"
+  status = 301
+  force = true
+
+# thatsfootball → overlap-daily. The DB slug is updated after this deploy.
+# Must sit above the /creators/* rewrite or that splat serves the old profile.
+[[redirects]]
+  from = "/creators/thatsfootball"
+  to = "/creators/overlap-daily"
   status = 301
   force = true
 

@@ -34,6 +34,7 @@ function memoryBackend(creators) {
     events: new Map(),
     creators: new Map(creators || []),
     subs: new Map(),
+    unlinked: new Map(),
     calls: [],
   };
 
@@ -87,6 +88,10 @@ function memoryBackend(creators) {
         updated_at: body.updated_at,
         created_at: existing ? existing.created_at : body.updated_at,
       });
+      return json(201, null);
+    }
+    if (table === 'frfc_stripe_unlinked_invoices' && method === 'POST') {
+      state.unlinked.set(body.event_id, body);
       return json(201, null);
     }
     if (table === 'frfc_verified_subscriptions' && method === 'PATCH') {
@@ -366,6 +371,36 @@ test('invoice.paid turns Verified on through the billing period end and a retry 
   const again = await deliver(invoicePayload('evt_invoice_1'), backend);
   assert.equal(again.body.duplicate, true);
   assert.equal(streamerPatches(backend.state).length, patches);
+});
+
+test('a stale unlinked invoice.paid is acknowledged and logged, a fresh one still retries', async () => {
+  const backend = memoryBackend([[CREATOR, creator()]]);
+  const now = Math.floor(Date.now() / 1000);
+  const freshPayload = invoicePayload('evt_invoice_fresh');
+  freshPayload.created = now - 60;
+  const fresh = await deliver(freshPayload, backend);
+  assert.equal(fresh.response.statusCode, 500);
+  assert.equal(fresh.body.error, 'Subscription not linked yet');
+  assert.equal(backend.state.events.has('evt_invoice_fresh'), false);
+  assert.equal(backend.state.unlinked.size, 0);
+
+  const stalePayload = invoicePayload('evt_invoice_stale');
+  stalePayload.created = now - Math.ceil(webhook.UNLINKED_INVOICE_AGE_MS / 1000) - 5;
+  const stale = await deliver(stalePayload, backend);
+  assert.equal(stale.response.statusCode, 200);
+  assert.equal(stale.body.skipped, 'unlinked_subscription');
+  assert.equal(stale.body.review, true);
+  assert.equal(backend.state.events.has('evt_invoice_stale'), true);
+  assert.equal(backend.state.creators.get(CREATOR).is_verified, false);
+  const logged = backend.state.unlinked.get('evt_invoice_stale');
+  assert.equal(logged.stripe_subscription_id, 'sub_123');
+  assert.equal(logged.stripe_customer_id, 'cus_123');
+  assert.equal(logged.invoice_id, 'in_123');
+  assert.equal(Object.prototype.hasOwnProperty.call(logged, 'email'), false);
+
+  const again = await deliver(stalePayload, backend);
+  assert.equal(again.body.duplicate, true);
+  assert.equal(backend.state.unlinked.size, 1);
 });
 
 test('invoice.paid reads the newer invoice parent subscription id and does not shorten a later or open-ended period', async () => {

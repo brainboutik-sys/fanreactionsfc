@@ -135,6 +135,8 @@ test('verified payment urls stay in lockstep and encode the creator id', () => {
 
   const app = fs.readFileSync(path.join(__dirname, '..', 'js/app.js'), 'utf8');
   assert.match(app, /escHtml\(verifiedPaymentUrl\(c\.id, currentUser && currentUser\.email\)\)/);
+  assert.match(app, /Get Verified, \$\{escHtml\(VERIFIED_PRICE_LABEL\)\}/);
+  assert.match(app, /isCurrentlyVerified\(c\) \?/);
   assert.match(app, /const email = currentUser && currentUser\.email/);
   assert.match(app, /escHtml\(verifiedPaymentUrl\(creator && creator\.id, email\)\)/);
   assert.match(app, /verifiedCtaHTML\(c\)/);

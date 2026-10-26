@@ -2182,7 +2182,7 @@ async function renderProfile(slug) {
             <a href="/creators/${escHtml(c.slug || slugify(c.name))}/stats" class="btn btn-primary btn-sm" onclick="event.preventDefault();navigate('/creators/${c.slug || slugify(c.name)}/stats')">Monthly stats card</a>
           ` : `
             <p class="cp-verified-note">Verified creators are pinned on their club page, listed first on Streamwall when they are live, and get a shareable monthly stats card.</p>
-            <a href="${escHtml(verifiedPaymentUrl(c.id, currentUser && currentUser.email))}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified</a>
+            <a href="${escHtml(verifiedPaymentUrl(c.id, currentUser && currentUser.email))}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified, ${escHtml(VERIFIED_PRICE_LABEL)}</a>
           `}
         </div>
 
@@ -4261,7 +4261,9 @@ async function renderAccount() {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change email</button>
           <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change password</button>
+          <a href="/account" class="btn btn-secondary btn-sm" id="manageSubscriptionLink" hidden onclick="openBillingPortal(event)">Manage subscription</a>
         </div>
+        <div id="manageSubscriptionMsg" style="font-size:var(--fs-sm);margin-top:8px"></div>
       </div>
     </div>
 
@@ -4322,6 +4324,48 @@ async function renderAccount() {
   // Wire up file input
   const fileInput = document.getElementById('acctAvatarFile');
   if (fileInput) fileInput.addEventListener('change', handleAvatarUpload);
+  refreshManageSubscription();
+}
+
+// Shows Manage subscription only when this user has a Stripe customer.
+// The portal URL is created on click, server-side. No customer, or no
+// STRIPE_SECRET_KEY on the function, leaves the link hidden.
+async function refreshManageSubscription() {
+  const link = document.getElementById('manageSubscriptionLink');
+  if (!link || !sb || !currentUser) return;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session || !session.access_token) return;
+    const res = await fetch('/.netlify/functions/billing-portal', {
+      headers: { Authorization: 'Bearer ' + session.access_token },
+    });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (data && data.available) link.hidden = false;
+  } catch { /* leave the link hidden */ }
+}
+
+async function openBillingPortal(event) {
+  if (event) event.preventDefault();
+  const msg = document.getElementById('manageSubscriptionMsg');
+  if (!sb || !currentUser) return;
+  if (msg) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Opening the subscription portal…'; }
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session || !session.access_token) return;
+    const res = await fetch('/.netlify/functions/billing-portal', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.access_token },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) {
+      if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'The subscription portal is unavailable right now.'; }
+      return;
+    }
+    window.location.href = data.url;
+  } catch {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'The subscription portal is unavailable right now.'; }
+  }
 }
 
 async function exportMyData() {

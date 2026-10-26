@@ -58,3 +58,8 @@ alter view public.frfc_link_click_counts set (security_invoker = true);
 
 revoke all on table public.frfc_link_click_counts from public, anon, authenticated;
 grant select on table public.frfc_link_click_counts to service_role;
+
+-- Retention is 90 days. link-click.js deletes older rows after a
+-- successful insert, at most once an hour per function instance.
+-- pg_cron is not scheduled here: this project does not enable that
+-- extension, and create extension would fail where it is unavailable.

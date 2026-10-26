@@ -60,6 +60,7 @@ test('a click stores only creator, club, link type, and path', async () => {
       return json(200, [{ id: CREATOR, slug: 'overlap-daily' }]);
     }
     if (href.includes('frfc_link_clicks')) {
+      if (options.method === 'DELETE') return json(204, null);
       inserts.push(JSON.parse(options.body));
       assert.equal(options.headers.Authorization, 'Bearer ' + SERVICE);
       return json(201, null);
@@ -174,6 +175,33 @@ test('admin counts are read-only and report a missing table', async () => {
   }
 });
 
+test('inserts delete clicks older than 90 days, and not on every request', async () => {
+  const deletes = [];
+  const fetchImpl = async (url, options = {}) => {
+    const href = String(url);
+    if (href.includes('frfc_streamers')) return json(200, [{ id: CREATOR, slug: 'aftv' }]);
+    if (options.method === 'DELETE' && href.includes('frfc_link_clicks')) {
+      deletes.push(href);
+      return json(204, null);
+    }
+    if (href.includes('frfc_link_clicks')) return json(201, null);
+    return json(500, { message: 'unexpected' });
+  };
+  await withClickEnv(fetchImpl, async () => {
+    const body = { slug: 'aftv', link: 'channel', path: '/creators/aftv' };
+    const first = await click.handler(post(body));
+    assert.equal(first.statusCode, 200);
+    assert.equal(deletes.length, 1);
+    assert.match(deletes[0], /created_at=lt\./);
+    const cutoff = decodeURIComponent(deletes[0].split('created_at=lt.')[1]);
+    const age = Date.now() - Date.parse(cutoff);
+    assert.ok(Math.abs(age - click.RETENTION_MS) < 5000, age);
+    const second = await click.handler(post(body));
+    assert.equal(second.statusCode, 200);
+    assert.equal(deletes.length, 1);
+  });
+});
+
 test('the migration is service-role only and the client sends no visitor id', () => {
   const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261026110000_frfc_link_clicks.sql'), 'utf8');
   assert.match(sql, /enable row level security/);
@@ -201,4 +229,10 @@ test('the migration is service-role only and the client sends no visitor id', ()
   assert.match(og, /data-frfc-link="channel"/);
   const hub = fs.readFileSync(path.join(__dirname, '..', 'netlify/functions/club-og.js'), 'utf8');
   assert.match(hub, /data-frfc-link="channel" data-frfc-creator="\$\{esc\(slug\)\}"/);
+
+  const adminJs = fs.readFileSync(path.join(__dirname, '..', 'js/admin.js'), 'utf8');
+  assert.match(adminJs, /loadUnlinkedPayments\(\); loadLinkClicks\(\)/);
+  assert.match(adminJs, /function loadUnlinkedPayments\(/);
+  assert.match(adminJs, /function loadLinkClicks\(/);
+  assert.match(sql, /90 days/);
 });

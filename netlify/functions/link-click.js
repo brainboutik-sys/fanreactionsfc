@@ -17,7 +17,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const WINDOW_MS = 60 * 1000;
 const PER_KEY_LIMIT = 30;
 const GLOBAL_LIMIT = 200;
+const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const buckets = new Map();
+let lastCleanupMs = 0;
 
 function res(statusCode, body) {
   return {
@@ -88,6 +91,35 @@ function allowClick(key, nowMs) {
 
 function resetLimits() {
   buckets.clear();
+  lastCleanupMs = 0;
+}
+
+// pg_cron is not enabled in this project, so a schedule in the migration
+// would fail where the extension is unavailable. After a successful insert,
+// at most once an hour per instance, delete rows older than 90 days.
+// A failed delete is retried on a later insert. The click response does
+// not depend on it.
+async function deleteExpiredClicks(supabaseUrl, sbKey, nowMs) {
+  const now = typeof nowMs === 'number' ? nowMs : Date.now();
+  if (now - lastCleanupMs < CLEANUP_INTERVAL_MS) return;
+  lastCleanupMs = now;
+  const cutoff = new Date(now - RETENTION_MS).toISOString();
+  try {
+    const deleted = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_link_clicks?created_at=lt.${encodeURIComponent(cutoff)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: sbKey,
+          Authorization: `Bearer ${sbKey}`,
+          Prefer: 'return=minimal',
+        },
+      }
+    );
+    if (!deleted.ok && deleted.status !== 404) lastCleanupMs = 0;
+  } catch {
+    lastCleanupMs = 0;
+  }
 }
 
 async function readJson(response) {
@@ -139,6 +171,7 @@ exports.handler = async (event) => {
     }),
   });
   if (!inserted.ok) return res(503, { error: 'Click log is not ready' });
+  await deleteExpiredClicks(supabaseUrl, sbKey);
   return res(200, { ok: true });
 };
 
@@ -146,3 +179,5 @@ exports.parseClick = parseClick;
 exports.allowClick = allowClick;
 exports.resetLimits = resetLimits;
 exports.PER_KEY_LIMIT = PER_KEY_LIMIT;
+exports.RETENTION_MS = RETENTION_MS;
+exports.deleteExpiredClicks = deleteExpiredClicks;

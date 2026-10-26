@@ -31,6 +31,9 @@
 // ── Supabase ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_iq6Dv3b9IYfNktis7WeZ-g_y7_DV0gm';
+// Stripe's no-code Customer Portal login page. The visitor signs in with
+// the email they used at checkout. Empty hides Manage subscription.
+const STRIPE_PORTAL_LOGIN_URL = '';
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
 catch (_) { /* initialized in DOMContentLoaded fallback */ }
@@ -287,6 +290,37 @@ function firstPartyCoverUrl(coverImageUrl) {
   return m ? `https://fanreactionsfc.com/article-covers/${m[1]}` : null;
 }
 
+function articleShareImage(coverImageUrl) {
+  const first = firstPartyCoverUrl(coverImageUrl);
+  if (first) return first;
+  const raw = String(coverImageUrl || '');
+  if (/^https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\//i.test(raw)) return raw.replace(/[?#].*$/, '');
+  return '';
+}
+
+// First-party covers and the site card are 1200x630. YouTube thumbnails
+// are not, so those tags are removed instead of claiming the card size.
+function syncOgDimensions(image) {
+  const youtube = /^https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\//i.test(image || '');
+  const sized = !youtube && (/\/article-covers\//.test(image || '') || /\/img\/og-social-card\./.test(image || ''));
+  function setMeta(prop, content) {
+    let el = document.querySelector('meta[property="' + prop + '"]');
+    if (!content) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute('property', prop);
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', content);
+  }
+  if (!sized && !youtube) return;
+  setMeta('og:image:width', sized ? '1200' : '');
+  setMeta('og:image:height', sized ? '630' : '');
+}
+
 // image is optional — omit it (or pass a falsy value) to reset to the
 // default site logo, e.g. when navigating away from a news article to a
 // page with no image of its own. Only news articles pass one today (see
@@ -308,6 +342,7 @@ function updatePageMeta(title, description, image, opts) {
   if (ogImage) ogImage.setAttribute('content', resolvedImage);
   const twitterImage = document.querySelector('meta[name="twitter:image"]');
   if (twitterImage) twitterImage.setAttribute('content', resolvedImage);
+  syncOgDimensions(resolvedImage);
   let ogSite = document.querySelector('meta[property="og:site_name"]');
   if (!ogSite) {
     ogSite = document.createElement('meta');
@@ -3870,7 +3905,7 @@ async function renderNewsArticle(slug) {
     return;
   }
 
-  updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), firstPartyCoverUrl(article.cover_image_url));
+  updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), articleShareImage(article.cover_image_url));
   const moreClub = articleMoreClub(article);
   const moreLabel = moreClub ? articleMoreLabel(moreClub) : '';
   const moreHref = moreClub ? clubPath(moreClub) : '';
@@ -4261,9 +4296,8 @@ async function renderAccount() {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change email</button>
           <button class="btn btn-secondary btn-sm" disabled title="Coming soon">Change password</button>
-          <a href="/account" class="btn btn-secondary btn-sm" id="manageSubscriptionLink" hidden onclick="openBillingPortal(event)">Manage subscription</a>
+          ${STRIPE_PORTAL_LOGIN_URL ? `<a href="${escHtml(STRIPE_PORTAL_LOGIN_URL)}" class="btn btn-secondary btn-sm" id="manageSubscriptionLink" target="_blank" rel="noopener">Manage subscription</a>` : ''}
         </div>
-        <div id="manageSubscriptionMsg" style="font-size:var(--fs-sm);margin-top:8px"></div>
       </div>
     </div>
 
@@ -4324,48 +4358,6 @@ async function renderAccount() {
   // Wire up file input
   const fileInput = document.getElementById('acctAvatarFile');
   if (fileInput) fileInput.addEventListener('change', handleAvatarUpload);
-  refreshManageSubscription();
-}
-
-// Shows Manage subscription only when this user has a Stripe customer.
-// The portal URL is created on click, server-side. No customer, or no
-// STRIPE_SECRET_KEY on the function, leaves the link hidden.
-async function refreshManageSubscription() {
-  const link = document.getElementById('manageSubscriptionLink');
-  if (!link || !sb || !currentUser) return;
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session || !session.access_token) return;
-    const res = await fetch('/.netlify/functions/billing-portal', {
-      headers: { Authorization: 'Bearer ' + session.access_token },
-    });
-    if (!res.ok) return;
-    const data = await res.json().catch(() => ({}));
-    if (data && data.available) link.hidden = false;
-  } catch { /* leave the link hidden */ }
-}
-
-async function openBillingPortal(event) {
-  if (event) event.preventDefault();
-  const msg = document.getElementById('manageSubscriptionMsg');
-  if (!sb || !currentUser) return;
-  if (msg) { msg.style.color = 'var(--text-dim)'; msg.textContent = 'Opening the subscription portal…'; }
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session || !session.access_token) return;
-    const res = await fetch('/.netlify/functions/billing-portal', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + session.access_token },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.url) {
-      if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'The subscription portal is unavailable right now.'; }
-      return;
-    }
-    window.location.href = data.url;
-  } catch {
-    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'The subscription portal is unavailable right now.'; }
-  }
 }
 
 async function exportMyData() {

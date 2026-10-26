@@ -386,7 +386,18 @@ test('a stale unlinked invoice.paid is acknowledged and logged, a fresh one stil
 
   const stalePayload = invoicePayload('evt_invoice_stale');
   stalePayload.created = now - Math.ceil(webhook.UNLINKED_INVOICE_AGE_MS / 1000) - 5;
-  const stale = await deliver(stalePayload, backend);
+  const loggedLines = [];
+  const origError = console.error;
+  console.error = (...args) => {
+    loggedLines.push(args.map((part) => String(part)).join(' '));
+  };
+  let stale;
+  try {
+    stale = await deliver(stalePayload, backend);
+  } finally {
+    console.error = origError;
+  }
+  assert.equal(loggedLines.some((line) => /cus_/.test(line)), false);
   assert.equal(stale.response.statusCode, 200);
   assert.equal(stale.body.skipped, 'unlinked_subscription');
   assert.equal(stale.body.review, true);

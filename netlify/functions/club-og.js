@@ -89,6 +89,10 @@ const SEO_HEADLINE_ALIASES = [
   ['Spurs', 'Tottenham'],
   ['Leeds', 'Leeds United'],
   ['Bayern', 'Bayern Munich'],
+  // Bare "United" / "City" in a headline are Man United / Man City.
+  // Longer club names ("Leeds United", "Hull City") win by span.
+  ['United', 'Man United'],
+  ['City', 'Man City'],
 ];
 
 function seoFill(template, vars) {
@@ -267,23 +271,45 @@ function derbyNickname(text, index) {
   return /(?:Manchester|Emirates)\s+$/i.test(String(text || '').slice(0, index));
 }
 
-// For each display name, keep the earliest match across its labels and
-// aliases, then sort. A later "Tottenham" must not beat an earlier "Spurs".
+// "City Ground" is Nottingham Forest's stadium, not Man City.
+function cityGround(text, index, length) {
+  return /^\s+Ground\b/i.test(String(text || '').slice(index + length));
+}
+
+// For each display name, keep the earliest match that is not strictly inside
+// a longer club name ("United" inside "Leeds United", "City" inside "Hull
+// City"), then sort. A later "Tottenham" must not beat an earlier "Spurs".
 function clubHits(headline) {
   const text = String(headline || '');
-  const best = Object.create(null);
+  const found = [];
   seoClubMatchList().forEach(function (row) {
     const re = new RegExp('\\b' + seoEscapeReg(row.label) + '\\b', 'ig');
     let match;
     while ((match = re.exec(text))) {
       if ((row.display === 'Derby' || row.label === 'Derby') && derbyNickname(text, match.index)) continue;
-      const idx = match.index;
-      const prev = best[row.display];
-      if (!prev || idx < prev.index) {
-        best[row.display] = { display: row.display, index: idx, label: row.label };
-      }
-      break;
+      if (row.label === 'City' && cityGround(text, match.index, match[0].length)) continue;
+      // Bare United/City name the club. They are not the title label:
+      // "Man Utd" already fits on live single-club titles.
+      const bare = (row.label === 'United' || row.label === 'City') ? row.label : '';
+      found.push({
+        display: row.display,
+        index: match.index,
+        end: match.index + match[0].length,
+        label: bare ? row.display : row.label,
+        bare: bare,
+      });
     }
+  });
+  const visible = found.filter(function (hit) {
+    return !found.some(function (other) {
+      const longer = (other.end - other.index) > (hit.end - hit.index);
+      return longer && other.index <= hit.index && other.end >= hit.end;
+    });
+  });
+  const best = Object.create(null);
+  visible.forEach(function (hit) {
+    const prev = best[hit.display];
+    if (!prev || hit.index < prev.index) best[hit.display] = hit;
   });
   return Object.keys(best).map(function (key) { return best[key]; }).sort(function (a, b) {
     return a.index - b.index;
@@ -495,8 +521,9 @@ function curatedEventPhrase(event) {
 }
 
 // Headline wording first when it is a shorter alias ("Spurs", "Bayern"),
-// then the directory name, then the existing short label.
-function labelChoices(name, surface) {
+// then the directory name, then the existing short label. extra is only
+// the bare headline word ("United", "City") and only for two-club titles.
+function labelChoices(name, surface, extra) {
   const names = [];
   function add(n) {
     if (n && names.indexOf(n) < 0) names.push(n);
@@ -505,6 +532,7 @@ function labelChoices(name, surface) {
   add(name);
   const short = shorterClubLabel(name);
   if (short && short !== name) add(short);
+  if (extra) add(extra);
   return names;
 }
 
@@ -527,9 +555,9 @@ function packArticleTitle(club, event, surface) {
   return '';
 }
 
-function labelPairs(a, b, surfaces) {
-  const as = labelChoices(a, surfaces && surfaces[a]);
-  const bs = labelChoices(b, surfaces && surfaces[b]);
+function labelPairs(a, b, surfaces, extras) {
+  const as = labelChoices(a, surfaces && surfaces[a], extras && extras[a]);
+  const bs = labelChoices(b, surfaces && surfaces[b], extras && extras[b]);
   const pairs = [];
   as.forEach(function (aa) {
     bs.forEach(function (bb) { pairs.push([aa, bb]); });
@@ -729,10 +757,12 @@ function surfaceMap(hits) {
   return map;
 }
 
-function twoClubTitles(a, b, score, surfaces, template) {
-  return labelPairs(a, b, surfaces).map(function (pair) {
-    return seoFill(template, { A: pair[0], B: pair[1], Score: score }) + ARTICLE_TITLE_SUFFIX;
+function bareAliasMap(hits) {
+  const map = Object.create(null);
+  hits.forEach(function (hit) {
+    if (hit.bare) map[hit.display] = hit.bare;
   });
+  return map;
 }
 
 // Words after the score ("at Anfield", "Carabao at Anfield"). Dropped only
@@ -745,78 +775,86 @@ function scoreTail(event, score) {
   return source.slice(at + score.length).replace(/^[\s,.:;\-–]+/, '').trim();
 }
 
-function scoreEventLines(score, tail) {
-  const lines = [];
-  if (tail) lines.push((score + ' ' + tail).replace(/\s+/g, ' ').trim());
-  if (score && lines.indexOf(score) < 0) lines.push(score);
-  return lines;
-}
-
 function rememberTitle(out, title) {
   if (title && out.indexOf(title) < 0) out.push(title);
 }
 
-// Deterministic order for a two-club score title:
-//   1. both clubs, with "fan"
-//   2. both clubs, without "fan"
-//   3. shorter club names (labelPairs walks those after the directory name)
-//   4. the same list again with the venue dropped
-// labelPairs already puts the headline alias, then the directory name,
-// then the short label. Venue-bearing lines are attempted before the
-// score on its own, so the venue is the last thing dropped.
-function twoClubCandidateTitles(a, b, score, tail, surfaces) {
-  const pairs = labelPairs(a, b, surfaces);
-  const lines = scoreEventLines(score, tail);
+// A label is the extra short form ("Man Utd", "Palace") rather than the
+// headline alias or the directory name.
+function isShortClubLabel(display, label, surfaces) {
+  if (!label || label === display) return false;
+  const surface = surfaces && surfaces[display];
+  if (surface && String(surface).toLowerCase() === String(label).toLowerCase()) return false;
+  return true;
+}
+
+// Deterministic order for a two-club score title. The suffix is always
+// attached. Within each event line:
+//   1. both clubs, with "fan" (react to, then colon)
+//   2. both clubs, without "fan" (colon, then react to — colon is what
+//      already fits for Everton–Chelsea, Brighton–Arsenal, Liverpool–Spurs)
+//   3. shorter club names, same templates
+// The venue-bearing line is tried before the score on its own, so the
+// venue is the last thing dropped. Nothing here clips the event text.
+function twoClubCandidateTitles(a, b, score, tail, surfaces, extras) {
+  const pairs = labelPairs(a, b, surfaces, extras);
+  const primary = [];
+  const shortened = [];
+  pairs.forEach(function (pair) {
+    const short = isShortClubLabel(a, pair[0], surfaces) || isShortClubLabel(b, pair[1], surfaces);
+    (short ? shortened : primary).push(pair);
+  });
+  const lines = [];
+  const withVenue = tail ? (score + ' ' + tail).replace(/\s+/g, ' ').trim() : '';
+  if (withVenue) lines.push(withVenue);
+  if (score && lines.indexOf(score) < 0) lines.push(score);
   const fanTemplates = [
     '{A} and {B} fan YouTubers react to {Score}',
     '{A} and {B} fan YouTubers react: {Score}',
   ];
   const plainTemplates = [
-    '{A} and {B} YouTubers react to {Score}',
     '{A} and {B} YouTubers react: {Score}',
+    '{A} and {B} YouTubers react to {Score}',
   ];
   const out = [];
-  lines.forEach(function (line) {
+  function emit(line, pairList) {
     [fanTemplates, plainTemplates].forEach(function (templates) {
-      pairs.forEach(function (pair) {
+      pairList.forEach(function (pair) {
         templates.forEach(function (template) {
           rememberTitle(out, seoFill(template, { A: pair[0], B: pair[1], Score: line }) + ARTICLE_TITLE_SUFFIX);
         });
       });
     });
+  }
+  lines.forEach(function (line) {
+    emit(line, primary);
+    emit(line, shortened);
   });
   return out;
 }
 
-// The brand suffix stays when the whole title fits in 60. When it does
-// not, "fan" is dropped and the event text is left intact. A core that
-// itself fits in 60 is used without the suffix rather than clipping it.
-function titleWithinSixty(title) {
-  if (!title || !String(title).endsWith(ARTICLE_TITLE_SUFFIX)) return '';
-  let core = String(title).slice(0, -ARTICLE_TITLE_SUFFIX.length).trim();
-  if (core.indexOf('fan YouTubers') !== -1) {
-    core = core.replace(/fan YouTubers/g, 'YouTubers').replace(/\s+/g, ' ').trim();
-  }
-  if (!core || core.length > ARTICLE_TITLE_MAX) return '';
-  if (!isNameOut(core) && isDanglingWord(core.split(/\s+/).pop())) return '';
-  return core;
-}
-
-function firstTitleWithinSixty(titles) {
+function firstFittingTitle(titles) {
   for (let i = 0; i < titles.length; i++) {
     if (acceptTitle(titles[i])) return titles[i];
-  }
-  for (let i = 0; i < titles.length; i++) {
-    const bare = titleWithinSixty(titles[i]);
-    if (bare) return bare;
   }
   return '';
 }
 
+// Shortest suffixed candidate. Used when nothing fits in 60. The suffix
+// stays on, and the event text is not truncated.
+function shortestSuffixedTitle(titles) {
+  let best = '';
+  for (let i = 0; i < titles.length; i++) {
+    const title = titles[i];
+    if (!title || !String(title).endsWith(ARTICLE_TITLE_SUFFIX)) continue;
+    if (!best || title.length < best.length) best = title;
+  }
+  return best;
+}
+
+// The brand suffix is never removed. "fan" is capped separately.
 function settleTitle(title) {
-  if (!title) return '';
-  if (title.length <= ARTICLE_TITLE_MAX) return title;
-  return titleWithinSixty(title) || title;
+  return title || '';
 }
 
 function fanPackedTitles(club, event, surface) {
@@ -920,6 +958,7 @@ function articleSeoTitle(article) {
   const hits = clubHits(headline);
   const mentioned = hits.map(function (hit) { return hit.display; });
   const surfaces = surfaceMap(hits);
+  const bareAliases = bareAliasMap(hits);
   const other = mentioned.filter(function (name) { return name !== primary; })[0] || '';
   const pair = !primary && mentioned.length >= 2 ? mentioned : null;
   const a = primary || (pair ? pair[0] : '');
@@ -946,8 +985,11 @@ function articleSeoTitle(article) {
   const twoClub = !primary && pair && score && /\breact\b/i.test(headline);
   if (twoClub) {
     const tail = scoreTail(eventFromHeadline(headline), score);
-    const picked = firstTitleWithinSixty(twoClubCandidateTitles(pair[0], pair[1], score, tail, surfaces));
-    if (picked) return picked;
+    const titles = twoClubCandidateTitles(pair[0], pair[1], score, tail, surfaces, bareAliases);
+    const fit = firstFittingTitle(titles);
+    if (fit) return fit;
+    const over = shortestSuffixedTitle(titles);
+    if (over) return over;
   }
   const packClub = (primary || (twoClub ? pair[0] : '') || (mentioned.length === 1 ? mentioned[0] : ''));
   if (packClub && !isPreview) {

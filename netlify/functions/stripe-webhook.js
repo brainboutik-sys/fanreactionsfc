@@ -312,8 +312,9 @@ function eventAgeMs(payload, nowMs) {
 }
 
 // Service-role insert into frfc_stripe_unlinked_invoices. The migration is
-// applied by hand; if the table is not there yet the function log still
-// has the ids and the webhook returns 200 so Stripe stops retrying.
+// applied by hand. The customer id is stored on the row and is not written
+// to the function log. If the table is not there yet the webhook still
+// returns 200 so Stripe stops retrying.
 async function logUnlinkedInvoice(supabaseUrl, sbKey, payload, invoice, subscriptionId) {
   const customerId = stripeId(invoice && invoice.customer, CUSTOMER_ID_RE);
   const invoiceId = invoice && typeof invoice.id === 'string' ? invoice.id.slice(0, 80) : '';
@@ -324,7 +325,6 @@ async function logUnlinkedInvoice(supabaseUrl, sbKey, payload, invoice, subscrip
     'stripe-webhook invoice.paid unlinked after retry window',
     payload && payload.id,
     subscriptionId,
-    customerId || '',
     invoiceId || ''
   );
   try {

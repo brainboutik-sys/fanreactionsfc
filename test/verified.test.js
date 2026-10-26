@@ -75,7 +75,7 @@ function trackedRepoFiles() {
   return out.split('\0').filter(Boolean).map(rel => ({
     rel: posixPath(rel),
     full: path.join(root, rel),
-  }));
+  })).filter(file => fs.existsSync(file.full));
 }
 
 function paymentUrlShape(fn) {
@@ -253,6 +253,8 @@ test('club pin and streamwall order do not rewrite organic ranking', async () =>
       assert.match(card.body, /1\.2K subscribers and 40 videos/);
       assert.match(card.body, /Latest upload: Match reaction/);
       assert.match(card.body, /property="og:image" content="https:\/\/i\.ytimg\.com\/vi\/abcdefghijk\/hqdefault\.jpg"/);
+      assert.doesNotMatch(card.body, /property="og:image:width"/);
+      assert.doesNotMatch(card.body, /property="og:image:height"/);
       assert.match(card.body, /zzzzzzzzzzz/);
       assert.doesNotMatch(card.body, /name="robots" content="noindex/);
       assert.match(card.body, /id="creator-stats-card"/);

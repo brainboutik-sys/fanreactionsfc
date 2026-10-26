@@ -2,10 +2,12 @@
 // GET /.netlify/functions/admin-link-clicks
 //   Authorization: Bearer <supabase access token>
 //
-// Any admin role can read frfc_link_click_counts. The table is
-// service-role only, so the browser cannot query it directly.
+// Needs the settings.manage permission (admin and super_admin by default,
+// not editor). The table is service-role only, so the browser cannot
+// query it directly. Nothing here writes.
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
+const REQUIRED_PERMISSION = 'settings.manage';
 
 function res(statusCode, body) {
   return {
@@ -35,13 +37,20 @@ exports.handler = async (event) => {
   const caller = await callerRes.json();
   if (!caller || !caller.id) return res(401, { error: 'Could not identify user' });
 
-  const roleRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_admin_roles?select=role&user_id=eq.${encodeURIComponent(caller.id)}&limit=1`,
-    { headers: sbHeaders }
-  );
-  if (!roleRes.ok) return res(502, { error: 'Could not check admin role' });
-  const roles = await roleRes.json();
-  if (!Array.isArray(roles) || !roles.length) return res(403, { error: 'Admin only' });
+  // Same check admin-unlinked-payments uses. frfc_has_permission() is
+  // SECURITY DEFINER and takes an explicit user id, so it works with the
+  // service-role key on the caller's behalf. An editor, or a role with no
+  // permissions, is refused. A failed lookup is refused too. The counts
+  // table is not queried unless the check returns true.
+  const permRes = await fetch(`${supabaseUrl}/rest/v1/rpc/frfc_has_permission`, {
+    method: 'POST',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, sbHeaders),
+    body: JSON.stringify({ p_user_id: caller.id, p_permission: REQUIRED_PERMISSION }),
+  });
+  if (!permRes.ok) return res(502, { error: 'Could not check permission' });
+  if ((await permRes.json()) !== true) {
+    return res(403, { error: `Permission required: ${REQUIRED_PERMISSION}` });
+  }
 
   const listRes = await fetch(
     `${supabaseUrl}/rest/v1/frfc_link_click_counts?select=creator_slug,club,link_type,clicks_7d,clicks_30d&order=clicks_7d.desc&limit=100`,

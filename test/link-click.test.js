@@ -60,7 +60,7 @@ test('a click stores only creator, club, link type, and path', async () => {
       return json(200, [{ id: CREATOR, slug: 'overlap-daily' }]);
     }
     if (href.includes('frfc_link_clicks')) {
-      if (options.method === 'DELETE') return json(204, null);
+      assert.notEqual(options.method, 'DELETE');
       inserts.push(JSON.parse(options.body));
       assert.equal(options.headers.Authorization, 'Bearer ' + SERVICE);
       return json(201, null);
@@ -139,67 +139,73 @@ test('the same creator and link type is rate limited without using an address', 
   });
 });
 
-test('admin counts are read-only and report a missing table', async () => {
-  const prevUrl = process.env.SUPABASE_URL;
-  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const prevFetch = global.fetch;
-  process.env.SUPABASE_URL = 'https://example.supabase.co';
-  process.env.SUPABASE_SERVICE_ROLE_KEY = SERVICE;
-  const event = { httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } };
-  try {
-    global.fetch = async (url) => {
-      if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
-      if (String(url).includes('frfc_admin_roles')) return json(200, []);
-      return json(500, { message: 'unexpected' });
-    };
-    const denied = await admin.handler(event);
-    assert.equal(denied.statusCode, 403);
+function isPermissionCheck(url) {
+  return String(url).includes('/rest/v1/rpc/frfc_has_permission');
+}
 
-    global.fetch = async (url) => {
-      if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
-      if (String(url).includes('frfc_admin_roles')) return json(200, [{ role: 'owner' }]);
-      if (String(url).includes('frfc_link_click_counts')) {
-        return json(404, { code: 'PGRST205', message: 'Could not find the table frfc_link_click_counts' });
-      }
-      return json(500, { message: 'unexpected' });
-    };
-    const pending = await admin.handler(event);
-    assert.equal(pending.statusCode, 200);
-    assert.equal(JSON.parse(pending.body).pendingMigration, true);
-  } finally {
-    global.fetch = prevFetch;
-    if (prevUrl == null) delete process.env.SUPABASE_URL;
-    else process.env.SUPABASE_URL = prevUrl;
-    if (prevKey == null) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
-  }
+test('a caller without settings.manage is refused and the counts are never read', async () => {
+  let asked = null;
+  let tableQueried = false;
+  const denied = await withClickEnv(async (url, init) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) {
+      asked = JSON.parse(init.body);
+      assert.equal(init.method, 'POST');
+      return json(200, false);
+    }
+    if (String(url).includes('frfc_link_click')) tableQueried = true;
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler({ httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } }));
+  assert.equal(denied.statusCode, 403);
+  assert.deepEqual(asked, { p_user_id: USER, p_permission: 'settings.manage' });
+  assert.match(JSON.parse(denied.body).error, /settings\.manage/);
+  assert.equal(tableQueried, false);
+
+  const notTrue = await withClickEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) return json(200, null);
+    if (String(url).includes('frfc_link_click')) tableQueried = true;
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler({ httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } }));
+  assert.equal(notTrue.statusCode, 403);
+  assert.equal(tableQueried, false);
 });
 
-test('inserts delete clicks older than 90 days, and not on every request', async () => {
-  const deletes = [];
-  const fetchImpl = async (url, options = {}) => {
-    const href = String(url);
-    if (href.includes('frfc_streamers')) return json(200, [{ id: CREATOR, slug: 'aftv' }]);
-    if (options.method === 'DELETE' && href.includes('frfc_link_clicks')) {
-      deletes.push(href);
-      return json(204, null);
-    }
-    if (href.includes('frfc_link_clicks')) return json(201, null);
+test('a failed permission lookup is a 502 and the counts are never read', async () => {
+  let tableQueried = false;
+  const failed = await withClickEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) return json(500, { message: 'down' });
+    if (String(url).includes('frfc_link_click')) tableQueried = true;
     return json(500, { message: 'unexpected' });
-  };
-  await withClickEnv(fetchImpl, async () => {
-    const body = { slug: 'aftv', link: 'channel', path: '/creators/aftv' };
-    const first = await click.handler(post(body));
-    assert.equal(first.statusCode, 200);
-    assert.equal(deletes.length, 1);
-    assert.match(deletes[0], /created_at=lt\./);
-    const cutoff = decodeURIComponent(deletes[0].split('created_at=lt.')[1]);
-    const age = Date.now() - Date.parse(cutoff);
-    assert.ok(Math.abs(age - click.RETENTION_MS) < 5000, age);
-    const second = await click.handler(post(body));
-    assert.equal(second.statusCode, 200);
-    assert.equal(deletes.length, 1);
-  });
+  }, () => admin.handler({ httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } }));
+  assert.equal(failed.statusCode, 502);
+  assert.equal(tableQueried, false);
+});
+
+test('a caller with settings.manage can read click counts', async () => {
+  const pending = await withClickEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) return json(200, true);
+    if (String(url).includes('frfc_link_click_counts')) {
+      return json(404, { code: 'PGRST205', message: 'Could not find the table frfc_link_click_counts' });
+    }
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler({ httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } }));
+  assert.equal(pending.statusCode, 200);
+  assert.equal(JSON.parse(pending.body).pendingMigration, true);
+
+  const row = { creator_slug: 'aftv', club: 'Arsenal', link_type: 'live', clicks_7d: 2, clicks_30d: 5 };
+  const listed = await withClickEnv(async (url) => {
+    if (String(url).includes('/auth/v1/user')) return json(200, { id: USER });
+    if (isPermissionCheck(url)) return json(200, true);
+    if (String(url).includes('frfc_link_click_counts')) return json(200, [row]);
+    return json(500, { message: 'unexpected' });
+  }, () => admin.handler({ httpMethod: 'GET', headers: { authorization: 'Bearer user-token' } }));
+  assert.equal(listed.statusCode, 200);
+  const body = JSON.parse(listed.body);
+  assert.equal(body.pendingMigration, false);
+  assert.deepEqual(body.counts, [row]);
 });
 
 test('the migration is service-role only and the client sends no visitor id', () => {
@@ -231,8 +237,11 @@ test('the migration is service-role only and the client sends no visitor id', ()
   assert.match(hub, /data-frfc-link="channel" data-frfc-creator="\$\{esc\(slug\)\}"/);
 
   const adminJs = fs.readFileSync(path.join(__dirname, '..', 'js/admin.js'), 'utf8');
-  assert.match(adminJs, /loadUnlinkedPayments\(\); loadLinkClicks\(\)/);
+  assert.match(adminJs, /if \(can\('settings\.manage'\)\) \{ loadUnlinkedPayments\(\); loadLinkClicks\(\); \}/);
+  assert.match(adminJs, /can\('settings\.manage'\)[\s\S]*Unlinked Verified payments[\s\S]*Channel and watch-live clicks/);
   assert.match(adminJs, /function loadUnlinkedPayments\(/);
   assert.match(adminJs, /function loadLinkClicks\(/);
   assert.match(sql, /90 days/);
+  assert.match(sql, /retention-cleanup\.js/);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'netlify/functions/link-click.js'), 'utf8'), /frfc_link_clicks\?created_at/);
 });

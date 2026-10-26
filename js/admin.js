@@ -164,7 +164,10 @@ function renderPage() {
     content.innerHTML = toggle + '<div class="admin-page-header"><div><h1 class="admin-page-title">Access Denied</h1><div class="admin-page-subtitle">Your role doesn\'t include the &ldquo;' + requiredPermission + '&rdquo; permission.</div></div></div>';
     return;
   }
-  if (adminPage === 'dashboard') { content.innerHTML = toggle + renderDashboard(); loadUnlinkedPayments(); loadLinkClicks(); }
+  if (adminPage === 'dashboard') {
+    content.innerHTML = toggle + renderDashboard();
+    if (can('settings.manage')) { loadUnlinkedPayments(); loadLinkClicks(); }
+  }
   else if (adminPage === 'creators') content.innerHTML = toggle + renderCreators();
   else if (adminPage === 'submissions') content.innerHTML = toggle + renderSubmissions();
   else if (adminPage === 'news')     content.innerHTML = toggle + renderNews();
@@ -222,9 +225,10 @@ function renderDashboard() {
     renderActivityList(adminLog.slice(0, 10)) +
   '</div></div>' +
 
-  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Unlinked Verified payments</span></div><div class="admin-card-body" id="adminUnlinkedBody">Loading…</div></div>' +
-
-  '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Channel and watch-live clicks</span></div><div class="admin-card-body" id="adminLinkClicksBody">Loading…</div></div>';
+  (can('settings.manage')
+    ? '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Unlinked Verified payments</span></div><div class="admin-card-body" id="adminUnlinkedBody">Loading…</div></div>' +
+      '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Channel and watch-live clicks</span></div><div class="admin-card-body" id="adminLinkClicksBody">Loading…</div></div>'
+    : '');
 }
 
 async function loadUnlinkedPayments() {

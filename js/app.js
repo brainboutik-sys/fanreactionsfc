@@ -10,6 +10,7 @@
      js/lib/claim-ui.js → renderClaimModalHtml()
      js/lib/verified.js → isCurrentlyVerified(), verifiedBadgeHTML(), the Stripe Payment Link constant
      js/lib/club-sponsorship.js → isSponsorshipActive(), sponsoredSlotHtml()
+     js/lib/club-live-banner.js → clubLiveBannerHtml(); CLUB_LIVE_BANNER_ENABLED
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -2716,20 +2717,65 @@ function hubFaqAnswerHtml(faq) {
   return escHtml(faq.a);
 }
 
+// Paid card above the organic grid. A missing table, an error, or an
+// inactive window returns null. The caller does not reorder the ranking.
+async function loadActiveClubSponsor(club) {
+  if (typeof sb === 'undefined' || !sb || typeof isSponsorshipActive !== 'function') return null;
+  try {
+    const { data, error } = await sb.from('frfc_club_sponsorships')
+      .select('creator_id,starts_at,ends_at,club_slug')
+      .eq('club_slug', clubSlug(club))
+      .maybeSingle();
+    if (!error && data && isSponsorshipActive(data, new Date())) {
+      return creators.find(c => c.id === data.creator_id) || null;
+    }
+  } catch (e) { /* missing table or network — no sponsored card */ }
+  return null;
+}
+
+// Kickoffs for this club inside the banner window. Public fixture rows
+// only — no trigger bookkeeping. A failed read leaves the live-creator
+// banner working on its own.
+async function loadClubLiveFixtures(club, now) {
+  if (typeof CLUB_LIVE_BANNER_ENABLED === 'undefined' || !CLUB_LIVE_BANNER_ENABLED) return [];
+  if (typeof CLUB_LIVE_PRE_MS !== 'number' || typeof CLUB_LIVE_MATCH_MS !== 'number') return [];
+  if (typeof sb === 'undefined' || !sb || !club || club === 'Multi-Club / Other') return [];
+  const clock = now instanceof Date ? now.getTime() : Date.now();
+  const from = new Date(clock - CLUB_LIVE_MATCH_MS).toISOString();
+  const to = new Date(clock + CLUB_LIVE_PRE_MS).toISOString();
+  const safeClub = String(club).replace(/["(),]/g, '');
+  if (!safeClub) return [];
+  try {
+    const { data, error } = await sb.from('frfc_fixtures')
+      .select('home_team,away_team,kickoff_at,competition_code,status')
+      .or('home_team.eq."' + safeClub + '",away_team.eq."' + safeClub + '"')
+      .gte('kickoff_at', from)
+      .lte('kickoff_at', to)
+      .limit(8);
+    if (error || !Array.isArray(data)) return [];
+    return data;
+  } catch (e) {
+    return [];
+  }
+}
+
+function clubLiveBannerFor(club, clubCreators, fixtures, now) {
+  if (typeof clubLiveBannerHtml !== 'function') return '';
+  return clubLiveBannerHtml({
+    club: club,
+    creators: clubCreators,
+    fixtures: fixtures || [],
+    now: now || new Date(),
+  });
+}
+
 // Ranking hub for a real club. /clubs/multi-club stays on renderClubPage.
 async function renderClubHub(club) {
-  let sponsored = null;
-  if (typeof sb !== 'undefined' && sb && typeof isSponsorshipActive === 'function') {
-    try {
-      const { data, error } = await sb.from('frfc_club_sponsorships')
-        .select('creator_id,starts_at,ends_at,club_slug')
-        .eq('club_slug', clubSlug(club))
-        .maybeSingle();
-      if (!error && data && isSponsorshipActive(data, new Date())) {
-        sponsored = creators.find(c => c.id === data.creator_id) || null;
-      }
-    } catch (e) { sponsored = null; }
-  }
+  const bannerNow = new Date();
+  const [sponsored, fixtures] = await Promise.all([
+    loadActiveClubSponsor(club),
+    loadClubLiveFixtures(club, bannerNow),
+  ]);
   if (currentRoute.page !== 'club' || currentRoute.club !== club) return;
 
   const params = new URLSearchParams(location.search);
@@ -2761,6 +2807,7 @@ async function renderClubHub(club) {
   const clubLeague = getLeague(club);
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
   const clubUrl = clubPath(club);
+  const liveBanner = clubLiveBannerFor(club, bySubs, fixtures, bannerNow);
 
   updatePageMeta(
     hubTitle(club, new Date()),
@@ -2794,6 +2841,7 @@ async function renderClubHub(club) {
             <a href="/submit" class="btn btn-accent btn-pill btn-sm" onclick="event.preventDefault();navigate('/submit')">+ Suggest</a>
           </div>
         </div>
+        ${liveBanner}
       </div>
     </div>
     <div class="container section">
@@ -2885,6 +2933,7 @@ function renderClubPage(club) {
   const clubLeague = getLeague(club);
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
   const clubUrl = clubPath(club);
+  const liveBanner = clubLiveBannerFor(club, clubCreators, [], new Date());
 
   updatePageMeta(
     `${club} Football YouTubers | FanReactionsFC`,
@@ -2911,6 +2960,7 @@ function renderClubPage(club) {
             <a href="/submit" class="btn btn-accent btn-pill btn-sm">+ Suggest</a>
           </div>
         </div>
+        ${liveBanner}
       </div>
     </div>
 

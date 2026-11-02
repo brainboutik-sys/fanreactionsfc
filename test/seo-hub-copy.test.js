@@ -369,7 +369,9 @@ test('multi-club hub copy is unchanged and articles do not link to /clubs/none',
       assert.ok(related, 'expected a related club link');
       assert.match(related[0], /href="\/clubs\/chelsea"/);
       assert.match(related[0], /More from the rooms: Chelsea fan YouTubers/);
-      assert.doesNotMatch(related[0], /\/clubs\/everton/);
+      assert.match(related[0], /href="\/clubs\/everton"/);
+      assert.match(related[0], /More from the rooms: Everton fan YouTubers/);
+      assert.ok(related[0].indexOf('/clubs/chelsea') < related[0].indexOf('/clubs/everton'));
       assert.doesNotMatch(res.body, /\/clubs\/none/);
     });
   } finally {
@@ -713,6 +715,232 @@ test('titles that already fit in 60 stay on the live wording', () => {
     assert.equal(title, row.title, row.slug);
     assert.ok(title.length <= 60, row.slug + ' ' + title.length);
     assert.match(title, / \| FanReactionsFC$/);
+  }
+});
+
+test('Real Madrid and Man City hubs use a click title, meta, and creator FAQ', async () => {
+  const now = new Date('2026-11-02T12:00:00Z');
+  for (const row of [
+    ['Real Madrid', 'Best Real Madrid Fan YouTubers | FanReactionsFC'],
+    ['Man City', 'Best Man City Fan YouTubers | FanReactionsFC'],
+  ]) {
+    const title = seo.hubPageTitle(row[0], now);
+    assert.equal(title, row[1]);
+    assert.ok(title.length <= 60, title + ' (' + title.length + ')');
+    assert.match(title, / \| FanReactionsFC$/);
+  }
+  const madrid = seo.hubPageMeta('Real Madrid', 10, 'LIVE DjMaRiiO', '10.3M', now);
+  assert.match(madrid, /^Best Real Madrid fan YouTubers:/);
+  assert.match(madrid, /LIVE DjMaRiiO \(10\.3M subscribers\)/);
+  assert.ok(madrid.length <= 155, madrid + ' (' + madrid.length + ')');
+  const city = seo.hubPageMeta('Man City', 24, 'CityXtra', '96.7K', now);
+  assert.match(city, /CityXtra \(96\.7K subscribers\)/);
+  assert.ok(city.length <= 155, city);
+  assert.equal(seo.hubPageTitle('Arsenal', now), seo.hubTitle('Arsenal', now));
+
+  const faq = seo.hubBestCreatorsFaq('Real Madrid', ['LIVE DjMaRiiO', 'ByDiegoX10', 'JKCLife']);
+  assert.equal(faq.q, 'Who are the best Real Madrid fan YouTubers?');
+  assert.match(faq.a, /LIVE DjMaRiiO, ByDiegoX10 and JKCLife/);
+  assert.equal(seo.hubBestCreatorsFaq('Arsenal', ['AFTV']), null);
+  assert.equal(seo.hubBestCreatorsFaq('Man City', []), null);
+
+  const club = require('../netlify/functions/club-og.js');
+  const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('frfc_streamers')) {
+      return {
+        ok: true,
+        json: async () => [
+          { id: 'rm1', name: 'LIVE DjMaRiiO', slug: 'live-djmariio', team: 'Real Madrid', subscriber_count: 10300000, content_types: ['Reactions'], description: 'Madrid reactions.' },
+          { id: 'mc1', name: 'CityXtra', slug: 'cityxtra', team: 'Man City', subscriber_count: 96700, content_types: ['Watchalong'], description: 'City watchalongs.' },
+        ],
+      };
+    }
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    await withCwd(async () => {
+      const madridPage = await club.handler({ path: '/clubs/real-madrid' });
+      assert.equal(madridPage.statusCode, 200);
+      assert.match(madridPage.body, /<title>Best Real Madrid Fan YouTubers \| FanReactionsFC<\/title>/);
+      assert.match(madridPage.body, /<h1 class="page-hero-title">Best Real Madrid Fan YouTubers<\/h1>/);
+      assert.match(madridPage.body, /Who are the best Real Madrid fan YouTubers\?/);
+      assert.match(madridPage.body, /"@type":"FAQPage"/);
+      const cityPage = await club.handler({ path: '/clubs/manchester-city' });
+      assert.match(cityPage.body, /<title>Best Man City Fan YouTubers \| FanReactionsFC<\/title>/);
+      assert.match(cityPage.body, /Who are the best Man City fan YouTubers\?/);
+      assert.match(cityPage.body, /CityXtra does Man City watchalongs/);
+      const graph = JSON.parse(cityPage.body.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'];
+      const faqPage = graph.find(n => n['@type'] === 'FAQPage');
+      assert.equal(faqPage.mainEntity[0].name, 'Who are the best Man City fan YouTubers?');
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prevKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+  }
+});
+
+test('Harry Kane article uses an seo title override and links every club it covers', async () => {
+  const kane = {
+    slug: 'football-youtubers-react-as-harry-kane-wins-the-ballon-dor',
+    title: "Football YouTubers react as Harry Kane wins the Ballon d'Or",
+    summary: "Football fan YouTubers react as Harry Kane wins the 2026 Ballon d'Or in London, ahead of Kylian Mbappé and Lamine Yamal.",
+    related_team: null,
+    body: 'The [Bayern Munich](/clubs/bayern-munich) striker, formerly of [Tottenham](/clubs/tottenham). The [Barcelona](/clubs/barcelona) end, and the [Arsenal](/clubs/arsenal) rooms.',
+  };
+  const title = seo.articleSeoTitle(kane);
+  assert.equal(title, "Harry Kane Ballon d'Or: fan YouTubers react | FanReactionsFC");
+  assert.equal(title.length, 60);
+  assert.notEqual(title, kane.title);
+  const meta = seo.articleSeoMeta(kane);
+  assert.match(meta, /first English winner since 2001/);
+  assert.ok(meta.length <= 155, meta + ' (' + meta.length + ')');
+  assert.deepEqual(seo.articleHubClubs(kane), ['Bayern Munich', 'Tottenham', 'Barcelona', 'Arsenal']);
+
+  const covered = {
+    title: 'Saturday roundup',
+    related_team: null,
+    body: 'Hubs: /clubs/tottenham /clubs/crystal-palace /clubs/manchester-united /clubs/manchester-city /clubs/brighton /clubs/newcastle /clubs/chelsea',
+  };
+  assert.deepEqual(seo.articleHubClubs(covered), [
+    'Tottenham', 'Crystal Palace', 'Man United', 'Man City', 'Brighton', 'Newcastle', 'Chelsea',
+  ]);
+  assert.deepEqual(seo.articleHubClubs({ title: 'No club here', related_team: 'none', body: 'Chelsea is named.' }), []);
+  assert.deepEqual(seo.articleHubClubs({
+    title: 'Chelsea watchalong',
+    related_team: 'chelsea',
+    body: 'Also /clubs/none and /clubs/brighton.',
+  }), ['Chelsea', 'Brighton']);
+
+  const articleFn = require('../netlify/functions/news-article.js');
+  const prev = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [Object.assign({
+      dek: '',
+      cover_image_url: null,
+      tags: ['Harry Kane'],
+      published_at: '2026-10-28T00:00:00Z',
+      updated_at: '2026-10-28T00:05:00Z',
+    }, kane)],
+  });
+  try {
+    await withCwd(async () => {
+      const res = await articleFn.handler({ path: '/news/' + kane.slug });
+      assert.equal(res.statusCode, 200);
+      assert.match(res.body, /<title>Harry Kane Ballon d(?:'|&#39;)Or: fan YouTubers react \| FanReactionsFC<\/title>/);
+      assert.match(res.body, /<h1 class="page-hero-title">Football YouTubers react as Harry Kane wins the Ballon d(?:'|&#39;)Or<\/h1>/);
+      const related = res.body.match(/<div class="news-article-related">[\s\S]*?<\/div>/);
+      assert.ok(related, 'expected club hub links');
+      for (const slug of ['bayern-munich', 'tottenham', 'barcelona', 'arsenal']) {
+        assert.match(related[0], new RegExp('href="/clubs/' + slug + '"'));
+      }
+      assert.doesNotMatch(related[0], /\/clubs\/none/);
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prev === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prev;
+  }
+});
+
+test('thin creator profiles render a synced bio, subscriber count, top videos, and a club hub link', async () => {
+  const { handler } = require('../netlify/functions/creator-og.js');
+  const prev = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const origFetch = global.fetch;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  const creators = {
+    gjustjuve: {
+      id: 'cbd16737-459e-4921-98bf-072b5d58d9f1',
+      name: 'GJustjuve',
+      slug: 'gjustjuve',
+      team: 'Juventus',
+      description: null,
+      subscriber_count: 46200,
+      video_count: 3811,
+      upload_frequency: 'Daily',
+      content_types: [],
+      channel_url: 'https://www.youtube.com/@GJustjuve',
+      latest_video_id: 'Dwqq-5p5SU8',
+      latest_video_title: 'FENOMENO ALAJBEGOVIC | MORE THAN 3 POINTS BUT.. | JUVENTUS 2-0 NAPOLI',
+      latest_video_views: 4142,
+      hub: '/clubs/juventus',
+      bio: /GJustjuve is a Juventus fan YouTuber\. The channel has 46\.2K subscribers and 3,811 videos, and uploads daily\./,
+    },
+    turkishldn: {
+      id: '18270df8-8ccf-47c2-90c1-6ed5e5c9d637',
+      name: 'TurkishLDN',
+      slug: 'turkishldn',
+      team: 'Arsenal',
+      description: null,
+      subscriber_count: 150000,
+      video_count: 788,
+      upload_frequency: 'Daily',
+      content_types: [],
+      channel_url: 'https://www.youtube.com/@TurkishLDN',
+      latest_video_id: 'XxVNCYUzZjI',
+      latest_video_title: '0 SHOTS On TARGET?! | Liverpool 0-1 ARSENAL',
+      latest_video_views: 50168,
+      hub: '/clubs/arsenal',
+      bio: /TurkishLDN is an Arsenal fan YouTuber\. The channel has 150\.0K subscribers and 788 videos, and uploads daily\./,
+    },
+    troopztv: {
+      id: 'e6fdac0d-e4f5-4934-b584-ba94dc532e8f',
+      name: 'TroopzTV',
+      slug: 'troopztv',
+      team: 'Arsenal',
+      description: null,
+      subscriber_count: 342000,
+      video_count: 3210,
+      upload_frequency: 'Daily',
+      content_types: ['Reactions', 'Watchalong'],
+      channel_url: 'https://www.youtube.com/@TroopzTV',
+      latest_video_id: '3z6PibiZRiw',
+      latest_video_title: 'Liverpool 0-1 Arsenal LIVE Premier League Watchalong W/ Troopz PT 2',
+      latest_video_views: 24880,
+      hub: '/clubs/arsenal',
+      bio: /TroopzTV is an Arsenal fan YouTuber covering reactions, watchalong\. The channel has 342\.0K subscribers and 3,210 videos, and uploads daily\./,
+    },
+  };
+  let current = creators.gjustjuve;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('frfc_video_metrics')) {
+      return { ok: true, json: async () => [
+        { video_id: current.latest_video_id, views: current.latest_video_views },
+        { video_id: 'AAAAAAAAAAA', views: 54906 },
+      ] };
+    }
+    if (u.includes('frfc_streamers') && u.includes('team=eq.')) {
+      return { ok: true, json: async () => [] };
+    }
+    if (u.includes('frfc_streamers')) return { ok: true, json: async () => [current] };
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    await withCwd(async () => {
+      for (const creator of Object.values(creators)) {
+        current = creator;
+        const res = await handler({ path: '/creators/' + creator.slug });
+        assert.equal(res.statusCode, 200, creator.slug);
+        assert.match(res.body, creator.bio, creator.slug);
+        assert.match(res.body, new RegExp('href="' + creator.hub + '"'), creator.slug);
+        assert.match(res.body, /Top videos/, creator.slug);
+        assert.match(res.body, new RegExp(creator.latest_video_title.replace(/[.*+?^${}()|[\]\\|]/g, '\\$&')), creator.slug);
+        assert.match(res.body, /54\.9K views/, creator.slug);
+        assert.doesNotMatch(res.body, /Recent upload/, creator.slug);
+      }
+    });
+  } finally {
+    global.fetch = origFetch;
+    if (prev === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prev;
   }
 });
 

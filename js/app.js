@@ -2100,9 +2100,10 @@ async function renderProfile(slug) {
   const isFav = favorites.has(c.id);
   const similar = creators.filter(s => s.team === c.team && s.id !== c.id).slice(0, 4);
 
+  const profileBlurb = (c.description ? c.description : creatorIntroText(c)).replace(/\s+/g, ' ').trim();
   updatePageMeta(
-    `${c.name} — Football Creator on FanReactionsFC`,
-    (c.description ? c.description.slice(0, 160) : `${c.name} is ${aOrAn(c.team)} ${c.team} football YouTuber on FanReactionsFC.`) + (c.subscriberCount ? ` ${formatNum(c.subscriberCount)} subscribers.` : '')
+    `${c.name} — Football creator on FanReactionsFC`,
+    profileBlurb.length <= 155 ? profileBlurb : profileBlurb.slice(0, 152).trim() + '…'
   );
 
   document.getElementById('app').innerHTML = `
@@ -2116,7 +2117,7 @@ async function renderProfile(slug) {
             ${c.channelCountry ? `<span class="cp-flag-badge">${countryFlag(c.channelCountry)}</span>` : ''}
           </div>
           <div class="cp-hero-info">
-            <div class="cp-hero-eyebrow">${crestImg(c.team, 'crest-sm')} ${escHtml(c.team)} ${c.league ? '&middot; ' + escHtml(c.league) : ''}</div>
+            <div class="cp-hero-eyebrow">${crestImg(c.team, 'crest-sm')} ${c.team ? `<a href="${clubPath(c.team)}" onclick="event.preventDefault();navigate('${clubPath(c.team)}')">${escHtml(c.team)}</a>` : ''} ${c.league ? '&middot; ' + escHtml(c.league) : ''}</div>
             <h1 class="cp-hero-name">
               ${escHtml(c.name)}
               ${c.claimedBy ? '<img src="/img/icons/claimed-verified.png" alt="Claimed by the creator" title="Claimed by the creator" class="cp-claimed-icon">' : ''}
@@ -2124,6 +2125,7 @@ async function renderProfile(slug) {
               ${c.isLive ? '<span class="badge badge-live" style="vertical-align:middle">● LIVE</span>' : ''}
             </h1>
             <p class="cp-hero-desc">${c.description ? escHtml(c.description) : escHtml(creatorIntroText(c))}</p>
+            ${c.team && c.team !== 'Multi-Club / Other' ? `<p class="seo-more-links"><a href="${clubPath(c.team)}" onclick="event.preventDefault();navigate('${clubPath(c.team)}')">Best ${escHtml(c.team)} fan YouTubers</a></p>` : (c.team ? `<p class="seo-more-links"><a href="${clubPath(c.team)}" onclick="event.preventDefault();navigate('${clubPath(c.team)}')">${escHtml(c.team)} creators</a></p>` : '')}
             ${(c.socialX || c.socialInstagram || c.socialTwitch || c.socialDiscord || c.socialTiktok) ? `
             <div class="cp-social-links">
               ${socialLinkHTML(c.socialX, 'x', 'X (Twitter)')}
@@ -2208,6 +2210,8 @@ async function renderProfile(slug) {
           </a>
         </div>` : ''}
 
+        <div id="cp-top-videos-slot">${profileTopVideosHTML(initialProfileVideos(c))}</div>
+
         ${c.latestVideoId ? `
         <div class="cp-section-card">
           <div class="cp-section-head">
@@ -2291,6 +2295,8 @@ async function renderProfile(slug) {
     ${renderFooter()}
   `;
 
+
+  loadProfileTopVideos(c);
 
   // Async: load subscriber history for growth delta + sparkline
   if (c.subscriberCount) {
@@ -2547,6 +2553,62 @@ function joinWithAnd(arr) {
   return arr.slice(0, -1).join(', ') + ', and ' + arr[arr.length - 1];
 }
 
+function initialProfileVideos(c) {
+  if (!c || !c.latestVideoId) return [];
+  return [{ id: c.latestVideoId, title: c.latestVideoTitle || '', views: c.latestVideoViews || 0 }];
+}
+
+function profileTopVideosHTML(videos) {
+  const rows = (videos || []).filter(v => v && safeId(v.id));
+  if (!rows.length) return '';
+  return `
+        <div class="cp-section-card" id="cp-top-videos">
+          <div class="cp-section-head"><span class="cp-section-label">Top videos</span></div>
+          <ul class="seo-list">
+            ${rows.map(v => {
+              const id = safeId(v.id);
+              const label = v.title ? escHtml(v.title) : (v.views ? formatNum(v.views) + ' views' : 'YouTube');
+              const meta = v.title && v.views ? ` <span>· ${formatNum(v.views)} views</span>` : '';
+              return `<li><a href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener">${label}</a>${meta}</li>`;
+            }).join('')}
+          </ul>
+        </div>`;
+}
+
+// Highest synced view counts. Titles are used only when this directory
+// already stored one (the latest upload). No titles are invented.
+function mergeProfileTopVideos(creator, rows) {
+  const byId = new Map();
+  function add(video) {
+    const id = safeId(video && video.id);
+    if (!id) return;
+    const prev = byId.get(id) || { id, views: 0, title: '' };
+    const views = Number(video.views) || 0;
+    if (views > prev.views) prev.views = views;
+    if (video.title && !prev.title) prev.title = String(video.title);
+    byId.set(id, prev);
+  }
+  initialProfileVideos(creator).forEach(add);
+  (rows || []).forEach(row => add({ id: row.video_id, views: row.views || 0 }));
+  return [...byId.values()].sort((a, b) => b.views - a.views || a.id.localeCompare(b.id)).slice(0, 3);
+}
+
+async function loadProfileTopVideos(creator) {
+  const slot = document.getElementById('cp-top-videos-slot');
+  if (!slot || !sb || !creator || !creator.id) return;
+  if (currentRoute.page !== 'profile' || currentRoute.slug !== (creator.slug || slugify(creator.name))) return;
+  try {
+    const { data, error } = await sb.from('frfc_video_metrics')
+      .select('video_id,views')
+      .eq('creator_id', creator.id)
+      .order('views', { ascending: false })
+      .limit(40);
+    if (error || !data) return;
+    if (currentRoute.page !== 'profile' || currentRoute.slug !== (creator.slug || slugify(creator.name))) return;
+    slot.innerHTML = profileTopVideosHTML(mergeProfileTopVideos(creator, data));
+  } catch (e) { /* keep the latest synced upload */ }
+}
+
 // Generated fallback intro paragraph for a creator profile — only used
 // when the channel has no real description synced from YouTube.
 function creatorIntroText(c) {
@@ -2750,6 +2812,8 @@ async function renderClubHub(club) {
     subs: subsLabel,
     watchNames: organic.filter(c => (c.contentTypes || []).some(t => String(t).toLowerCase() === 'watchalong')).slice(0, 3).map(c => c.name),
   });
+  const bestFaq = hubBestCreatorsFaq(club, organic.slice(0, 3).map(c => c && c.name));
+  if (bestFaq) faqs.unshift(bestFaq);
   const intro = hubIntro(club, organic.length, claim && claim.name);
   const rankedHeading = hubRankedHeading(club, organic.length);
   const videos = bySubs
@@ -2763,8 +2827,8 @@ async function renderClubHub(club) {
   const clubUrl = clubPath(club);
 
   updatePageMeta(
-    hubTitle(club, new Date()),
-    hubMeta(club, organic.length, claim && claim.name, new Date())
+    hubPageTitle(club, new Date()),
+    hubPageMeta(club, organic.length, claim && claim.name, subsLabel, new Date())
   );
 
   document.getElementById('app').innerHTML = `
@@ -3952,9 +4016,7 @@ async function renderNewsArticle(slug) {
   }
 
   updatePageMeta(articleSeoTitle(article), articleSeoMeta(article), articleShareImage(article.cover_image_url));
-  const moreClub = articleMoreClub(article);
-  const moreLabel = moreClub ? articleMoreLabel(moreClub) : '';
-  const moreHref = moreClub ? clubPath(moreClub) : '';
+  const hubClubs = articleHubClubs(article);
 
   sb.rpc('increment_article_view', { article_id: article.id }).then(() => {});
 
@@ -3974,9 +4036,12 @@ async function renderNewsArticle(slug) {
     <div class="container container-narrow section">
       ${firstPartyCoverUrl(article.cover_image_url) ? `<img src="${escHtml(firstPartyCoverUrl(article.cover_image_url))}" alt="${escHtml(articleCoverAlt(article.related_team, article.title))}" class="news-article-cover">` : ''}
       <div class="news-article-body">${newsBodyHTML(article.body)}</div>
-      ${moreLabel ? `
+      ${hubClubs.length ? `
       <div class="news-article-related">
-        <a href="${moreHref}" onclick="event.preventDefault();navigate('${moreHref}')">${escHtml(moreLabel)}</a>
+        ${hubClubs.map(club => {
+          const href = clubPath(club);
+          return `<a href="${href}" onclick="event.preventDefault();navigate('${href}')">${escHtml(articleMoreLabel(club))}</a>`;
+        }).join(' ')}
       </div>` : ''}
       ${creatorLinksHTML(article.creator_links)}
       ${newsletterSignupHTML('article')}

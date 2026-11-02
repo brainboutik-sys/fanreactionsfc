@@ -43,6 +43,21 @@ const HUB_COPY = {
   relatedAnchor: '{Club} fan YouTubers',
 };
 
+// CTR overrides for hubs whose generic ranked title is not earning the click.
+// Titles stay within 60 characters, including the brand suffix.
+const HUB_PAGE_OVERRIDES = {
+  'Real Madrid': {
+    title: 'Best Real Madrid Fan YouTubers | FanReactionsFC',
+    meta: 'Best Real Madrid fan YouTubers: {N} ranked channels, led by {Top} ({subs} subscribers). Watchalongs and reactions, updated {Month YYYY}.',
+    metaNoTop: 'Best Real Madrid fan YouTubers: watchalongs, match reactions and fan TV. Updated {Month YYYY}.',
+  },
+  'Man City': {
+    title: 'Best Man City Fan YouTubers | FanReactionsFC',
+    meta: 'Best Man City fan YouTubers: {N} ranked channels, led by {Top} ({subs} subscribers). Watchalongs and reactions, updated {Month YYYY}.',
+    metaNoTop: 'Best Man City fan YouTubers: watchalongs, match reactions and fan TV. Updated {Month YYYY}.',
+  },
+};
+
 // ── Article templates ─────────────────────────────────────────────────────
 const ARTICLE_TITLE_MAX = 60;
 const ARTICLE_META_MAX = 155;
@@ -56,6 +71,15 @@ const ARTICLE_COPY = {
   coverAlt: '{Club} fan YouTubers react: {Headline}',
   updated: 'Updated {Date}',
   published: 'Published {Date}',
+};
+
+// frfc_articles has no SEO-title column. Optional per-slug overrides live here
+// so the stored H1 (articles.title) stays the headline.
+const ARTICLE_SEO_OVERRIDES = {
+  'football-youtubers-react-as-harry-kane-wins-the-ballon-dor': {
+    title: "Harry Kane Ballon d'Or: fan YouTubers react | FanReactionsFC",
+    meta: "Harry Kane wins the 2026 Ballon d'Or, the first English winner since 2001. Fan YouTubers from Bayern Munich, Tottenham, Arsenal and Barcelona react.",
+  },
 };
 
 // Display names are the existing short names (Man City, not Manchester City).
@@ -149,6 +173,12 @@ function hubTitle(club, now) {
   return seoFill(HUB_COPY.titleShort, { Club: club, YYYY: yyyy });
 }
 
+function hubPageTitle(club, now) {
+  const over = HUB_PAGE_OVERRIDES[club];
+  if (over && over.title && over.title.length <= HUB_TITLE_MAX) return over.title;
+  return hubTitle(club, now);
+}
+
 function hubH1(club) {
   return seoFill(HUB_COPY.h1, { Club: club });
 }
@@ -165,6 +195,23 @@ function hubMeta(club, count, topName, now) {
     Top: topName,
     'Month YYYY': month,
   }), HUB_META_MAX);
+}
+
+function hubPageMeta(club, count, topName, subs, now) {
+  const over = HUB_PAGE_OVERRIDES[club];
+  if (!over) return hubMeta(club, count, topName, now);
+  const month = seoMonthYear(now);
+  const n = Number(count) || 0;
+  if (topName && subs && n > 0) {
+    return seoClip(seoFill(over.meta, {
+      N: n,
+      Club: club,
+      Top: topName,
+      subs: subs,
+      'Month YYYY': month,
+    }), HUB_META_MAX);
+  }
+  return seoClip(seoFill(over.metaNoTop, { Club: club, 'Month YYYY': month }), HUB_META_MAX);
 }
 
 function hubIntro(club, count, topName) {
@@ -234,6 +281,20 @@ function buildHubFaqs(opts) {
     a: HUB_COPY.faqListA,
   });
   return faqs;
+}
+
+// Short creator FAQ for the low-CTR hubs. Names come from the ranked rows.
+function hubBestCreatorsFaq(club, names) {
+  if (!HUB_PAGE_OVERRIDES[club]) return null;
+  const list = (names || []).filter(Boolean).slice(0, 3);
+  if (!list.length) return null;
+  const a = list.length === 1
+    ? list[0] + ' is the best ' + club + ' fan YouTuber in this directory.'
+    : 'The best ' + club + ' fan YouTubers in this directory include ' + seoNameList(list) + '.';
+  return {
+    q: 'Who are the best ' + club + ' fan YouTubers?',
+    a: a,
+  };
 }
 
 function seoEscapeReg(s) {
@@ -955,7 +1016,15 @@ function fanHeadlineTitles(headline, club, surface) {
   return titles;
 }
 
+function articleSeoOverride(article) {
+  const slug = article && article.slug;
+  if (!slug || !ARTICLE_SEO_OVERRIDES[slug]) return null;
+  return ARTICLE_SEO_OVERRIDES[slug];
+}
+
 function articleSeoTitle(article) {
+  const override = articleSeoOverride(article);
+  if (override && override.title) return override.title;
   const headline = (article && (article.title || article.headline)) || '';
   const primary = articleClubName(article && (article.related_team || article.relatedTeam));
   const hits = clubHits(headline);
@@ -1113,6 +1182,8 @@ function composeArticleSeoMeta(article) {
 }
 
 function articleSeoMeta(article) {
+  const override = articleSeoOverride(article);
+  if (override && override.meta) return override.meta;
   return balanceMetaQuotes(composeArticleSeoMeta(article));
 }
 
@@ -1149,6 +1220,25 @@ function articleMoreClub(article) {
   const headline = (article && (article.title || article.headline)) || '';
   if (clubsInHeadline(headline).length !== 2) return '';
   return articleHubClubFromBody(article && article.body);
+}
+
+// Every club the article covers: related_team, then each /clubs/<slug> in
+// the body. Headline clubs are used only when neither of those is set.
+function articleHubClubs(article) {
+  const out = [];
+  function add(name) {
+    if (!name || out.indexOf(name) >= 0) return;
+    out.push(name);
+  }
+  add(articleClubName(article && (article.related_team || article.relatedTeam)));
+  const body = String((article && article.body) || '');
+  const re = /\/clubs\/([A-Za-z0-9-]+)/g;
+  let match;
+  while ((match = re.exec(body))) add(articleClubName(match[1]));
+  if (!out.length) {
+    clubsInHeadline((article && (article.title || article.headline)) || '').forEach(add);
+  }
+  return out;
 }
 
 function articleCoverAlt(relatedOrClub, headline) {
@@ -1782,14 +1872,15 @@ exports.handler = async (event) => {
   const sid = sponsoredCreator && sponsoredCreator.id;
   const organic = creators.filter(c => !(sid && c.id === sid));
   const claimTop = isMultiClub ? null : hubClaimTop(organic, null);
+  const claimSubs = claimTop && claimTop.subscriber_count ? formatNum(claimTop.subscriber_count) : '';
   const title = isMultiClub
     ? `${club} Football YouTubers | FanReactionsFC`
-    : hubTitle(club, new Date());
+    : hubPageTitle(club, new Date());
   const description = isMultiClub
     ? (creators.length
       ? `${creators.length} ${club} content creator${creators.length !== 1 ? 's' : ''} on YouTube — watchalongs, reactions, and fan commentary.${top ? ` The most-followed is ${top.name}${top.subscriber_count ? ` with ${formatNum(top.subscriber_count)} subscribers` : ''}.` : ''}`
       : `FanReactionsFC club page for ${club} YouTube creators — watchalongs, reactions, and fan commentary.`)
-    : hubMeta(club, organic.length, claimTop && claimTop.name, new Date());
+    : hubPageMeta(club, organic.length, claimTop && claimTop.name, claimSubs, new Date());
 
   const verifiedPinned = creators.filter(c => isCurrentlyVerified(c));
   const verifiedBox = verifiedPinned.length ? `
@@ -1867,6 +1958,8 @@ exports.handler = async (event) => {
       subs: subsLabel,
       watchNames: watchalongNames(organic),
     });
+    const bestFaq = hubBestCreatorsFaq(club, organic.slice(0, 3).map(c => c && c.name));
+    if (bestFaq) faqs.unshift(bestFaq);
     const tableRows = organic.map((c, i) => {
       const slug = c.slug || slugify(c.name);
       const avatar = /^https?:\/\//i.test(c.avatar_url || '')

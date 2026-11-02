@@ -53,6 +53,106 @@ function formatNum(n) {
   return String(n);
 }
 
+function aOrAn(word) {
+  return /^[aeiou]/i.test(String(word || '')) ? 'an' : 'a';
+}
+
+function clipMeta(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= 155) return t;
+  const cut = t.slice(0, 152);
+  const sp = cut.lastIndexOf(' ');
+  return ((sp > 80 ? cut.slice(0, sp) : cut).trim()) + '…';
+}
+
+// Stored YouTube description when the sync has one. Otherwise only facts
+// already on the streamer row: club, content types, subscribers, videos, cadence.
+function creatorBio(creator) {
+  const stored = String(creator.description || '').replace(/\s+/g, ' ').trim();
+  if (stored) return stored;
+  const name = creator.name || 'This creator';
+  const team = creator.team && creator.team !== 'Multi-Club / Other' ? creator.team : '';
+  const types = Array.isArray(creator.content_types) ? creator.content_types.filter(Boolean).slice(0, 3) : [];
+  const freq = creator.upload_frequency && creator.upload_frequency !== 'Unknown' && creator.upload_frequency !== 'Inactive'
+    ? String(creator.upload_frequency).toLowerCase() : '';
+  let sentence = team
+    ? `${name} is ${aOrAn(team)} ${team} fan YouTuber`
+    : `${name} is a football fan YouTuber`;
+  if (types.length) sentence += ` covering ${types.map(t => String(t).toLowerCase()).join(', ')}`;
+  sentence += '.';
+  const stats = [];
+  if (creator.subscriber_count) stats.push(`${formatNum(creator.subscriber_count)} subscribers`);
+  if (creator.video_count) stats.push(`${Number(creator.video_count).toLocaleString('en-GB')} videos`);
+  if (stats.length) {
+    sentence += ` The channel has ${stats.join(' and ')}`;
+    sentence += freq ? `, and uploads ${freq}.` : '.';
+  } else if (freq) {
+    sentence += ` The channel uploads ${freq}.`;
+  }
+  return sentence;
+}
+
+function safeVideoId(id) {
+  const s = String(id || '');
+  return /^[A-Za-z0-9_-]{11}$/.test(s) ? s : '';
+}
+
+async function fetchTopVideos(supabaseUrl, sbKey, creator) {
+  const byId = new Map();
+  function add(video) {
+    const id = safeVideoId(video && video.id);
+    if (!id) return;
+    const prev = byId.get(id);
+    const views = Number(video.views) || 0;
+    const title = String((video && video.title) || '').trim();
+    const thumb = String((video && video.thumb) || '').trim();
+    if (!prev) {
+      byId.set(id, { id, views, title, thumb });
+      return;
+    }
+    if (views > prev.views) prev.views = views;
+    if (title && !prev.title) prev.title = title;
+    if (thumb && !prev.thumb) prev.thumb = thumb;
+  }
+  add({
+    id: creator.latest_video_id,
+    title: creator.latest_video_title || '',
+    views: creator.latest_video_views || 0,
+    thumb: creator.latest_video_thumbnail || '',
+  });
+  if (creator.id && sbKey) {
+    try {
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/frfc_video_metrics?select=video_id,views&creator_id=eq.${encodeURIComponent(creator.id)}&order=views.desc.nullslast&limit=40`,
+        { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+      );
+      if (res.ok) {
+        const rows = await res.json();
+        (Array.isArray(rows) ? rows : []).forEach(row => add({ id: row.video_id, views: row.views || 0 }));
+      }
+    } catch { /* the latest synced upload above is enough */ }
+  }
+  return [...byId.values()]
+    .sort((a, b) => b.views - a.views || a.id.localeCompare(b.id))
+    .slice(0, 3)
+    .map(v => Object.assign({}, v, { thumb: v.thumb || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg` }));
+}
+
+function topVideosHtml(videos) {
+  if (!videos.length) return '';
+  return `
+        <div class="cp-section-card">
+          <div class="cp-section-head"><span class="cp-section-label">Top videos</span></div>
+          <ul class="seo-list">
+            ${videos.map(v => {
+              const label = v.title || (v.views ? `${formatNum(v.views)} views` : 'YouTube');
+              const meta = v.title && v.views ? ` · ${formatNum(v.views)} views` : '';
+              return `<li><a href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">${esc(label)}</a>${esc(meta)}</li>`;
+            }).join('')}
+          </ul>
+        </div>`;
+}
+
 // Paid Verified tier. Keep in sync with js/lib/verified.js.
 function isCurrentlyVerified(row, now) {
   if (!row) return false;
@@ -241,7 +341,7 @@ exports.handler = async (event) => {
   let extraClubs = [];
   try {
     const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
-    const cols = 'name,slug,team,description,avatar_url,subscriber_count,channel_url,last_youtube_sync,updated_at,is_verified,verified_until';
+    const cols = 'id,name,slug,team,description,avatar_url,subscriber_count,video_count,upload_frequency,content_types,channel_url,last_youtube_sync,updated_at,is_verified,verified_until,latest_video_id,latest_video_title,latest_video_views,latest_video_thumbnail';
     const legacyCols = 'name,slug,team,description,avatar_url,subscriber_count,channel_url,last_youtube_sync,updated_at';
     const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
     let res = await fetch(
@@ -295,9 +395,12 @@ exports.handler = async (event) => {
   const url = `${SITE_URL}/creators/${canonicalSlug}`;
   const subCount = creator.subscriber_count ? formatNum(creator.subscriber_count) : '';
   const title = `${creator.name} — Football creator on FanReactionsFC`;
-  const description = creator.description
-    ? creator.description.replace(/\s+/g, ' ').trim().slice(0, 155)
-    : `Discover ${creator.name}, a ${creator.team} YouTube creator on FanReactionsFC${subCount ? ` · ${subCount} subscribers` : ''}.`;
+  const bio = creatorBio(creator);
+  const description = clipMeta(bio);
+  const topVideos = await fetchTopVideos(supabaseUrl, sbKey, creator);
+  const clubHub = creator.team
+    ? `<p class="seo-more-links"><a href="${clubPath(creator.team)}">${creator.team !== 'Multi-Club / Other' ? `Best ${esc(creator.team)} fan YouTubers` : `${esc(creator.team)} creators`}</a></p>`
+    : '';
   const image = creator.avatar_url || `${SITE_URL}/img/logo-wide.png`;
   const isOrg = MULTI_HOST.test(creator.name || '') || MULTI_HOST.test(canonicalSlug);
 
@@ -311,7 +414,7 @@ exports.handler = async (event) => {
           <div class="cp-hero-info">
             <div class="cp-hero-eyebrow">${creator.team ? `<a href="${clubPath(creator.team)}">${esc(creator.team)}</a>` : 'Football creator'}</div>
             <h1 class="cp-hero-name">${esc(creator.name)}${isCurrentlyVerified(creator) ? ' <span class="badge badge-verified">Verified</span>' : ''}</h1>
-            <p class="cp-hero-desc">${esc(creator.description || `${creator.name} is a ${creator.team} football YouTuber on FanReactionsFC.`)}</p>
+            <p class="cp-hero-desc">${esc(bio)}</p>
             <div class="cp-hero-actions">
               ${creator.channel_url ? `<a href="${esc(creator.channel_url)}" rel="noopener" class="btn btn-accent" data-frfc-link="channel" data-frfc-creator="${esc(canonicalSlug)}" data-frfc-club="${esc(creator.team || '')}">Watch on YouTube</a>` : ''}
               ${creator.team && creator.team !== 'Multi-Club / Other' ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">best ${esc(creator.team)} fan YouTubers</a>` : (creator.team ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">More ${esc(creator.team)} creators</a>` : '')}
@@ -323,6 +426,8 @@ exports.handler = async (event) => {
     ${stats.length ? `<div class="cp-stats-bar"><div class="container"><div class="cp-stat-cards">${stats.join('')}</div></div></div>` : ''}
     <div class="container cp-body">
       <div class="cp-main">
+        ${clubHub}
+        ${topVideosHtml(topVideos)}
         ${similar.length ? `
         <div class="cp-section-card">
           <div class="cp-section-head">

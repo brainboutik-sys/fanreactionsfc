@@ -205,7 +205,7 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
   test('hides the card when the window has not started, has ended, or the table is missing', async () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
     const cases = [
-      [{ creator_id: 'paid', starts_at: '2026-11-01T00:00:00Z' }],
+      [{ creator_id: 'paid', starts_at: '2027-11-01T00:00:00Z' }],
       [{ creator_id: 'paid', ends_at: '2026-10-01T00:00:00Z' }],
       [],
     ];

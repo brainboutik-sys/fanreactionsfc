@@ -33,7 +33,7 @@ const SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_iq6Dv3b9IYfNktis7WeZ-g_y7_DV0gm';
 // Stripe's no-code Customer Portal login page. The visitor signs in with
 // the email they used at checkout. Empty hides Manage subscription.
-const STRIPE_PORTAL_LOGIN_URL = '';
+const STRIPE_PORTAL_LOGIN_URL = 'https://billing.stripe.com/p/login/aFabJ03Rd2xw0KW4v0ffy00';
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
 catch (_) { /* initialized in DOMContentLoaded fallback */ }
@@ -4109,7 +4109,7 @@ function renderTermsOfService() {
     <h2>7. Verified creator tier</h2>
     <p>Verified is an optional paid subscription for creators, currently CHF 4 per month. Verified creators are pinned on their club page, listed first on Streamwall when they are live, and get a shareable monthly stats card.</p>
     <p>Payment is taken by Stripe on its own checkout page. The subscription renews every month until you cancel, and we switch on Verified status automatically when Stripe confirms your payment.</p>
-    <p>You can cancel at any time by emailing <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a>. Cancelling stops future renewals, and Verified status stays on until the end of the period you have already paid for. Payments are not refunded, except where the law requires otherwise.</p>
+    <p>You can cancel at any time from Manage subscription on your account settings page, which opens the Stripe customer portal. If you need help, email <a href="mailto:admin@fanreactionsfc.com">admin@fanreactionsfc.com</a>. Cancelling stops future renewals, and Verified status stays on until the end of the period you have already paid for. Payments are not refunded, except where the law requires otherwise.</p>
     <p>Verified is a paid listing feature, not an endorsement of a creator's content. We may remove Verified status, and cancel the subscription, if a profile is claimed falsely or the site is misused.</p>
 
     <h2>8. Changes</h2>

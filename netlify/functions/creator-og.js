@@ -313,7 +313,7 @@ exports.handler = async (event) => {
             <h1 class="cp-hero-name">${esc(creator.name)}${isCurrentlyVerified(creator) ? ' <span class="badge badge-verified">Verified</span>' : ''}</h1>
             <p class="cp-hero-desc">${esc(creator.description || `${creator.name} is a ${creator.team} football YouTuber on FanReactionsFC.`)}</p>
             <div class="cp-hero-actions">
-              ${creator.channel_url ? `<a href="${esc(creator.channel_url)}" rel="noopener" class="btn btn-accent">Watch on YouTube</a>` : ''}
+              ${creator.channel_url ? `<a href="${esc(creator.channel_url)}" rel="noopener" class="btn btn-accent" data-frfc-link="channel" data-frfc-creator="${esc(canonicalSlug)}" data-frfc-club="${esc(creator.team || '')}">Watch on YouTube</a>` : ''}
               ${creator.team && creator.team !== 'Multi-Club / Other' ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">best ${esc(creator.team)} fan YouTubers</a>` : (creator.team ? `<a href="${clubPath(creator.team)}" class="btn btn-on-dark">More ${esc(creator.team)} creators</a>` : '')}
             </div>
           </div>

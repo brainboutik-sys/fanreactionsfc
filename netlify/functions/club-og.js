@@ -1489,7 +1489,7 @@ function sponsoredSlotHtml(clubName, creator) {
     : '';
   const blurbLine = blurb ? `<p class="sponsored-slot-blurb">${sponsorshipEscape(blurb)}</p>` : '';
   const youtubeLink = youtube
-    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener">Watch on YouTube</a>`
+    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener"${slug ? ` data-frfc-link="channel" data-frfc-creator="${sponsorshipEscape(slug)}" data-frfc-club="${sponsorshipEscape(clubName)}"` : ''}>Watch on YouTube</a>`
     : '';
   return `<section class="sponsored-slot" aria-label="Sponsored">
   <div class="sponsored-slot-labels">
@@ -1880,7 +1880,7 @@ exports.handler = async (event) => {
       const synced = syncedMonth(c.last_youtube_sync);
       const country = c.channel_country ? String(c.channel_country).toUpperCase() : '';
       const yt = /^https?:\/\//i.test(c.channel_url || '')
-        ? `<a href="${esc(c.channel_url)}" target="_blank" rel="noopener">YouTube</a>` : '';
+        ? `<a href="${esc(c.channel_url)}" target="_blank" rel="noopener" data-frfc-link="channel" data-frfc-creator="${esc(slug)}" data-frfc-club="${esc(club)}">YouTube</a>` : '';
       const subs = c.subscriber_count ? `${formatNum(c.subscriber_count)} subscribers` : '—';
       const extra = [synced ? `as of ${synced}` : '', freq, country].filter(Boolean).join(' · ');
       return `

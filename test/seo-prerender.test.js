@@ -711,15 +711,22 @@ test('a YouTube thumbnail cover is the og:image and is not claimed as 1200x630',
   }
 });
 
-test('netlify.toml 301s /creators/thatsfootball to overlap-daily above the creator rewrites', () => {
-  const toml = fs.readFileSync(path.join(__dirname, '..', 'netlify.toml'), 'utf8');
-  const statsFrom = toml.indexOf('from = "/creators/thatsfootball/stats"');
-  const statsSplat = toml.indexOf('from = "/creators/*/stats"');
-  const shane = toml.indexOf('from = "/creators/shane-gooner"');
-  const profile = toml.indexOf('from = "/creators/thatsfootball"\n');
-  const splat = toml.indexOf('from = "/creators/*"\n');
+function assertThatsfootballRedirect(toml) {
+  const lines = toml.split(/\r?\n/);
+  const statsFrom = lines.findIndex((line) => line.includes('from = "/creators/thatsfootball/stats"'));
+  const statsSplat = lines.findIndex((line) => line.includes('from = "/creators/*/stats"'));
+  const shane = lines.findIndex((line) => line.includes('from = "/creators/shane-gooner"'));
+  const profile = lines.findIndex((line) => line === '  from = "/creators/thatsfootball"');
+  const splat = lines.findIndex((line) => line === '  from = "/creators/*"');
   assert.ok(statsFrom > 0 && statsSplat > statsFrom, 'stats 301 must precede the stats rewrite');
   assert.ok(shane > 0 && profile > shane && splat > profile, 'profile 301 follows shane-gooner and precedes /creators/*');
-  assert.match(toml, /from = "\/creators\/thatsfootball\/stats"\s+to = "\/creators\/overlap-daily\/stats"\s+status = 301\s+force = true/);
-  assert.match(toml, /from = "\/creators\/thatsfootball"\s+to = "\/creators\/overlap-daily"\s+status = 301\s+force = true/);
+  const text = lines.join('\n');
+  assert.match(text, /from = "\/creators\/thatsfootball\/stats"\s+to = "\/creators\/overlap-daily\/stats"\s+status = 301\s+force = true/);
+  assert.match(text, /from = "\/creators\/thatsfootball"\s+to = "\/creators\/overlap-daily"\s+status = 301\s+force = true/);
+}
+
+test('netlify.toml 301s /creators/thatsfootball to overlap-daily above the creator rewrites', () => {
+  const toml = fs.readFileSync(path.join(__dirname, '..', 'netlify.toml'), 'utf8');
+  assertThatsfootballRedirect(toml);
+  assertThatsfootballRedirect(toml.replace(/\n/g, '\r\n'));
 });

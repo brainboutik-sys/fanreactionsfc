@@ -559,6 +559,7 @@ function _appendChPrefilled(id, team, url, name) {
   div.className = 'ch-row'; div.dataset.chid = id;
   div.innerHTML = '<select class="ch-team" data-id="' + id + '" onchange="Gen.onTeamChange(this,' + id + ')"><option value="">Select team...</option>' + teamOpts + '</select><select class="ch-chan" data-id="' + id + '" onchange="Gen.onChanChange(this,' + id + ')">' + chanOpts + '</select><a href="' + (url || '#') + '" class="ch-link' + (url ? '' : ' empty') + '" id="chLink' + id + '" target="_blank" rel="noopener" title="Open channel">\u2197</a><button class="btn-remove" onclick="Gen.removeChannel(' + id + ')">&times;</button>';
   list.appendChild(div);
+  if (url) updateChLink(id, url);
 }
 
 // ── Channels (manual add, uses app.js global: creators) ──────────────────────
@@ -603,11 +604,38 @@ function onTeamChange(sel, id) {
 
 function onChanChange(sel, id) { updateChLink(id, sel.value); }
 
+function creatorForChannelUrl(url) {
+  var wanted = String(url || '').trim().toLowerCase();
+  if (!wanted || typeof creators === 'undefined') return null;
+  for (var i = 0; i < creators.length; i++) {
+    if (String(creators[i].channel || '').trim().toLowerCase() === wanted) return creators[i];
+  }
+  return null;
+}
+
 function updateChLink(id, url) {
   var link = document.getElementById('chLink' + id);
   if (!link) return;
-  if (url) { link.href = url; link.classList.remove('empty'); }
-  else { link.href = '#'; link.classList.add('empty'); }
+  if (url) {
+    link.href = url;
+    link.classList.remove('empty');
+    var c = creatorForChannelUrl(url);
+    if (c && c.slug) {
+      link.setAttribute('data-frfc-link', 'channel');
+      link.setAttribute('data-frfc-creator', c.slug);
+      link.setAttribute('data-frfc-club', c.team || '');
+    } else {
+      link.removeAttribute('data-frfc-link');
+      link.removeAttribute('data-frfc-creator');
+      link.removeAttribute('data-frfc-club');
+    }
+  } else {
+    link.href = '#';
+    link.classList.add('empty');
+    link.removeAttribute('data-frfc-link');
+    link.removeAttribute('data-frfc-creator');
+    link.removeAttribute('data-frfc-club');
+  }
 }
 
 function chName(id) { var s = document.querySelector('.ch-chan[data-id="' + id + '"]'); return s ? s.options[s.selectedIndex]?.text || '' : ''; }

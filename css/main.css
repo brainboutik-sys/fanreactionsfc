@@ -362,6 +362,22 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 /* Live alert */
 .cp-live-alert{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(230,57,70,.07);border:1px solid rgba(230,57,70,.22);border-radius:var(--radius);font-size:var(--fs-base);color:var(--text)}
 
+/* Club-page watch-live banner. Sits in the navy hero. Hide the whole
+   block by setting CLUB_LIVE_BANNER_ENABLED to false. */
+.club-live-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding:12px 14px;background:rgba(230,57,70,.18);border:1px solid rgba(230,57,70,.5);border-radius:var(--radius);color:#fff}
+.club-live-banner-copy{display:flex;align-items:center;gap:10px;min-width:0}
+.club-live-banner-title{font-size:var(--fs-lg);font-weight:800;letter-spacing:-.01em;color:#fff;line-height:1.2}
+.club-live-banner-detail{margin:3px 0 0;color:rgba(255,255,255,.82);font-size:var(--fs-base);line-height:1.4}
+.club-live-banner-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;flex-shrink:0}
+.club-live-banner-also-label{font-size:var(--fs-sm);font-weight:700;color:rgba(255,255,255,.7)}
+.club-live-banner-also{font-size:var(--fs-sm);font-weight:700;color:var(--yellow);text-decoration:none}
+.club-live-banner-also:hover{text-decoration:underline}
+@media(max-width:600px){
+  .club-live-banner{flex-direction:column;align-items:stretch}
+  .club-live-banner-actions{justify-content:flex-start}
+  .club-live-banner-actions .btn{width:100%}
+}
+
 /* Section cards */
 .cp-section-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .cp-section-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}

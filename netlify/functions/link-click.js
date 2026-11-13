@@ -1,14 +1,16 @@
 // POST /.netlify/functions/link-click
 // One row in frfc_link_clicks. The body may contain only:
 //   slug  — a creator slug that exists in frfc_streamers
-//   link  — "live" or "channel"
+//   link  — "live", "channel", or "poll"
 //   club  — optional page-context club name
 //   path  — site path, no query string
 // Anything else in the JSON is ignored and not stored. The function does
 // not read Cookie, User-Agent, or client IP, and it sets no cookie.
 //
 // The migration supabase/migrations/20261026110000_frfc_link_clicks.sql
-// is applied by hand. It is not run by deploy.
+// is applied by hand. It is not run by deploy. link_type "poll" also
+// needs 20261113100000_frfc_article_poll_votes.sql, which widens the
+// check constraint. Until that runs, a poll click insert returns 503.
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -58,7 +60,7 @@ function parseClick(raw) {
   try { data = JSON.parse(raw); } catch { return null; }
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const slug = typeof data.slug === 'string' ? data.slug.trim() : '';
-  const link = data.link === 'live' || data.link === 'channel' ? data.link : '';
+  const link = data.link === 'live' || data.link === 'channel' || data.link === 'poll' ? data.link : '';
   const path = cleanPath(data.path);
   if (!SLUG_RE.test(slug) || slug.length > 80 || !link || !path) return null;
   return { slug, link, path, club: cleanClub(data.club) };

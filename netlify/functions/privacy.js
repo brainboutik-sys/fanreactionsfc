@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SITE_URL = 'https://fanreactionsfc.com';
-const LAST_UPDATED = 'October 22, 2026';
+const LAST_UPDATED = 'November 13, 2026';
 
 let indexHtmlCache = null;
 function readIndexHtml() {
@@ -98,6 +98,7 @@ const BODY = `
       <tr><td>Favourited creators</td><td>You tap the heart icon on a creator</td><td>To show your favourites across sessions</td></tr>
       <tr><td>Name, email, message subject/body</td><td>You submit the Contact form or report/claim a creator profile</td><td>To respond to your request</td></tr>
       <tr><td>Anonymous device identifier (random UUID, no personal info)</td><td>Automatically, stored in your browser</td><td>To prevent repeat voting abuse in Creator Battle</td></tr>
+      <tr><td>Random browser id and the article-poll choice</td><td>When you vote on a news article's "Who reacted best?" poll</td><td>To keep one vote per browser per article and to show the vote share</td></tr>
       <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
       <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr><tr><td>Payment details (card, billing name, email), the channel URL you enter at checkout, subscription status, and the Stripe customer and subscription IDs</td><td>Only if you buy the paid Verified tier. You enter card details on Stripe's checkout page, never on our site</td><td>To take payment, switch on Verified status, and keep the records the law requires</td></tr>
     </table>
@@ -125,7 +126,7 @@ const BODY = `
     <p>Some of the providers above (Google, Resend, MailerLite, Stripe, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. Payment records for the Verified tier are kept for as long as accounting and tax law require. Except where the law requires us to keep it, you can request earlier deletion at any time — see Section 10.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Article poll votes (a random browser id and the creator you picked) are kept so the vote share on that article stays intact. Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. Payment records for the Verified tier are kept for as long as accounting and tax law require. Except where the law requires us to keep it, you can request earlier deletion at any time — see Section 10.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>

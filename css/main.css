@@ -1132,6 +1132,28 @@ img.review-avatar{background:var(--bg-hover)}
 .news-article-related{display:flex;align-items:center;gap:8px;margin-top:32px;padding-top:20px;border-top:1px solid var(--border);font-size:var(--fs-sm);color:var(--text-dim)}
 .news-article-related a{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--navy)}
 
+.article-poll{margin-top:32px;padding-top:20px;border-top:1px solid var(--border)}
+.article-poll-title{font-size:var(--fs-lg);font-weight:700;line-height:1.3;margin:0 0 6px}
+.article-poll-lead{margin:0 0 14px;color:var(--text-dim);font-size:var(--fs-sm);line-height:1.5}
+.article-poll-options{display:flex;flex-direction:column;gap:8px}
+.article-poll-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.article-poll-name{font-weight:700;color:var(--navy);min-width:0;overflow-wrap:anywhere}
+.article-poll a:focus-visible{outline:none;box-shadow:var(--focus-ring);border-radius:4px}
+.article-poll-vote{flex-shrink:0;min-height:44px}
+.article-poll-results{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.article-poll-result{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:6px;align-items:center}
+.article-poll-result-name{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0}
+.article-poll-yours{font-size:var(--fs-xs);font-weight:600;color:var(--text-muted)}
+.article-poll-pct{font-weight:700;font-variant-numeric:tabular-nums}
+.article-poll-bar{grid-column:1 / -1;height:8px;background:var(--bg-hover);border-radius:100px;overflow:hidden}
+.article-poll-bar > span{display:block;height:100%;background:var(--navy);border-radius:100px}
+.article-poll-total{margin:0 0 12px;font-size:var(--fs-sm);color:var(--text-dim)}
+.article-poll-status{margin:12px 0 0;min-height:1.4em;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5}
+@media (max-width:600px){
+  .article-poll-option{flex-direction:column;align-items:stretch}
+  .article-poll-vote{width:100%}
+}
+
 /* ── Cookie consent banner ─────────────────────────────────────────────── */
 .consent-banner{position:fixed;left:0;right:0;bottom:0;z-index:200;background:var(--navy);color:#fff;box-shadow:0 -4px 20px rgba(0,0,0,.2)}
 .consent-banner-inner{max-width:1100px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}

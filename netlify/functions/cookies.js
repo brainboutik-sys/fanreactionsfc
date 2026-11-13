@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SITE_URL = 'https://fanreactionsfc.com';
-const LAST_UPDATED = 'October 22, 2026';
+const LAST_UPDATED = 'November 13, 2026';
 
 let indexHtmlCache = null;
 function readIndexHtml() {
@@ -93,6 +93,7 @@ const BODY = `
       <tr><td>Supabase auth session</td><td>Keeps you signed in</td><td>Until you sign out / session expiry</td></tr>
       <tr><td><code>frfc_consent_analytics</code></td><td>Remembers your cookie choice</td><td>Persistent (until cleared)</td></tr>
       <tr><td><code>frfc_fp</code></td><td>Random anonymous ID to prevent repeat-vote abuse in Creator Battle — not linked to your identity</td><td>Persistent (until cleared)</td></tr>
+      <tr><td><code>frfc_article_poll_client</code> / <code>frfc_article_poll_votes</code></td><td>Random id and the creator you picked on each article poll, so you only vote once per article. Not linked to your account</td><td>Persistent (until cleared)</td></tr>
       <tr><td><code>frfc_streamwall_streams</code> / <code>frfc_streamwall_goal_ids</code></td><td>Remembers which streams you added to your Streamwall</td><td>Persistent (until cleared)</td></tr>
     </table>
     <p>These are required for the site to function and are not subject to consent.</p>

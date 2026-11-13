@@ -122,6 +122,31 @@ test('unknown creators, bad link types, and query strings are rejected', async (
   })).club, null);
 });
 
+test('a poll link click is stored as link_type poll', async () => {
+  const inserts = [];
+  const res = await withClickEnv(async (url, options = {}) => {
+    const href = String(url);
+    if (href.includes('frfc_streamers')) return json(200, [{ id: CREATOR, slug: 'aftv' }]);
+    if (href.includes('frfc_link_clicks')) {
+      inserts.push(JSON.parse(options.body));
+      return json(201, null);
+    }
+    return json(500, { message: 'unexpected' });
+  }, () => click.handler(post({
+    slug: 'aftv',
+    link: 'poll',
+    club: 'Arsenal',
+    path: '/news/who-reacted',
+  })));
+  assert.equal(res.statusCode, 200);
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0].link_type, 'poll');
+  assert.equal(inserts[0].page_path, '/news/who-reacted');
+  assert.equal(click.parseClick(JSON.stringify({
+    slug: 'aftv', link: 'poll', path: '/news/who-reacted',
+  })).link, 'poll');
+});
+
 test('the same creator and link type is rate limited without using an address', async () => {
   const fetchImpl = async (url) => {
     if (String(url).includes('frfc_streamers')) return json(200, [{ id: CREATOR, slug: 'aftv' }]);

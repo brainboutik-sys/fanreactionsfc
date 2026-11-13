@@ -11,6 +11,7 @@
      js/lib/verified.js → isCurrentlyVerified(), verifiedBadgeHTML(), the Stripe Payment Link constant
      js/lib/club-sponsorship.js → isSponsorshipActive(), sponsoredSlotHtml()
      js/lib/club-live-banner.js → clubLiveBannerHtml(); CLUB_LIVE_BANNER_ENABLED
+     js/lib/article-poll.js → articlePollSectionHtml(); ARTICLE_POLL_ENABLED
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -577,20 +578,20 @@ function handleRoute() {
   }
 }
 
-// One row per click on a creator channel or watch-live link. The body is
-// slug, club, link type, and the page path. No account, no cookie, no
-// storage id. credentials: 'omit' so the browser does not attach cookies.
+// One row per click on a creator channel, watch-live, or article-poll link.
+// The body is slug, club, link type, and the page path. No account, no
+// cookie, no storage id. credentials: 'omit' so the browser does not attach cookies.
 // sendBeacon cannot omit cookies, so this uses fetch keepalive instead.
 function creatorLinkTrackAttrs(slug, type, club) {
   const safeSlug = String(slug || '').trim();
   if (!safeSlug) return '';
-  const kind = type === 'live' ? 'live' : 'channel';
+  const kind = type === 'live' ? 'live' : (type === 'poll' ? 'poll' : 'channel');
   return ` data-frfc-link="${kind}" data-frfc-creator="${escHtml(safeSlug)}" data-frfc-club="${escHtml(club || '')}"`;
 }
 
 function sendCreatorLinkClick(slug, link, club) {
   const safeSlug = String(slug || '').trim();
-  if (!safeSlug || (link !== 'live' && link !== 'channel')) return;
+  if (!safeSlug || (link !== 'live' && link !== 'channel' && link !== 'poll')) return;
   let path = '/';
   try { path = String(location.pathname || '/'); } catch (e) { path = '/'; }
   if (!path.startsWith('/')) path = '/';
@@ -3776,7 +3777,7 @@ async function submitContact() {
 // tables, localStorage keys, GTM/GA4, YouTube embeds) — not boilerplate.
 // These are informational drafts; have counsel review before relying on them
 // as your sole compliance basis.
-const LEGAL_LAST_UPDATED = 'October 22, 2026';
+const LEGAL_LAST_UPDATED = 'November 13, 2026';
 
 function legalPageShell(eyebrow, title, bodyHtml) {
   document.getElementById('app').innerHTML = `
@@ -3987,6 +3988,66 @@ async function loadNewsPage(replace) {
 
 function loadMoreNews() { loadNewsPage(false); }
 
+function articlePollMarkup(article) {
+  if (typeof articlePollSectionHtml !== 'function') return '';
+  if (typeof ARTICLE_POLL_ENABLED !== 'undefined' && !ARTICLE_POLL_ENABLED) return '';
+  let storage = null;
+  try { storage = window.localStorage; } catch (e) { storage = null; }
+  try {
+    return articlePollSectionHtml({
+      articleId: article && article.id,
+      body: article && article.body,
+      creators: creators,
+      club: article && article.related_team || '',
+      storage: storage,
+    });
+  } catch (e) {
+    return '';
+  }
+}
+
+function mountArticlePoll(article) {
+  if (typeof ARTICLE_POLL_ENABLED === 'undefined' || !ARTICLE_POLL_ENABLED) return;
+  if (typeof articlePollMount !== 'function' || typeof articlePollOptions !== 'function') return;
+  if (!article) return;
+  const root = document.querySelector('[data-article-poll]');
+  if (!root) return;
+  let storage = null;
+  try { storage = window.localStorage; } catch (e) { storage = null; }
+  articlePollMount({
+    root: root,
+    articleId: article.id,
+    options: articlePollOptions(article.body, creators),
+    club: article.related_team || '',
+    storage: storage,
+    insertVote: async (slug, clientId) => {
+      try {
+        const res = await sb.from('frfc_article_poll_votes').insert({
+          article_id: article.id,
+          creator_slug: slug,
+          client_id: clientId,
+        });
+        if (res && !res.error) return { ok: true };
+        const code = res && res.error && res.error.code;
+        const message = res && res.error && res.error.message || '';
+        if (code === '23505' || /duplicate key/i.test(message)) return { ok: true, duplicate: true };
+        return { ok: false };
+      } catch (e) {
+        return { ok: false };
+      }
+    },
+    loadCounts: async () => {
+      try {
+        const res = await sb.rpc('frfc_article_poll_counts', { p_article_id: article.id });
+        if (!res || res.error) return { ok: false };
+        return { ok: true, counts: res.data || [] };
+      } catch (e) {
+        return { ok: false };
+      }
+    },
+  });
+}
+
 async function renderNewsArticle(slug) {
   document.getElementById('app').innerHTML = '<div class="container section-message"><div style="color:var(--text-dim)">Loading…</div></div>';
   let article = null;
@@ -4024,6 +4085,7 @@ async function renderNewsArticle(slug) {
     <div class="container container-narrow section">
       ${firstPartyCoverUrl(article.cover_image_url) ? `<img src="${escHtml(firstPartyCoverUrl(article.cover_image_url))}" alt="${escHtml(articleCoverAlt(article.related_team, article.title))}" class="news-article-cover">` : ''}
       <div class="news-article-body">${newsBodyHTML(article.body)}</div>
+      ${articlePollMarkup(article)}
       ${moreLabel ? `
       <div class="news-article-related">
         <a href="${moreHref}" onclick="event.preventDefault();navigate('${moreHref}')">${escHtml(moreLabel)}</a>
@@ -4034,6 +4096,7 @@ async function renderNewsArticle(slug) {
     </div>
     ${renderFooter()}
   `;
+  mountArticlePoll(article);
 }
 
 function renderPrivacyPolicy() {
@@ -4051,6 +4114,7 @@ function renderPrivacyPolicy() {
       <tr><td>Favourited creators</td><td>You tap the heart icon on a creator</td><td>To show your favourites across sessions</td></tr>
       <tr><td>Name, email, message subject/body</td><td>You submit the Contact form or report/claim a creator profile</td><td>To respond to your request</td></tr>
       <tr><td>Anonymous device identifier (random UUID, no personal info)</td><td>Automatically, stored in your browser</td><td>To prevent repeat voting abuse in Creator Battle</td></tr>
+      <tr><td>Random browser id and the article-poll choice</td><td>When you vote on a news article's "Who reacted best?" poll</td><td>To keep one vote per browser per article and to show the vote share</td></tr>
       <tr><td>Usage analytics (pages viewed, approximate location, device type)</td><td>Only if you accept analytics cookies</td><td>To understand traffic and improve the site</td></tr>
       <tr><td>Email address, and a record of when/how you opted in</td><td>Only if you tick the newsletter opt-in box on the News page, an article, the site footer, or your Account settings, and confirm via email</td><td>To send you the optional FanReactionsFC email newsletter</td></tr><tr><td>Payment details (card, billing name, email), the channel URL you enter at checkout, subscription status, and the Stripe customer and subscription IDs</td><td>Only if you buy the paid Verified tier. You enter card details on Stripe's checkout page, never on our site</td><td>To take payment, switch on Verified status, and keep the records the law requires</td></tr>
     </table>
@@ -4078,7 +4142,7 @@ function renderPrivacyPolicy() {
     <p>Some of the providers above (Google, Resend, MailerLite, Stripe, Supabase's underlying infrastructure) may process data outside your country, including the United States. Where required, transfers rely on those providers' standard contractual clauses or equivalent safeguards.</p>
 
     <h2>5. Retention</h2>
-    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. Payment records for the Verified tier are kept for as long as accounting and tax law require. Except where the law requires us to keep it, you can request earlier deletion at any time — see Section 10.</p>
+    <p>Account data (profile, favourites, votes, community posts) is retained while your account is active and deleted when you delete your account (Section 7). Article poll votes (a random browser id and the creator you picked) are kept so the vote share on that article stays intact. Contact form messages and creator reports are automatically deleted 12 months after submission. Newsletter subscriber records are kept while your subscription is active; if you unsubscribe, we delete your email from our subscriber list within 30 days, keeping only a minimal suppression record so we don't accidentally email you again. Records of newsletter consent (what you agreed to and when) are kept for 3 years to demonstrate compliance, then deleted or anonymised. Payment records for the Verified tier are kept for as long as accounting and tax law require. Except where the law requires us to keep it, you can request earlier deletion at any time — see Section 10.</p>
 
     <h2>6. Cookies</h2>
     <p>See our <a href="/cookies">Cookie Policy</a> for the full list of cookies and trackers.</p>
@@ -4115,6 +4179,7 @@ function renderCookiePolicy() {
       <tr><td>Supabase auth session</td><td>Keeps you signed in</td><td>Until you sign out / session expiry</td></tr>
       <tr><td><code>frfc_consent_analytics</code></td><td>Remembers your cookie choice</td><td>Persistent (until cleared)</td></tr>
       <tr><td><code>frfc_fp</code></td><td>Random anonymous ID to prevent repeat-vote abuse in Creator Battle — not linked to your identity</td><td>Persistent (until cleared)</td></tr>
+      <tr><td><code>frfc_article_poll_client</code> / <code>frfc_article_poll_votes</code></td><td>Random id and the creator you picked on each article poll, so you only vote once per article. Not linked to your account</td><td>Persistent (until cleared)</td></tr>
       <tr><td><code>frfc_streamwall_streams</code> / <code>frfc_streamwall_goal_ids</code></td><td>Remembers which streams you added to your Streamwall</td><td>Persistent (until cleared)</td></tr>
     </table>
     <p>These are required for the site to function and are not subject to consent.</p>

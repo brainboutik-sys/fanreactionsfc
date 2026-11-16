@@ -68,6 +68,13 @@ schedule = "*/5 * * * *"
 [functions."retention-cleanup"]
 schedule = "0 5 * * *"
 
+# Weekly creator rank snapshot for the /rankings movement badges.
+# Background function (15 min) because paging + per-creator updates can pass
+# the 30s scheduled-function limit. The cron has to live here: exports.config
+# on a legacy exports.handler is not registered. See rank-snapshot-background.js.
+[functions."rank-snapshot-background"]
+schedule = "0 3 * * 1"
+
 # Weekly creator ranking. Monday 08:00 UTC, after the 07:00 YouTube sync
 # has written subscriber history. Supabase reads and writes only — see
 # weekly-ranking-scheduled.js. The admin button stays POST weekly-ranking.

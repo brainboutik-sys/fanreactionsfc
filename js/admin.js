@@ -842,6 +842,12 @@ async function generateWeeklyRanking() {
     });
     var data = await res.json().catch(function() { return {}; });
     if (!res.ok) { toast(data.error || 'Failed to generate ranking', 'error'); return; }
+    if (data.duplicate) {
+      toast('A weekly ranking for this week already exists: ' + (data.workingTitle || 'this week'), 'info');
+      await loadAdminData();
+      renderPage();
+      return;
+    }
     await logAction('generate', 'story_candidate', data.candidateId, { workingTitle: data.workingTitle });
     toast('Ranking generated: ' + data.workingTitle, 'success');
     if (data.dataQualityNotes && data.dataQualityNotes.length) {

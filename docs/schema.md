@@ -209,6 +209,28 @@ anyone. Low-sensitivity, left open because the submit flow reads for duplicate d
 
 ---
 
+### Matchday speed (migration not applied by deploy)
+
+`supabase/migrations/20261117120000_matchday_speed_foundation.sql`. Run it in
+the SQL editor before the benchmark can read these values. Both writers no-op
+the new write when the object is missing, so the functions can deploy first.
+
+#### `frfc_videos` — one row per YouTube video
+`video_id` (text PK), `creator_id` → `frfc_streamers`, `published_at`
+(timestamptz, nullable), `updated_at`. Written by `sync-background.js` from
+`playlistItems.snippet.publishedAt`, which that call already returns. Not a
+column on `frfc_video_metrics`: that table is one stats snapshot per sync.
+RLS: SELECT for `anon` and `authenticated`. No insert/update/delete policy;
+the service role writes it.
+
+#### `frfc_fixtures` full time
+`finished_at` (timestamptz), `full_time_source` (`api` | `estimated`),
+`extra_time` (boolean, null until a sync classifies the match).
+`fixtures-sync.js` sets `finished_at` to kickoff + 105 minutes, plus 30 when
+football-data.org reports extra time or a penalty shootout, and
+`full_time_source` to `estimated`. The v4 match resource has no whistle
+timestamp. Existing public SELECT policy covers the new columns.
+
 ## Functions (RPCs)
 
 All are `SECURITY DEFINER` unless noted. Callable from the browser via `sb.rpc(...)`

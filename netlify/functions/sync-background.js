@@ -40,6 +40,7 @@ exports.handler = async () => {
 
   let okCount = 0, failCount = 0, quota = 0;
   const videoMetricRows = [];
+  const videoPublishRows = [];
 
   for (const c of creators) {
     const m = (c.channel_url || '').match(/@([A-Za-z0-9_.-]+)/);
@@ -108,6 +109,10 @@ exports.handler = async () => {
             update.latest_video_title = latest.title;
             update.latest_video_date = latest.publishedAt;
             update.latest_video_thumbnail = `https://i.ytimg.com/vi/${latest.videoId}/mqdefault.jpg`;
+
+            // Upload time is already on these playlist items (snippet.publishedAt).
+            // Kept off frfc_video_metrics, which is one stats row per sync.
+            videoPublishRows.push(...publishRowsFromVids(c.id, vids));
 
             // 3. Batch-fetch details for all up-to-5 recent videos — same
             // cost as a single-ID request, and lets us detect upcoming
@@ -229,6 +234,23 @@ exports.handler = async () => {
     } catch (e) { /* metrics are a nice-to-have for rankings, never fail the sync over them */ }
   }
 
+  // One upsert for every upload time collected above. A missing frfc_videos
+  // table (migration not applied yet) is ignored so this deploy can land
+  // first. The in-browser admin sync does not write this table: it runs as
+  // the admin user, and the table has no insert policy.
+  let videosRecorded = 0;
+  let videosMigrationRequired = false;
+  let videosError = null;
+  const videoRows = dedupeVideoRows(videoPublishRows);
+  if (videoRows.length) {
+    try {
+      const videoResult = await upsertVideoPublishTimes(supabaseUrl, sbKey, videoRows);
+      videosRecorded = videoResult.recorded;
+      videosMigrationRequired = !!videoResult.migration_required;
+      videosError = videoResult.error || null;
+    } catch (e) { /* publish times never fail the creator sync */ }
+  }
+
   await finishJobRun(supabaseUrl, sbKey, jobRunId, {
     status: failCount === 0 ? 'success' : (okCount > 0 ? 'partial' : 'failed'),
     items_processed: okCount,
@@ -236,8 +258,67 @@ exports.handler = async () => {
     quota_used: quota,
   });
 
-  return ok({ total: creators.length, ok: okCount, fail: failCount, quota, videoMetricsRecorded: videoMetricRows.length });
+  return ok({
+    total: creators.length,
+    ok: okCount,
+    fail: failCount,
+    quota,
+    videoMetricsRecorded: videoMetricRows.length,
+    videosRecorded,
+    videosMigrationRequired,
+    ...(videosError ? { videosError } : {}),
+  });
 };
+
+function publishRowsFromVids(creatorId, vids) {
+  const rows = [];
+  const seen = new Set();
+  for (const v of vids || []) {
+    if (!v || !v.videoId || !v.publishedAt || seen.has(v.videoId)) continue;
+    const ms = Date.parse(v.publishedAt);
+    if (!Number.isFinite(ms)) continue;
+    seen.add(v.videoId);
+    rows.push({
+      video_id: v.videoId,
+      creator_id: creatorId,
+      published_at: new Date(ms).toISOString(),
+    });
+  }
+  return rows;
+}
+
+function dedupeVideoRows(rows) {
+  const byId = new Map();
+  for (const row of rows) byId.set(row.video_id, row);
+  return [...byId.values()];
+}
+
+function isSchemaMissing(status, body) {
+  if (status !== 400 && status !== 404 && status !== 406) return false;
+  return /PGRST204|PGRST205|schema cache|Could not find the|column .* does not exist|relation .* does not exist/i.test(body || '');
+}
+
+async function upsertVideoPublishTimes(supabaseUrl, sbKey, rows) {
+  const stamped = rows.map(row => ({ ...row, updated_at: new Date().toISOString() }));
+  const res = await fetch(`${supabaseUrl}/rest/v1/frfc_videos?on_conflict=video_id`, {
+    method: 'POST',
+    headers: {
+      apikey: sbKey,
+      Authorization: `Bearer ${sbKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(stamped),
+  });
+  if (res.ok) return { recorded: stamped.length };
+  const body = await res.text();
+  if (isSchemaMissing(res.status, body)) return { recorded: 0, migration_required: true };
+  return { recorded: 0, error: body.slice(0, 300) };
+}
+
+exports.publishRowsFromVids = publishRowsFromVids;
+exports.dedupeVideoRows = dedupeVideoRows;
+exports.isSchemaMissing = isSchemaMissing;
 
 // ── Job health tracking (frfc_job_runs) ─────────────────────────────────────
 // Best-effort on both ends — a health-tracking failure should never take

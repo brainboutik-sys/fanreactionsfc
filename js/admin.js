@@ -1591,7 +1591,8 @@ function getLastSync() {
 //
 // KNOWN GAP vs sync-background.js: this client version does NOT detect
 // upcoming/scheduled livestreams (upcoming_video_* fields) — only
-// sync-background.js does. If you add fields to one, check the other.
+// sync-background.js does. It also does not write frfc_videos (service
+// role only). If you add fields to one, check the other.
 var syncRunning = false;
 
 async function ytFetch(endpoint, params) {

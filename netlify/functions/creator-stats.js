@@ -3,11 +3,20 @@
 // recent uploads come from columns the YouTube sync already writes
 // (frfc_streamers.latest_video_* plus frfc_video_metrics). No analytics.
 //
-// Self-contained: do not require another function or js/lib module.
+// The peer-rank block is public to Verified visitors. It prefers the
+// frfc_creator_peer_rank RPC (one database round trip). Until that
+// migration is applied, it reads frfc_streamers, frfc_video_metrics, and
+// frfc_subscriber_history and computes the same comparison in
+// js/lib/peer-rank.js. Netlify bundles that require. This file does not
+// read frfc_link_clicks: referral totals are owner-only and are loaded
+// in the browser with the owner's JWT.
+//
 // isCurrentlyVerified / statsShareCopy / statsMonthLabel / verifiedPaymentUrl
 // must stay in lockstep with js/lib/verified.js (see test/verified.test.js).
 // The Stripe Payment Link is read from that file so the URL lives in one
 // constant. This function passes the creator id only — never an email.
+
+const peer = require('../../js/lib/peer-rank.js');
 
 const fs = require('fs');
 const path = require('path');
@@ -225,6 +234,107 @@ function getVerifiedCta(config, creatorId) {
     <a href="${esc(url)}" class="btn btn-accent" target="_blank" rel="nofollow noopener">Get Verified — ${esc(config.price)}</a>`;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function readJson(res) {
+  if (res && typeof res.json === 'function') return res.json();
+  return null;
+}
+
+async function fetchPaged(fetchImpl, url, headers) {
+  const rows = [];
+  const pageSize = 1000;
+  for (let page = 0; page < 20; page++) {
+    const offset = page * pageSize;
+    const res = await fetchImpl(url, {
+      headers: Object.assign({}, headers, {
+        Range: offset + '-' + (offset + pageSize - 1),
+        'Range-Unit': 'items',
+      }),
+    });
+    if (!res || res.status === 416) return rows;
+    if (!res.ok) {
+      const error = new Error('Supabase read failed');
+      error.status = res.status;
+      throw error;
+    }
+    const body = await readJson(res);
+    if (!Array.isArray(body) || body.length === 0) return rows;
+    rows.push.apply(rows, body);
+    if (body.length < pageSize) return rows;
+  }
+  return rows;
+}
+
+async function fetchPeerRankForCreator(supabaseUrl, sbKey, creator, options) {
+  const fetchImpl = (options && options.fetch) || fetch;
+  const now = options && options.now != null ? options.now : Date.now();
+  const headers = {
+    apikey: sbKey,
+    Authorization: 'Bearer ' + sbKey,
+    Accept: 'application/json',
+  };
+  const creatorId = creator && creator.id;
+  if (UUID_RE.test(creatorId || '')) {
+    try {
+      const res = await fetchImpl(supabaseUrl + '/rest/v1/rpc/frfc_creator_peer_rank', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+        body: JSON.stringify({ p_creator_id: creatorId }),
+      });
+      if (res && res.ok) {
+        const model = peer.normalizeRpcPeerRank(await readJson(res));
+        if (model) return model;
+      }
+    } catch (e) { /* table reads below still answer the public block */ }
+  }
+  try {
+    const directory = await fetchPaged(
+      fetchImpl,
+      supabaseUrl + '/rest/v1/frfc_streamers?select=id,team,subscriber_count&order=id.asc',
+      headers
+    );
+    const slug = peer.canonicalClubSlug(creator && creator.team);
+    const ids = [];
+    if (slug) {
+      for (let i = 0; i < directory.length; i++) {
+        if (peer.canonicalClubSlug(directory[i].team) === slug && UUID_RE.test(directory[i].id || '')) {
+          ids.push(directory[i].id);
+        }
+      }
+    }
+    if (UUID_RE.test(creatorId || '') && ids.indexOf(creatorId) === -1) ids.push(creatorId);
+    const since = new Date(now - peer.VIEWS_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const metrics = [];
+    for (let i = 0; i < ids.length; i += 40) {
+      const query = peer.videoMetricsQuery(ids.slice(i, i + 40), since);
+      if (!query) continue;
+      const page = await fetchPaged(fetchImpl, supabaseUrl + '/rest/v1/frfc_video_metrics?' + query, headers);
+      metrics.push.apply(metrics, page);
+    }
+    let history = [];
+    if (UUID_RE.test(creatorId || '')) {
+      const historySince = new Date(now - 45 * 24 * 60 * 60 * 1000).toISOString();
+      history = await fetchPaged(
+        fetchImpl,
+        supabaseUrl + '/rest/v1/frfc_subscriber_history?select=subscriber_count,recorded_at&creator_id=eq.'
+          + encodeURIComponent(creatorId) + '&recorded_at=gte.' + encodeURIComponent(historySince)
+          + '&order=recorded_at.asc',
+        headers
+      );
+    }
+    return peer.buildPeerRank({
+      creator: creator,
+      directory: directory,
+      metrics: metrics,
+      history: history,
+      now: now,
+    });
+  } catch (e) {
+    return peer.buildPeerRank({ creator: creator, unavailable: true, now: now });
+  }
+}
+
 const CREATOR_SELECT = 'id,name,slug,team,avatar_url,subscriber_count,video_count,latest_video_id,latest_video_title,latest_video_date,latest_video_views,latest_video_thumbnail,last_youtube_sync,is_verified,verified_until';
 const CREATOR_SELECT_LEGACY = 'id,name,slug,team,avatar_url,subscriber_count,video_count,latest_video_id,latest_video_title,latest_video_date,latest_video_views,latest_video_thumbnail,last_youtube_sync';
 
@@ -367,6 +477,7 @@ exports.handler = async (event) => {
     latestTitle: creator.latest_video_title || '',
   });
   const uploads = await fetchRecentUploads(supabaseUrl, sbKey, creator);
+  const peerRank = await fetchPeerRankForCreator(supabaseUrl, sbKey, creator);
   const image = (uploads[0] && uploads[0].thumbnail) || creator.avatar_url || DEFAULT_OG_IMAGE;
   const club = creator.team && creator.team !== 'Multi-Club / Other' ? creator.team : '';
 
@@ -405,6 +516,7 @@ exports.handler = async (event) => {
         </div>
         <h3 class="stats-uploads-title">Recent uploads</h3>
         ${uploadsHtml(uploads)}
+        ${peer.peerRankSectionHtml(peerRank, esc)}
         <p class="stats-footnote">YouTube totals from the latest FanReactionsFC sync. Channel analytics are not included.</p>
       </article>
       <div class="stats-actions">
@@ -423,6 +535,7 @@ exports.handler = async (event) => {
   }));
 };
 
+exports.fetchPeerRankForCreator = fetchPeerRankForCreator;
 exports.isCurrentlyVerified = isCurrentlyVerified;
 exports.statsShareCopy = statsShareCopy;
 exports.statsMonthLabel = statsMonthLabel;

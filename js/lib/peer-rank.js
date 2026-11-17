@@ -405,7 +405,7 @@ function peerRankSectionHtml(model, esc) {
     + '<div class="stats-metrics stats-peers-metrics">'
     + '<div class="stats-metric"><div class="stats-metric-label">Club rank</div><div class="stats-metric-num">' + e(parts.rankNum) + '</div><p class="stats-metric-note">' + e(parts.rankNote) + '</p></div>'
     + '<div class="stats-metric"><div class="stats-metric-label">Views per video</div><div class="stats-metric-num">' + e(parts.viewsNum) + '</div><p class="stats-metric-note">' + e(parts.viewsNote) + '</p></div>'
-    + '<div class="stats-metric"><div class="stats-metric-label">Subscribers, week on week</div><div class="stats-metric-num">' + e(parts.weekNum) + '</div><p class="stats-metric-note">' + e(parts.weekNote) + '</p></div>'
+    + '<div class="stats-metric"><div class="stats-metric-label">Week on week</div><div class="stats-metric-num">' + e(parts.weekNum) + '</div><p class="stats-metric-note">' + e(parts.weekNote) + '</p></div>'
     + '</div>'
     + '<p class="stats-footnote">' + e(PEER_RANK_DEFINITION) + '</p>'
     + '</section>';

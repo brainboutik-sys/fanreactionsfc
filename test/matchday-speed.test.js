@@ -23,6 +23,15 @@ function jsonRes(body, status = 200, hdrs) {
   };
 }
 
+// PR 35 refuses anything except the scheduler POST. Today's handler ignores
+// the argument, so the same event runs before and after that guard.
+function schedulerEvent() {
+  return {
+    httpMethod: 'POST',
+    body: JSON.stringify({ next_run: '2026-11-17T15:00:00.000Z' }),
+  };
+}
+
 function kickoffMatch(overrides) {
   return {
     id: 101,
@@ -488,7 +497,7 @@ test('sync stores playlist publishedAt on frfc_videos and does not add a YouTube
       return jsonRes({});
     };
 
-    const res = await sync.handler();
+    const res = await sync.handler(schedulerEvent());
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
     assert.equal(body.ok, 1);
@@ -552,7 +561,7 @@ test('a failed video-detail call still stores the playlist upload time', async (
       }
       return jsonRes({});
     };
-    const res = await sync.handler();
+    const res = await sync.handler(schedulerEvent());
     assert.equal(res.statusCode, 200);
     assert.equal(JSON.parse(res.body).videosRecorded, 1);
     assert.equal(JSON.parse(res.body).videoMetricsRecorded, 0);
@@ -605,7 +614,7 @@ test('a missing frfc_videos table does not fail the YouTube sync', async () => {
       }
       return jsonRes({});
     };
-    const res = await sync.handler();
+    const res = await sync.handler(schedulerEvent());
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
     assert.equal(body.ok, 1);
@@ -616,10 +625,12 @@ test('a missing frfc_videos table does not fail the YouTube sync', async () => {
   assert.equal(metricsPosted, true);
 });
 
-test('schedule lines this PR must not take from the concurrent schedule PR are unchanged', () => {
+test('the sync cron stays 07:00 and 15:00 UTC', () => {
   const syncSrc = fs.readFileSync(path.join(__dirname, '..', 'netlify/functions/sync-background.js'), 'utf8');
   const fixtureSrc = fs.readFileSync(path.join(__dirname, '..', 'netlify/functions/fixtures-sync.js'), 'utf8');
-  assert.match(syncSrc, /exports\.config = \{ schedule: '0 7,15 \* \* \*' \};/);
+  // Value, not the assignment text: main uses a string literal and PR 35
+  // uses exports.config = { schedule: SCHEDULE } with the same cron.
+  assert.equal(sync.config.schedule, '0 7,15 * * *');
   assert.match(fixtureSrc, /exports\.config = \{ schedule: '30 4 \* \* \*' \};/);
   assert.equal(syncSrc.match(/ytFetch\(ytKey,\s*'playlistItems'/g).length, 1);
   assert.equal(syncSrc.match(/ytFetch\(ytKey,\s*'videos'/g).length, 1);

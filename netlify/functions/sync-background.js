@@ -1,26 +1,80 @@
 // Netlify scheduled background function — refreshes full creator metadata
 // twice a day (07:00 and 15:00 UTC).
 //
-// Background function: up to 15-minute timeout (vs 30s for regular scheduled).
-// Named with the `-background` suffix so Netlify routes it through the
-// background runtime.
+// Schedule: `0 7,15 * * *` UTC. It has to be declared in netlify.toml.
+// This file still exports `config.schedule` (the same constant), but
+// Netlify's bundler only honours that export on the modern default-export
+// function shape. A legacy `exports.handler` drops it, so this job never
+// registered and the sync only ran when something requested the URL
+// (no runs 6–16 Nov 2026). Same registration fix as rank-snapshot-background.
+// The `-background` suffix stays: walking every creator can outlive the 30s
+// scheduled-function limit. A background function scheduled from netlify.toml
+// still runs on the cron and gets the 15-minute limit.
+//
+// Monday 07:00 UTC writes frfc_subscriber_history an hour before
+// weekly-ranking-scheduled (Monday 08:00 UTC) reads it.
+//
+// A public GET must not start a sync. Once the cron is registered, Netlify
+// does not accept web requests to a scheduled function (403). This handler
+// also refuses anything that is not the scheduler's POST body
+// `{"next_run":"<iso-8601>"}`, which is the payload Clockwork sends. A URL
+// probe therefore cannot call YouTube or insert frfc_job_runs. The scheduled
+// run still opens that row.
 //
 // Required env vars:
 //   YOUTUBE_API_KEY             — YouTube Data API key
 //   SUPABASE_URL                — optional, falls back to hardcoded
 //   SUPABASE_SERVICE_ROLE_KEY   — Supabase secret key so writes bypass RLS
 //
-// Cost: ~9 YouTube quota units × ~157 creators = ~1,400/run × 2 runs/day
-//       = ~2,800/day, well under the 10k/day free quota.
+// quota_used adds 9 per creator (channels 5, playlistItems 3, videos 1).
+// channels.list, playlistItems.list and videos.list cost 1 unit each, so
+// that counter overstates the YouTube dashboard by about 3×. Official usage
+// is ~1,400 units per run. Two runs plus live-check (~480/day) is ~3,300,
+// under 70% of the 10,000 unit daily quota. The 9 stays what frfc_job_runs
+// already stores.
 //
 // NOTE: is_live / live_video_id are deliberately NOT touched here — the
 // live-check function (every 5 min) owns those fields.
 
-exports.config = { schedule: '0 7,15 * * *' };
-
+const SCHEDULE = '0 7,15 * * *';
+const JOB_TYPE = 'sync-background';
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 
-exports.handler = async () => {
+exports.SCHEDULE = SCHEDULE;
+exports.JOB_TYPE = JOB_TYPE;
+exports.config = { schedule: SCHEDULE };
+
+// Netlify's scheduler POSTs {"next_run":"<iso>"}. A browser GET, or any
+// other request that reaches this background URL, is not that invocation.
+function scheduledNextRun(event) {
+  if (!event || typeof event !== 'object') return null;
+  if (String(event.httpMethod || '').toUpperCase() !== 'POST') return null;
+  let raw = event.body;
+  if (raw == null || raw === '') return null;
+  if (event.isBase64Encoded && typeof raw === 'string') {
+    try {
+      raw = Buffer.from(raw, 'base64').toString('utf8');
+    } catch (e) {
+      return null;
+    }
+  }
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const nextRun = parsed && parsed.next_run;
+    if (typeof nextRun !== 'string' || !Number.isFinite(Date.parse(nextRun))) return null;
+    return nextRun;
+  } catch (e) {
+    return null;
+  }
+}
+
+exports.scheduledNextRun = scheduledNextRun;
+
+exports.handler = async (event) => {
+  const nextRun = scheduledNextRun(event);
+  if (!nextRun) return ok({ error: 'Forbidden' }, 403);
+  console.log('sync-background next run:', nextRun);
+
   const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const ytKey = process.env.YOUTUBE_API_KEY;
@@ -28,7 +82,7 @@ exports.handler = async () => {
   if (!sbKey) return ok({ error: 'SUPABASE_SERVICE_ROLE_KEY not set' }, 500);
   if (!ytKey) return ok({ error: 'YOUTUBE_API_KEY not set' }, 500);
 
-  const jobRunId = await startJobRun(supabaseUrl, sbKey, 'sync-background');
+  const jobRunId = await startJobRun(supabaseUrl, sbKey, JOB_TYPE);
 
   // 1. Fetch all creators.
   const selectRes = await fetch(

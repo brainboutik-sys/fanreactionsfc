@@ -12,6 +12,7 @@
      js/lib/club-sponsorship.js → isSponsorshipActive(), sponsoredSlotHtml()
      js/lib/club-live-banner.js → clubLiveBannerHtml(); CLUB_LIVE_BANNER_ENABLED
      js/lib/article-poll.js → articlePollSectionHtml(); ARTICLE_POLL_ENABLED
+     js/lib/peer-rank.js → buildPeerRank(), peerRankSectionHtml(); referral clicks stay on the owner RPC
      js/app.js         → THIS FILE: the globals + helpers everything else uses
      js/community.js   → Feature Requests module (calls app.js core at runtime)
      js/generator.js   → window.Gen (description generator)
@@ -2392,6 +2393,167 @@ function statsUploadsHTML(uploads) {
     </a>`).join('')}</div>`;
 }
 
+function initialPeerRankHtml(c) {
+  if (typeof buildPeerRank !== 'function' || typeof peerRankSectionHtml !== 'function') {
+    return '<section class="stats-peers" id="creator-peer-rank" aria-label="Peer rank"><h3 class="stats-uploads-title">Peer rank</h3><p class="stats-footnote">Peer rank could not be loaded.</p></section>';
+  }
+  const model = buildPeerRank({
+    creator: { id: c.id, team: c.team, subscriber_count: c.subscriberCount },
+    directory: creators.map(row => ({ id: row.id, team: row.team, subscriber_count: row.subscriberCount })),
+    metrics: [],
+    history: [],
+    now: Date.now(),
+    viewsPending: true,
+    weekPending: true,
+  });
+  return peerRankSectionHtml(model, escHtml);
+}
+
+let statsHydrateGen = 0;
+
+async function fetchRowsPaged(url) {
+  const rows = [];
+  const pageSize = 1000;
+  for (let page = 0; page < 20; page++) {
+    const offset = page * pageSize;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        Accept: 'application/json',
+        Range: offset + '-' + (offset + pageSize - 1),
+        'Range-Unit': 'items',
+      },
+    });
+    if (res.status === 416) return rows;
+    if (!res.ok) throw new Error('Supabase read failed');
+    const body = await res.json();
+    if (!Array.isArray(body) || !body.length) return rows;
+    rows.push.apply(rows, body);
+    if (body.length < pageSize) return rows;
+  }
+  return rows;
+}
+
+async function loadPeerRankModel(creator) {
+  if (typeof buildPeerRank !== 'function') return { unavailable: true };
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/frfc_creator_peer_rank', {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ p_creator_id: creator.id }),
+    });
+    if (res.ok && typeof normalizeRpcPeerRank === 'function') {
+      const model = normalizeRpcPeerRank(await res.json());
+      if (model) return model;
+    }
+  } catch (e) { /* the reads below use tables that are already public */ }
+  const directory = creators.map(row => ({ id: row.id, team: row.team, subscriber_count: row.subscriberCount }));
+  const slug = typeof canonicalClubSlug === 'function' ? canonicalClubSlug(creator.team) : '';
+  const ids = [];
+  if (slug) {
+    directory.forEach(row => {
+      if (canonicalClubSlug(row.team) === slug) ids.push(row.id);
+    });
+  }
+  if (creator.id && ids.indexOf(creator.id) === -1) ids.push(creator.id);
+  const now = Date.now();
+  const since = new Date(now - (typeof VIEWS_WINDOW_DAYS === 'number' ? VIEWS_WINDOW_DAYS : 30) * 86400000).toISOString();
+  const metrics = [];
+  if (typeof videoMetricsQuery === 'function') {
+    for (let i = 0; i < ids.length; i += 40) {
+      const query = videoMetricsQuery(ids.slice(i, i + 40), since);
+      if (!query) continue;
+      const page = await fetchRowsPaged(SUPABASE_URL + '/rest/v1/frfc_video_metrics?' + query);
+      metrics.push.apply(metrics, page);
+    }
+  }
+  const historySince = new Date(now - 45 * 86400000).toISOString();
+  const history = await fetchRowsPaged(
+    SUPABASE_URL + '/rest/v1/frfc_subscriber_history?select=subscriber_count,recorded_at&creator_id=eq.'
+      + encodeURIComponent(creator.id) + '&recorded_at=gte.' + encodeURIComponent(historySince)
+      + '&order=recorded_at.asc'
+  );
+  return buildPeerRank({
+    creator: { id: creator.id, team: creator.team, subscriber_count: creator.subscriberCount },
+    directory: directory,
+    metrics: metrics,
+    history: history,
+    now: now,
+  });
+}
+
+// Owner JWT + frfc_owner_referral_clicks. The function checks
+// claimed_by = auth.uid() and is not granted to anon. A miss returns
+// no totals. The service role is never sent from the browser.
+async function fetchOwnerReferralClicks(creatorId) {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session && session.access_token;
+  if (!token) return { ok: false, pending: false };
+  const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/frfc_owner_referral_clicks', {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ p_creator_id: creatorId }),
+  });
+  const data = await res.json().catch(() => null);
+  if (res.status === 404) return { ok: false, pending: true };
+  if (!res.ok) {
+    const message = data && (data.message || data.error || data.hint) || '';
+    if (/PGRST202|Could not find the function|frfc_owner_referral_clicks/i.test(String(message))) {
+      return { ok: false, pending: true };
+    }
+    return { ok: false, pending: false };
+  }
+  if (!Array.isArray(data)) return { ok: false, pending: false };
+  return { ok: true, rows: data };
+}
+
+async function hydrateCreatorStatsExtras(c, slug) {
+  const gen = ++statsHydrateGen;
+  const stillHere = () => gen === statsHydrateGen && currentRoute.page === 'creatorStats' && currentRoute.slug === slug;
+  try {
+    const model = await loadPeerRankModel(c);
+    const slot = document.getElementById('creator-peer-rank');
+    if (slot && stillHere() && typeof peerRankSectionHtml === 'function') {
+      slot.outerHTML = peerRankSectionHtml(model, escHtml);
+    }
+  } catch (e) {
+    const slot = document.getElementById('creator-peer-rank');
+    if (slot && stillHere() && typeof peerRankSectionHtml === 'function') {
+      slot.outerHTML = peerRankSectionHtml({ unavailable: true }, escHtml);
+    }
+  }
+  if (!stillHere()) return;
+  const mount = document.getElementById('creator-referral-mount');
+  if (!mount || typeof shouldRequestReferralClicks !== 'function') return;
+  if (!shouldRequestReferralClicks(currentUser && currentUser.id, c.claimedBy)) {
+    mount.innerHTML = '';
+    return;
+  }
+  mount.innerHTML = '<section class="stats-referrals" aria-label="Referral clicks"><h3>Referral clicks</h3><p class="stats-referrals-note">Loading the clicks sent to your channel…</p></section>';
+  const clicks = await fetchOwnerReferralClicks(c.id);
+  if (!stillHere()) return;
+  const liveMount = document.getElementById('creator-referral-mount');
+  if (!liveMount) return;
+  if (!clicks.ok) {
+    liveMount.innerHTML = clicks.pending
+      ? '<section class="stats-referrals" aria-label="Referral clicks"><h3>Referral clicks</h3><p class="stats-referrals-note">Referral clicks are not available until the database migration is applied. No click totals are shown.</p></section>'
+      : '';
+    return;
+  }
+  if (typeof referralClicksHtml === 'function') liveMount.innerHTML = referralClicksHtml(clicks.rows, escHtml);
+}
+
 async function shareCreatorStats(btn) {
   const url = btn.getAttribute('data-share-url') || location.href;
   const title = btn.getAttribute('data-share-title') || document.title;
@@ -2508,15 +2670,18 @@ async function renderCreatorStats(slug) {
         </div>
         <h3 class="stats-uploads-title">Recent uploads</h3>
         <div id="statsUploads">${c.latestVideoId ? statsUploadsHTML([{ videoId: c.latestVideoId, title: c.latestVideoTitle || 'Latest upload', views: c.latestVideoViews || 0, thumbnail: c.latestVideoThumbnail || image }]) : '<p class="stats-empty">Loading recent uploads…</p>'}</div>
+        ${initialPeerRankHtml(c)}
         <p class="stats-footnote">YouTube totals from the latest FanReactionsFC sync. Channel analytics are not included.</p>
       </article>
       <div class="stats-actions">
         <button type="button" class="btn btn-primary" id="statsShareBtn" data-share-url="https://fanreactionsfc.com${statsUrl}" data-share-title="${escHtml(share.title)}" data-share-text="${escHtml(share.description)}" onclick="shareCreatorStats(this)">Share stats card</button>
         <a href="${profileUrl}" class="btn btn-ghost" onclick="event.preventDefault();navigate('${profileUrl}')">Creator profile</a>
       </div>
+      <div id="creator-referral-mount"></div>
     </div>
     ${renderFooter()}`;
 
+  hydrateCreatorStatsExtras(c, slug);
   const uploads = await loadRecentUploads(c);
   const slot = document.getElementById('statsUploads');
   if (slot && currentRoute.page === 'creatorStats' && currentRoute.slug === slug) {

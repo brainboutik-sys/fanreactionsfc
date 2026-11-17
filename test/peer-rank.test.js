@@ -460,7 +460,7 @@ test('verified HTML includes peer rank and a locked channel does not', async () 
 });
 
 test('the migration matches the club maps and keeps clicks behind claimed_by', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261117120000_creator_peer_rank.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261117130000_creator_peer_rank.sql'), 'utf8');
   const overrides = JSON.parse(between(sql, 'peer-rank-overrides'));
   const aliases = JSON.parse(between(sql, 'peer-rank-aliases'));
   const names = JSON.parse(between(sql, 'peer-rank-names'));

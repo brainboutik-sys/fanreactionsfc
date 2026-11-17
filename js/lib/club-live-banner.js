@@ -6,10 +6,11 @@
    links only. This banner is the live-stream link (data-frfc-link="live",
    the same click row the rest of the site already sends). It appears
    when a creator for that club is live, or when frfc_fixtures says the
-   club is inside the match window. Fixture rows stay TIMED after
-   kickoff, so the window is kickoff minus CLUB_LIVE_PRE_MS through
-   kickoff plus CLUB_LIVE_MATCH_MS. A terminal status (finished,
-   postponed, cancelled) hides it even inside that window. */
+   club is inside the match window. The window is kickoff minus
+   CLUB_LIVE_PRE_MS through kickoff plus CLUB_LIVE_MATCH_MS. fixtures-sync
+   marks FINISHED on its next 04:30 UTC run, which is after this window
+   for a normal kickoff. A terminal status (finished, postponed,
+   cancelled) hides the banner even inside that window. */
 
 const CLUB_LIVE_BANNER_ENABLED = true;
 const CLUB_LIVE_PRE_MS = 45 * 60 * 1000;

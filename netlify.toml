@@ -75,6 +75,15 @@ schedule = "0 5 * * *"
 [functions."rank-snapshot-background"]
 schedule = "0 3 * * 1"
 
+# Twice-daily YouTube creator sync (07:00 and 15:00 UTC). Background
+# function (15 min) because walking every creator can pass the 30s
+# scheduled-function limit. The cron has to live here: exports.config on a
+# legacy exports.handler is not registered, so this job only ran when
+# something hit the URL. Monday 07:00 is an hour before the ranking below.
+# See sync-background.js.
+[functions."sync-background"]
+schedule = "0 7,15 * * *"
+
 # Weekly creator ranking. Monday 08:00 UTC, after the 07:00 YouTube sync
 # has written subscriber history. Supabase reads and writes only — see
 # weekly-ranking-scheduled.js. The admin button stays POST weekly-ranking.

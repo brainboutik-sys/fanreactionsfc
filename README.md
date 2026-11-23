@@ -161,7 +161,12 @@ Community Feature Requests: `frfc_feature_requests`, `frfc_feature_votes`,
 
 Fixtures: `frfc_fixtures` — synced daily from football-data.org by `fixtures-sync.js`;
 `trigger_sent_at` marks which fixtures `live-check-fixtures-background.js` has already
-fired a live-check for, so each kickoff only triggers once.
+fired a live-check for, so each kickoff only triggers once. `finished_at`,
+`full_time_source`, and `extra_time` record full time for the matchday speed
+benchmark. They ship in `supabase/migrations/20261117120000_matchday_speed_foundation.sql`
+and are not applied by deploy. That migration also adds `frfc_videos`, whose
+`published_at` is the YouTube upload time `sync-background.js` already receives
+on the playlist response.
 
 - **Counts are trigger-owned.** `vote_count`, `comment_count`, and `like_count` are
   maintained by row triggers on the votes/comments/likes tables — never write them from

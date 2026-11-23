@@ -3320,9 +3320,12 @@ async function renderRankings() {
     : leagueFilter
       ? `Best ${leagueFilter} Fan YouTubers Ranked`
       : 'Best Football Fan YouTubers Ranked';
+  const rankingsScope = teamFilter || leagueFilter;
   updatePageMeta(
-    rankingsH1 + ' | FanReactionsFC',
-    rankingsIntro || 'Football fan YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.'
+    rankingsScope ? rankingsH1 + ' | FanReactionsFC' : 'Football YouTubers Rankings | FanReactionsFC',
+    rankingsScope
+      ? (rankingsIntro || 'Football fan YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.')
+      : 'Football YouTubers rankings list the top fan channels for watchalongs, match reactions and fan TV, ordered daily by YouTube subscribers on FanReactionsFC.'
   );
 
   document.getElementById('app').innerHTML = `

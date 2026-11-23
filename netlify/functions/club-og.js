@@ -43,6 +43,16 @@ const HUB_COPY = {
   relatedAnchor: '{Club} fan YouTubers',
 };
 
+// Per-club <title> and meta description. Other clubs stay on HUB_COPY.
+// H1 stays on HUB_COPY.h1. Titles must be <= HUB_TITLE_MAX. Metas are
+// written to 140-160 characters and returned as-is (not clipped).
+const HUB_PAGE_OVERRIDES = {
+  'Man United': {
+    title: 'Manchester United YouTubers | FanReactionsFC',
+    meta: 'Man United fan YouTubers and Man Utd fan channels. Watchalongs, match reactions and fan TV from Manchester United YouTubers, ranked on FanReactionsFC.',
+  },
+};
+
 // ── Article templates ─────────────────────────────────────────────────────
 const ARTICLE_TITLE_MAX = 60;
 const ARTICLE_META_MAX = 155;
@@ -143,6 +153,8 @@ function seoClipWords(text, max) {
 }
 
 function hubTitle(club, now) {
+  const override = HUB_PAGE_OVERRIDES[club];
+  if (override && override.title) return override.title;
   const yyyy = seoYear(now);
   const full = seoFill(HUB_COPY.titleFull, { Club: club, YYYY: yyyy });
   if (full.length <= HUB_TITLE_MAX) return full;
@@ -154,6 +166,8 @@ function hubH1(club) {
 }
 
 function hubMeta(club, count, topName, now) {
+  const override = HUB_PAGE_OVERRIDES[club];
+  if (override && override.meta) return override.meta;
   const month = seoMonthYear(now);
   const n = Number(count) || 0;
   if (!topName || n < 1) {

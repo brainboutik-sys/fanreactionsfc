@@ -25,6 +25,24 @@ test('hub and article copy blocks match the browser file', () => {
   }
 });
 
+test('Man United hub title and meta target the club queries; other clubs stay on the template', () => {
+  const now = new Date('2026-11-23T12:00:00Z');
+  const title = seo.hubTitle('Man United', now);
+  const meta = 'Man United fan YouTubers and Man Utd fan channels. Watchalongs, match reactions and fan TV from Manchester United YouTubers, ranked on FanReactionsFC.';
+  assert.equal(title, 'Manchester United YouTubers | FanReactionsFC');
+  assert.equal(title.length, 44);
+  assert.ok(title.length <= seo.HUB_TITLE_MAX);
+  assert.match(title, /\| FanReactionsFC$/);
+  assert.equal(seo.hubMeta('Man United', 48, 'UnitedStand', now), meta);
+  assert.equal(seo.hubMeta('Man United', 0, null, now), meta);
+  assert.equal(meta.length, 150);
+  assert.ok(meta.length >= 140 && meta.length <= 160);
+  assert.equal(seo.hubH1('Man United'), 'Best Man United Fan YouTubers');
+  assert.equal(seo.hubTitle('Arsenal', now), 'Best Arsenal Fan YouTubers (2026) – Ranked | FanReactionsFC');
+  assert.equal(seo.hubTitle('Man City', now), 'Best Man City Fan YouTubers (2026) – Ranked | FanReactionsFC');
+  assert.match(seo.hubMeta('Liverpool', 34, 'NathanConnorTV', now), /^The 34 best Liverpool fan YouTubers ranked/);
+});
+
 test('club hub title falls back once the ranked form exceeds 60 characters', () => {
   const now = new Date('2026-10-17T12:00:00Z');
   const city = seo.hubTitle('Man City', now);

@@ -52,7 +52,7 @@ test('shared head and prerendered pages include og:site_name and twitter:title',
   assert.match(indexHtml, /<meta name="twitter:title" content="FanReactionsFC — Discover the Best Football YouTubers">/);
   const pages = [
     ['../netlify/functions/home.js', { path: '/' }, /Discover the Best Football YouTubers/],
-    ['../netlify/functions/rankings.js', { path: '/rankings', queryStringParameters: {} }, /Best Football Fan YouTubers Ranked/],
+    ['../netlify/functions/rankings.js', { path: '/rankings', queryStringParameters: {} }, /Football YouTubers Rankings \| FanReactionsFC/],
     ['../netlify/functions/discover.js', { path: '/discover' }, /Discover/],
     ['../netlify/functions/news.js', { path: '/news' }, /FanReactionsFC News/],
     ['../netlify/functions/tools.js', { path: '/tools' }, /Tools \| FanReactionsFC/],

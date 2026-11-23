@@ -1629,68 +1629,40 @@ async function runSync() {
         var ch = chData.items?.[0];
         if (!ch) { fail++; continue; }
 
-        var stats = ch.statistics || {};
-        var snippet = ch.snippet || {};
         var uploadsPlaylist = ch.contentDetails?.relatedPlaylists?.uploads;
+        var vids = [];
+        var videoDetail = null;
 
-        var update = {
-          youtube_channel_id: ch.id,
-          subscriber_count: parseInt(stats.subscriberCount) || 0,
-          total_view_count: parseInt(stats.viewCount) || 0,
-          video_count: parseInt(stats.videoCount) || 0,
-          channel_created_at: snippet.publishedAt || null,
-          avatar_url: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || c.avatar_url,
-          channel_country: snippet.country || null,
-          is_live: false,
-          live_video_id: null,
-          last_youtube_sync: new Date().toISOString()
-        };
-
-        // 2. Latest videos from uploads playlist
+        // 2. Latest videos from uploads playlist. statistics only: this
+        // sync does not read liveStreamingDetails. is_live / live_video_id
+        // belong to the live-check jobs. See js/lib/admin-sync-patch.js.
         if (uploadsPlaylist) {
           try {
             quota += 3;
             var plData = await ytFetch('playlistItems', { playlistId: uploadsPlaylist, part: 'snippet', maxResults: 5 });
-            var vids = (plData.items || []).map(function(item) {
+            vids = (plData.items || []).map(function(item) {
               return { videoId: item.snippet?.resourceId?.videoId, publishedAt: item.snippet?.publishedAt, title: item.snippet?.title || '' };
             }).filter(function(v) { return v.videoId; });
 
             if (vids.length) {
-              var latest = vids[0];
-              update.latest_video_id = latest.videoId;
-              update.latest_video_title = latest.title;
-              update.latest_video_date = latest.publishedAt;
-              update.latest_video_thumbnail = 'https://i.ytimg.com/vi/' + latest.videoId + '/mqdefault.jpg';
-
-              // Get view count for latest video
               try {
                 quota += 7;
-                var vidData = await ytFetch('videos', { id: latest.videoId, part: 'statistics,liveStreamingDetails' });
-                var vidDetail = vidData.items?.[0];
-                if (vidDetail) {
-                  update.latest_video_views = parseInt(vidDetail.statistics?.viewCount) || 0;
-                  if (vidDetail.liveStreamingDetails?.actualStartTime && !vidDetail.liveStreamingDetails?.actualEndTime) {
-                    update.is_live = true;
-                    update.live_video_id = latest.videoId;
-                  }
-                }
+                var vidData = await ytFetch('videos', { id: vids[0].videoId, part: 'statistics' });
+                videoDetail = vidData.items?.[0] || null;
               } catch(e) { /* video detail fetch failed, continue */ }
-
-              // Upload frequency
-              var dates = vids.map(function(v){return v.publishedAt}).filter(Boolean);
-              if (dates.length >= 2) {
-                var sorted = dates.map(function(d){return new Date(d).getTime()}).sort(function(a,b){return b-a});
-                var gaps = [];
-                for (var g = 0; g < sorted.length-1; g++) gaps.push((sorted[g]-sorted[g+1])/86400000);
-                var avg = gaps.reduce(function(a,b){return a+b},0)/gaps.length;
-                update.upload_frequency = avg<2?'Daily':avg<2.5?'5x/week':avg<3.5?'3x/week':avg<5?'2x/week':avg<10?'Weekly':avg<20?'Biweekly':avg<45?'Monthly':'Inactive';
-              }
             }
           } catch(e) { /* playlist fetch failed, continue with channel data */ }
         }
 
-        // 3. Write to Supabase
-        await sb.from('frfc_streamers').update(update).eq('id', c.id);
+        // 3. Write to Supabase. The omit call is the body that is sent:
+        // PATCH and upsert both persist every key, and null is a write.
+        var update = adminSyncChannelPatch({
+          channel: ch,
+          videos: vids,
+          videoDetail: videoDetail,
+          avatarUrl: c.avatar_url
+        });
+        await sb.from('frfc_streamers').update(omitAdminSyncLiveColumns(update)).eq('id', c.id);
 
         // 4. Subscriber history
         if (update.subscriber_count > 0) {

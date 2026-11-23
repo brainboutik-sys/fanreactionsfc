@@ -11,7 +11,7 @@ const SITE_URL = 'https://fanreactionsfc.com';
 // Unscoped /rankings head tags. Filtered ?league / ?team pages keep the
 // scoped "Best {scope} Fan YouTubers Ranked" title. H1 is unchanged.
 const RANKINGS_SEO_TITLE = 'Football YouTubers Rankings | FanReactionsFC';
-const RANKINGS_SEO_DESCRIPTION = 'Football YouTubers rankings list the top fan channels for watchalongs, match reactions and fan TV, ordered daily by YouTube subscribers on FanReactionsFC.';
+const RANKINGS_SEO_DESCRIPTION = 'Football YouTubers rankings: the top fan channels for watchalongs, match reactions and fan TV, ranked by YouTube subscribers on FanReactionsFC.';
 
 const CLUB_SLUG_OVERRIDES = {
   'Man United': 'manchester-united',

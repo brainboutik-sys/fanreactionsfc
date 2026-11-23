@@ -134,7 +134,8 @@ test('rankings prerender has unique H1, canonical, ItemList, and a table', async
   assert.equal(RANKINGS_SEO_TITLE, 'Football YouTubers Rankings | FanReactionsFC');
   assert.equal(RANKINGS_SEO_TITLE.length, 44);
   assert.ok(RANKINGS_SEO_TITLE.length <= 60);
-  assert.equal(RANKINGS_SEO_DESCRIPTION.length, 154);
+  assert.equal(RANKINGS_SEO_DESCRIPTION.length, 143);
+  assert.doesNotMatch(RANKINGS_SEO_DESCRIPTION, /daily|hourly|weekly|updated/i);
   assert.ok(RANKINGS_SEO_DESCRIPTION.length >= 140 && RANKINGS_SEO_DESCRIPTION.length <= 160);
   const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
   assert.ok(app.includes(RANKINGS_SEO_TITLE));

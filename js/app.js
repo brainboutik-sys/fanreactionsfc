@@ -3325,7 +3325,7 @@ async function renderRankings() {
     rankingsScope ? rankingsH1 + ' | FanReactionsFC' : 'Football YouTubers Rankings | FanReactionsFC',
     rankingsScope
       ? (rankingsIntro || 'Football fan YouTubers ranked by subscribers, videos, views, and Creator Battle record — updated daily.')
-      : 'Football YouTubers rankings list the top fan channels for watchalongs, match reactions and fan TV, ordered daily by YouTube subscribers on FanReactionsFC.'
+      : 'Football YouTubers rankings: the top fan channels for watchalongs, match reactions and fan TV, ranked by YouTube subscribers on FanReactionsFC.'
   );
 
   document.getElementById('app').innerHTML = `

@@ -450,7 +450,7 @@ test('live-check includes upcoming_video_id only while the flag is on', async ()
 });
 
 test('the click migration adds live_hub and streamwall_play and has a rollback', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261123120000_frfc_link_clicks_live_hub.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261123085258_frfc_link_clicks_live_hub.sql'), 'utf8');
   assert.match(sql, /link_type in \('live', 'channel', 'poll', 'live_hub', 'streamwall_play'\)/);
   assert.match(sql, /link_type in \('live', 'channel', 'poll'\)/);
   assert.match(sql, /delete from public\.frfc_link_clicks/);

@@ -9,10 +9,10 @@
 // Anything else in the JSON is ignored and not stored. The function does
 // not read Cookie, User-Agent, or client IP, and it sets no cookie.
 //
-// The migration supabase/migrations/20261026110000_frfc_link_clicks.sql
+// The migration supabase/migrations/20261026132248_frfc_link_clicks.sql
 // is applied by hand. It is not run by deploy. link_type "poll" also
-// needs 20261113100000_frfc_article_poll_votes.sql. link_type "live_hub"
-// and "streamwall_play" need 20261123120000_frfc_link_clicks_live_hub.sql.
+// needs 20261113094115_frfc_article_poll_votes.sql. link_type "live_hub"
+// and "streamwall_play" need 20261123085258_frfc_link_clicks_live_hub.sql.
 // Until the check constraint allows a type, that insert returns 503.
 
 const { frfcLinkTypeOk } = require('../../js/lib/live-match-window.js');

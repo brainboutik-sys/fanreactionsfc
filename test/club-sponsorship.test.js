@@ -341,7 +341,7 @@ describe('club hub sponsored slot prerender', { concurrency: false }, () => {
 });
 
 test('migration defines one sponsorship row per club and does not grant client writes', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261014090000_frfc_club_sponsorships.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261014090917_frfc_club_sponsorships.sql'), 'utf8');
   assert.match(sql, /create table public\.frfc_club_sponsorships/i);
   assert.match(sql, /unique \(club_slug\)/);
   assert.match(sql, /creator_id uuid not null references public\.frfc_streamers/i);

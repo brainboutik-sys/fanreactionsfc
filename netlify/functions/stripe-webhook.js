@@ -17,7 +17,7 @@
 //                                other functions use. Bypasses RLS.
 //   SUPABASE_URL               — optional. Defaults to the production project.
 //
-// The migration supabase/migrations/20261020160000_verified_stripe_webhook.sql
+// The migration supabase/migrations/20261022105226_verified_stripe_webhook.sql
 // must be applied first. It is not run by deploy.
 //
 // Effects:

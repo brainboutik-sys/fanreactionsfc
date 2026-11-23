@@ -376,7 +376,7 @@ test('the article page, flag, and click logger are wired for the poll', () => {
 });
 
 test('the migration allows anon insert, hides raw rows, and widens link_type', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261113100000_frfc_article_poll_votes.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261113094115_frfc_article_poll_votes.sql'), 'utf8');
   assert.match(sql, /create table if not exists public\.frfc_article_poll_votes/);
   assert.match(sql, /article_id uuid not null references public\.frfc_articles \(id\) on delete cascade/);
   assert.match(sql, /creator_slug text not null/);

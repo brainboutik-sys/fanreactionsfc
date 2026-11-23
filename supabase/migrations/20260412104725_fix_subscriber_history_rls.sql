@@ -1,0 +1,1 @@
+CREATE POLICY "anon_insert_sub_history" ON frfc_subscriber_history FOR INSERT TO anon, authenticated WITH CHECK (true);

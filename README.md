@@ -167,7 +167,7 @@ rechecks the two clubs from 10 minutes before kickoff until 120 minutes after.
 Set `FRFC_LIVE_MATCH_WINDOW=0` to restore the old one-shot (next 7 minutes, once).
 `finished_at`, `full_time_source`, and `extra_time` record full time for the
 matchday speed benchmark. They ship in
-`supabase/migrations/20261117120000_matchday_speed_foundation.sql` and are not
+`supabase/migrations/20261123084343_matchday_speed_foundation.sql` and are not
 applied by deploy. That migration also adds `frfc_videos`, whose `published_at`
 is the YouTube upload time `sync-background.js` already receives on the playlist
 response.
@@ -182,7 +182,7 @@ response.
 - Win % on `/rankings` is computed client-side from `frfc_battles` win/loss counts
   (via the `get_battle_all_stats` RPC), not stored.
 - **Verified tier** (`is_verified`, `verified_until` on `frfc_streamers`) is
-  defined in `supabase/migrations/20261014120000_verified_creator_tier.sql`.
+  defined in `supabase/migrations/20261014092946_verified_creator_tier.sql`.
   Those columns are already on production. CI does not re-run the file. A creator is verified when
   `is_verified` is true and `verified_until` is null or in the future.
   The "Get Verified" button uses `VERIFIED_STRIPE_PAYMENT_LINK` in
@@ -191,7 +191,7 @@ response.
   `invoice.paid` and leaves it to lapse at `verified_until` when the
   subscription is deleted or a renewal fails. That function needs
   `STRIPE_WEBHOOK_SECRET` plus the service-role key, and the tables in
-  `supabase/migrations/20261020160000_verified_stripe_webhook.sql` (run
+  `supabase/migrations/20261022105226_verified_stripe_webhook.sql` (run
   that file in the SQL editor; deploy does not apply it). Comps are still
   the `UPDATE` examples in the earlier migration. The admin checkbox
   still writes the legacy `verified` column and does not grant the tier.

@@ -245,7 +245,7 @@ async function loadUnlinkedPayments() {
       return;
     }
     if (data.pendingMigration) {
-      body.innerHTML = 'The review table is not in the database yet. Apply <code>supabase/migrations/20261026100000_stripe_unlinked_invoices.sql</code> in the Supabase SQL editor. Until then, stale unlinked invoices are only in the stripe-webhook function log.';
+      body.innerHTML = 'The review table is not in the database yet. Apply <code>supabase/migrations/20261026113457_stripe_unlinked_invoices.sql</code> in the Supabase SQL editor. Until then, stale unlinked invoices are only in the stripe-webhook function log.';
       return;
     }
     var rows = data.payments || [];
@@ -277,7 +277,7 @@ async function loadLinkClicks() {
       return;
     }
     if (data.pendingMigration) {
-      body.innerHTML = 'The click table is not in the database yet. Apply <code>supabase/migrations/20261026110000_frfc_link_clicks.sql</code> and <code>supabase/migrations/20261123120000_frfc_link_clicks_live_hub.sql</code> in the Supabase SQL editor.';
+      body.innerHTML = 'The click table is not in the database yet. Apply <code>supabase/migrations/20261026132248_frfc_link_clicks.sql</code> and <code>supabase/migrations/20261123085258_frfc_link_clicks_live_hub.sql</code> in the Supabase SQL editor.';
       return;
     }
     var rows = data.counts || [];

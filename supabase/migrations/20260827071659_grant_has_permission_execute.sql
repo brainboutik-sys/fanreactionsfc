@@ -1,0 +1,1 @@
+grant execute on function public.frfc_has_permission(uuid, text) to authenticated, service_role;

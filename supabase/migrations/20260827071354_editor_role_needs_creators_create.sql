@@ -1,0 +1,1 @@
+insert into public.frfc_role_permissions (role_slug, permission_key) values ('editor', 'creators.create');

@@ -1,0 +1,1 @@
+alter table public.frfc_streamers add column social_instagram text;

@@ -1,0 +1,1 @@
+alter table public.frfc_admin_roles drop constraint frfc_admin_roles_role_check;

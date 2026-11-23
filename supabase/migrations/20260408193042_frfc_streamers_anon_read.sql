@@ -1,0 +1,1 @@
+CREATE POLICY frfc_streamers_select_anon ON public.frfc_streamers FOR SELECT TO anon USING (true);

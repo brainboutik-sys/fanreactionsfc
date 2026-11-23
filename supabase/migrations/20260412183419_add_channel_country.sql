@@ -1,0 +1,1 @@
+ALTER TABLE frfc_streamers ADD COLUMN IF NOT EXISTS channel_country text;

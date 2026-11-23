@@ -486,7 +486,7 @@ test('Netlify base64 bodies still verify, and the migration keeps the tables ser
   assert.equal(response.statusCode, 200);
   assert.equal(backend.state.subs.get('sub_123').creator_id, CREATOR);
 
-  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261020160000_verified_stripe_webhook.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261022105226_verified_stripe_webhook.sql'), 'utf8');
   assert.match(sql, /alter table public\.frfc_stripe_events enable row level security/);
   assert.match(sql, /alter table public\.frfc_verified_subscriptions enable row level security/);
   assert.match(sql, /revoke all on table public\.frfc_stripe_events from public, anon, authenticated/);

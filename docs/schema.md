@@ -39,7 +39,7 @@ YouTube-synced: `youtube_channel_id`, `subscriber_count`, `total_view_count`,
 `upload_frequency`, `channel_country`, `last_youtube_sync`. Flags: legacy
 `verified` (admin checkbox only — not the paid tier), `featured`,
 `claimed_by` (→ auth.users). Paid tier (migration
-`supabase/migrations/20261014120000_verified_creator_tier.sql`, already
+`supabase/migrations/20261014092946_verified_creator_tier.sql`, already
 applied on production): `is_verified` (boolean, default false), `verified_until`
 (timestamptz, null means no expiry). A creator counts as verified when
 `is_verified` is true and `verified_until` is null or in the future.
@@ -47,7 +47,7 @@ applied on production): `is_verified` (boolean, default false), `verified_until`
 `invoice.paid` (and does not clear them on subscription deletion). The
 link from a Stripe subscription to a creator lives in
 `frfc_verified_subscriptions` (migration
-`supabase/migrations/20261020160000_verified_stripe_webhook.sql`,
+`supabase/migrations/20261022105226_verified_stripe_webhook.sql`,
 **not applied by deploy**).
 Ranking snapshot: `subscriber_count_prev`,
 `avg_rating_prev`, `rank_snapshot_at`. Audit: `created_by`, `created_at`, `updated_at`.
@@ -65,7 +65,7 @@ policies; the admin panel's manual sync runs as the admin user and passes.
 Trigger: `frfc_streamers_updated_at` (BEFORE UPDATE) bumps `updated_at`.
 
 #### `frfc_club_sponsorships` — one sponsored featured creator per club hub
-Migration `supabase/migrations/20261014090000_frfc_club_sponsorships.sql`.
+Migration `supabase/migrations/20261014090917_frfc_club_sponsorships.sql`.
 **Not applied to production by the app deploy** — run that file in the
 Supabase SQL editor when the slot should go live.
 
@@ -83,7 +83,7 @@ Writes are the SQL editor or the service role. See the migration file for
 `insert` / `update` / `delete` examples.
 
 #### `frfc_verified_subscriptions` — Stripe customer and subscription per creator
-Migration `supabase/migrations/20261020160000_verified_stripe_webhook.sql`.
+Migration `supabase/migrations/20261022105226_verified_stripe_webhook.sql`.
 **Not applied by deploy** — run it in the SQL editor before the webhook
 can store anything.
 

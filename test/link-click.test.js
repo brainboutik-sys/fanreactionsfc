@@ -279,7 +279,7 @@ test('live_hub is not added into the live total', () => {
 });
 
 test('the migration is service-role only and the client sends no visitor id', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261026110000_frfc_link_clicks.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261026132248_frfc_link_clicks.sql'), 'utf8');
   assert.match(sql, /enable row level security/);
   assert.match(sql, /revoke all on table public\.frfc_link_clicks from public, anon, authenticated/);
   assert.match(sql, /grant select, insert, update, delete on table public\.frfc_link_clicks to service_role/);

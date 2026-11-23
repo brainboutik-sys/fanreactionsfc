@@ -1,0 +1,1 @@
+CREATE POLICY "anon_update_streamers" ON frfc_streamers FOR UPDATE TO anon USING (true) WITH CHECK (true);

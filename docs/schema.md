@@ -211,7 +211,7 @@ anyone. Low-sensitivity, left open because the submit flow reads for duplicate d
 
 ### Matchday speed (migration not applied by deploy)
 
-`supabase/migrations/20261117120000_matchday_speed_foundation.sql`. Run it in
+`supabase/migrations/20261123084343_matchday_speed_foundation.sql`. Run it in
 the SQL editor before the benchmark can read these values. Both writers no-op
 the new write when the object is missing, so the functions can deploy first.
 

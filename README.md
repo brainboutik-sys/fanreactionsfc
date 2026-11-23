@@ -167,7 +167,7 @@ rechecks the two clubs from 10 minutes before kickoff until 120 minutes after.
 Set `FRFC_LIVE_MATCH_WINDOW=0` to restore the old one-shot (next 7 minutes, once).
 `finished_at`, `full_time_source`, and `extra_time` record full time for the
 matchday speed benchmark. They ship in
-`supabase/migrations/20261117120000_matchday_speed_foundation.sql` and are not
+`supabase/migrations/20261123084343_matchday_speed_foundation.sql` and are not
 applied by deploy. That migration also adds `frfc_videos`, whose `published_at`
 is the YouTube upload time `sync-background.js` already receives on the playlist
 response.

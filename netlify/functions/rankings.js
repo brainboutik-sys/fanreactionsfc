@@ -8,6 +8,11 @@ const path = require('path');
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SITE_URL = 'https://fanreactionsfc.com';
 
+// Unscoped /rankings head tags. Filtered ?league / ?team pages keep the
+// scoped "Best {scope} Fan YouTubers Ranked" title. H1 is unchanged.
+const RANKINGS_SEO_TITLE = 'Football YouTubers Rankings | FanReactionsFC';
+const RANKINGS_SEO_DESCRIPTION = 'Football YouTubers rankings: the top fan channels for watchalongs, match reactions and fan TV, ranked by YouTube subscribers on FanReactionsFC.';
+
 const CLUB_SLUG_OVERRIDES = {
   'Man United': 'manchester-united',
   'Man City': 'manchester-city',
@@ -217,11 +222,12 @@ exports.handler = async (event) => {
 
   const scope = teamFilter || leagueFilter || '';
   const h1 = scope ? `Best ${scope} Fan YouTubers Ranked` : 'Best Football Fan YouTubers Ranked';
-  const title = h1 + ' | FanReactionsFC';
   const top = ranked[0];
-  const description = ranked.length
+  const visibleDescription = ranked.length
     ? `${ranked.length} ${scope ? scope + ' ' : ''}football fan YouTubers ranked by subscribers.${top ? ` ${top.name} leads with ${formatNum(top.subscriber_count)} subscribers.` : ''} Updated from YouTube channel data.`
     : 'Football fan YouTubers ranked by subscribers, videos, and views on FanReactionsFC.';
+  const title = scope ? h1 + ' | FanReactionsFC' : RANKINGS_SEO_TITLE;
+  const description = scope ? visibleDescription : RANKINGS_SEO_DESCRIPTION;
   const url = SITE_URL + '/rankings';
   const clubs = [...new Set(creators.map(c => c.team).filter(t => t && t !== 'Multi-Club / Other'))].sort();
   const dateModified = ranked
@@ -251,7 +257,7 @@ exports.handler = async (event) => {
           <div class="page-hero-text">
             <div class="page-hero-eyebrow">Daily Rankings</div>
             <h1 class="page-hero-title">${esc(h1)}</h1>
-            <p class="page-hero-subtitle">${esc(description)}</p>
+            <p class="page-hero-subtitle">${esc(visibleDescription)}</p>
             <p class="page-hero-meta seo-filter-links">${leagueLinks}</p>
           </div>
         </div>
@@ -315,3 +321,5 @@ exports.handler = async (event) => {
 
 exports.isFanRankingsChannel = isFanRankingsChannel;
 exports.dedupeRankedCreators = dedupeRankedCreators;
+exports.RANKINGS_SEO_TITLE = RANKINGS_SEO_TITLE;
+exports.RANKINGS_SEO_DESCRIPTION = RANKINGS_SEO_DESCRIPTION;

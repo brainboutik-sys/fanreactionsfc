@@ -13,6 +13,27 @@ function withCwd(fn) {
     .finally(() => process.chdir(prev));
 }
 
+test('manchester-united prerender uses the club query title and meta; Arsenal does not', async () => {
+  const { handler } = require('../netlify/functions/club-og.js');
+  const title = 'Manchester United YouTubers | FanReactionsFC';
+  const meta = 'Man United fan YouTubers and Man Utd fan channels. Watchalongs, match reactions and fan TV from Manchester United YouTubers, ranked on FanReactionsFC.';
+  await withCwd(async () => {
+    const united = await handler({ path: '/clubs/manchester-united' });
+    assert.equal(united.statusCode, 200);
+    assert.match(united.body, new RegExp('<title>' + title.replace(/[|]/g, '\\|') + '</title>'));
+    assert.match(united.body, new RegExp('<meta name="description" content="' + meta + '">'));
+    assert.match(united.body, new RegExp('<meta property="og:title" content="' + title.replace(/[|]/g, '\\|') + '">'));
+    assert.match(united.body, new RegExp('<meta property="og:description" content="' + meta + '">'));
+    assert.match(united.body, new RegExp('<meta name="twitter:title" content="' + title.replace(/[|]/g, '\\|') + '">'));
+    assert.match(united.body, /<h1 class="page-hero-title">Best Man United Fan YouTubers<\/h1>/);
+    const arsenal = await handler({ path: '/clubs/arsenal' });
+    const yyyy = String(new Date().getUTCFullYear());
+    assert.match(arsenal.body, new RegExp('<title>Best Arsenal Fan YouTubers \\(' + yyyy + '\\) – Ranked \\| FanReactionsFC</title>'));
+    assert.match(arsenal.body, /<h1 class="page-hero-title">Best Arsenal Fan YouTubers<\/h1>/);
+    assert.doesNotMatch(arsenal.body, /Manchester United YouTubers \| FanReactionsFC/);
+  });
+});
+
 test('club-og 301s legacy spaced/cased URLs onto hyphenated slugs', async () => {
   const { handler } = require('../netlify/functions/club-og.js');
   await withCwd(async () => {
@@ -109,14 +130,32 @@ test('fan rankings filter keeps club channels and drops journalists/streamers', 
 });
 
 test('rankings prerender has unique H1, canonical, ItemList, and a table', async () => {
-  const { handler } = require('../netlify/functions/rankings.js');
+  const { handler, RANKINGS_SEO_TITLE, RANKINGS_SEO_DESCRIPTION } = require('../netlify/functions/rankings.js');
+  assert.equal(RANKINGS_SEO_TITLE, 'Football YouTubers Rankings | FanReactionsFC');
+  assert.equal(RANKINGS_SEO_TITLE.length, 44);
+  assert.ok(RANKINGS_SEO_TITLE.length <= 60);
+  assert.equal(RANKINGS_SEO_DESCRIPTION.length, 143);
+  assert.doesNotMatch(RANKINGS_SEO_DESCRIPTION, /daily|hourly|weekly|updated/i);
+  assert.ok(RANKINGS_SEO_DESCRIPTION.length >= 140 && RANKINGS_SEO_DESCRIPTION.length <= 160);
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  assert.ok(app.includes(RANKINGS_SEO_TITLE));
+  assert.ok(app.includes(RANKINGS_SEO_DESCRIPTION));
   await withCwd(async () => {
     const res = await handler({ path: '/rankings', queryStringParameters: {} });
     assert.equal(res.statusCode, 200);
     assert.match(res.body, /<h1 class="page-hero-title">Best Football Fan YouTubers Ranked<\/h1>/);
+    assert.match(res.body, new RegExp('<title>' + RANKINGS_SEO_TITLE.replace(/[|]/g, '\\|') + '</title>'));
+    assert.match(res.body, new RegExp('<meta name="description" content="' + RANKINGS_SEO_DESCRIPTION.replace(/[|]/g, '\\|') + '">'));
+    assert.match(res.body, new RegExp('<meta property="og:title" content="' + RANKINGS_SEO_TITLE.replace(/[|]/g, '\\|') + '">'));
+    assert.match(res.body, new RegExp('<meta property="og:description" content="' + RANKINGS_SEO_DESCRIPTION.replace(/[|]/g, '\\|') + '">'));
+    assert.match(res.body, new RegExp('<meta name="twitter:title" content="' + RANKINGS_SEO_TITLE.replace(/[|]/g, '\\|') + '">'));
     assert.match(res.body, /canonical" id="canonicalLink" href="https:\/\/fanreactionsfc.com\/rankings"/);
     assert.match(res.body, /ItemList/);
     assert.doesNotMatch(res.body, /Discover the best football/);
+    const scoped = await handler({ path: '/rankings', queryStringParameters: { league: 'Premier League' } });
+    assert.match(scoped.body, /<title>Best Premier League Fan YouTubers Ranked \| FanReactionsFC<\/title>/);
+    assert.match(scoped.body, /<h1 class="page-hero-title">Best Premier League Fan YouTubers Ranked<\/h1>/);
+    assert.doesNotMatch(scoped.body, new RegExp('<title>' + RANKINGS_SEO_TITLE.replace(/[|]/g, '\\|') + '</title>'));
   });
 });
 

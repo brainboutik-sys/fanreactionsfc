@@ -1,4 +1,6 @@
-// Read-only counts of channel and watch-live clicks.
+// Read-only counts of creator link clicks. Each link_type is its own
+// row (live, channel, poll, live_hub, streamwall_play). live_hub and
+// streamwall_play are not folded into live.
 // GET /.netlify/functions/admin-link-clicks
 //   Authorization: Bearer <supabase access token>
 //
@@ -8,6 +10,19 @@
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const REQUIRED_PERMISSION = 'settings.manage';
+
+function rollupLinkTypes(counts) {
+  const totals = new Map();
+  for (const row of counts || []) {
+    const type = row && row.link_type ? String(row.link_type) : '';
+    if (!type) continue;
+    const cur = totals.get(type) || { link_type: type, clicks_7d: 0, clicks_30d: 0 };
+    cur.clicks_7d += Number(row.clicks_7d) || 0;
+    cur.clicks_30d += Number(row.clicks_30d) || 0;
+    totals.set(type, cur);
+  }
+  return [...totals.values()].sort((a, b) => a.link_type.localeCompare(b.link_type));
+}
 
 function res(statusCode, body) {
   return {
@@ -56,14 +71,17 @@ exports.handler = async (event) => {
     `${supabaseUrl}/rest/v1/frfc_link_click_counts?select=creator_slug,club,link_type,clicks_7d,clicks_30d&order=clicks_7d.desc&limit=100`,
     { headers: sbHeaders }
   );
-  if (listRes.status === 404) return res(200, { ok: true, pendingMigration: true, counts: [] });
+  if (listRes.status === 404) return res(200, { ok: true, pendingMigration: true, counts: [], byType: [] });
   if (!listRes.ok) {
     const text = await listRes.text();
     if (/frfc_link_click|PGRST205|42P01/i.test(text)) {
-      return res(200, { ok: true, pendingMigration: true, counts: [] });
+      return res(200, { ok: true, pendingMigration: true, counts: [], byType: [] });
     }
     return res(502, { error: 'Could not load link clicks' });
   }
   const counts = await listRes.json();
-  return res(200, { ok: true, pendingMigration: false, counts: Array.isArray(counts) ? counts : [] });
+  const rows = Array.isArray(counts) ? counts : [];
+  return res(200, { ok: true, pendingMigration: false, counts: rows, byType: rollupLinkTypes(rows) });
 };
+
+exports.rollupLinkTypes = rollupLinkTypes;

@@ -1,13 +1,13 @@
 // Netlify scheduled function — refreshes `is_live` / `live_video_id`
-// for all creators by batch-checking their known latest and live video IDs
-// against YouTube's liveStreamingDetails.
+// for all creators by batch-checking their known video IDs against
+// YouTube's liveStreamingDetails.
 //
 // Runs every 30 minutes as a blanket safety net (catches unlisted streams,
-// postponed/rescheduled matches not yet in frfc_fixtures, etc). The precise
-// detection now happens in live-check-fixtures.js, which fires ~5 minutes
-// before a real kickoff for the specific clubs playing — see that file for
-// why blanket time-window polling (the old live-check-peak.js) couldn't
-// actually detect a brand-new livestream.
+// postponed/rescheduled matches not yet in frfc_fixtures, etc). The
+// fixture job (live-check-fixtures-background.js) checks the two clubs
+// playing. With FRFC_LIVE_MATCH_WINDOW on (the default), this job also
+// checks upcoming_video_id, not only latest_video_id and live_video_id.
+// Set FRFC_LIVE_MATCH_WINDOW=0 to leave upcoming_video_id out.
 //
 // Required env vars:
 //   YOUTUBE_API_KEY             — server-side YouTube Data API key
@@ -15,6 +15,8 @@
 //   SUPABASE_SERVICE_ROLE_KEY   — service-role key so PATCH bypasses RLS
 
 exports.config = { schedule: '*/30 * * * *' };
+
+const { liveMatchWindowEnabled } = require('../../js/lib/live-match-window.js');
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 
@@ -27,8 +29,12 @@ exports.handler = async () => {
   if (!ytKey) return ok({ error: 'YOUTUBE_API_KEY not set' }, 500);
 
   // 1. Fetch creators that have any candidate video ID we can check.
+  const windowOn = liveMatchWindowEnabled(process.env);
+  const columns = windowOn
+    ? 'id,latest_video_id,live_video_id,upcoming_video_id,is_live'
+    : 'id,latest_video_id,live_video_id,is_live';
   const selectRes = await fetch(
-    `${supabaseUrl}/rest/v1/frfc_streamers?select=id,latest_video_id,live_video_id,is_live`,
+    `${supabaseUrl}/rest/v1/frfc_streamers?select=${columns}`,
     { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
   );
   if (!selectRes.ok) return ok({ error: 'supabase select failed', status: selectRes.status }, 502);
@@ -39,6 +45,7 @@ exports.handler = async () => {
   for (const c of creators) {
     if (c.latest_video_id) videoIds.add(c.latest_video_id);
     if (c.live_video_id) videoIds.add(c.live_video_id);
+    if (windowOn && c.upcoming_video_id) videoIds.add(c.upcoming_video_id);
   }
   const ids = [...videoIds];
 
@@ -73,10 +80,14 @@ exports.handler = async () => {
     let newIsLive = false;
     let newLiveVideoId = null;
 
-    // Prefer the known live_video_id; fall back to latest_video_id.
+    // Prefer the known live id, then a scheduled id that has since
+    // started, then the latest upload.
     if (c.live_video_id && liveStatus[c.live_video_id]?.isLive) {
       newIsLive = true;
       newLiveVideoId = c.live_video_id;
+    } else if (windowOn && c.upcoming_video_id && liveStatus[c.upcoming_video_id]?.isLive) {
+      newIsLive = true;
+      newLiveVideoId = c.upcoming_video_id;
     } else if (c.latest_video_id && liveStatus[c.latest_video_id]?.isLive) {
       newIsLive = true;
       newLiveVideoId = c.latest_video_id;

@@ -67,13 +67,17 @@ function sponsorshipInitials(name) {
 
 // Visible "Sponsored" and "Featured" labels. No rank. Every anchor uses
 // rel="sponsored noopener". Not an h2 — the organic list owns the ranking.
-function sponsoredSlotHtml(clubName, creator) {
+function sponsoredSlotHtml(clubName, creator, liveCta) {
   const name = creator && creator.name ? String(creator.name) : '';
   if (!clubName || !name) return '';
   const subs = creator.subscriberCount != null ? creator.subscriberCount : creator.subscriber_count;
   const slug = sponsorshipSlug(name, creator.slug);
   const profile = slug ? '/creators/' + encodeURIComponent(slug).replace(/%2F/gi, '') : '';
-  const youtube = sponsorshipHttpUrl(creator.channel || creator.channel_url);
+  const channel = sponsorshipHttpUrl(creator.channel || creator.channel_url);
+  const useLive = !!(liveCta && liveCta.linkType === 'live_hub' && sponsorshipHttpUrl(liveCta.href));
+  const youtube = useLive ? sponsorshipHttpUrl(liveCta.href) : channel;
+  const youtubeType = useLive ? 'live_hub' : 'channel';
+  const youtubeLabel = useLive ? 'Watch live' : 'Watch on YouTube';
   const avatar = sponsorshipHttpUrl(creator.avatar || creator.avatar_url);
   const blurb = sponsorshipBlurb(creator.description);
   const alt = name + ' – ' + clubName + ' fan YouTuber';
@@ -85,7 +89,7 @@ function sponsoredSlotHtml(clubName, creator) {
     : '';
   const blurbLine = blurb ? `<p class="sponsored-slot-blurb">${sponsorshipEscape(blurb)}</p>` : '';
   const youtubeLink = youtube
-    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener"${slug ? ` data-frfc-link="channel" data-frfc-creator="${sponsorshipEscape(slug)}" data-frfc-club="${sponsorshipEscape(clubName)}"` : ''}>Watch on YouTube</a>`
+    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener"${slug ? ` data-frfc-link="${youtubeType}" data-frfc-creator="${sponsorshipEscape(slug)}" data-frfc-club="${sponsorshipEscape(clubName)}"` : ''}>${youtubeLabel}</a>`
     : '';
   return `<section class="sponsored-slot" aria-label="Sponsored">
   <div class="sponsored-slot-labels">

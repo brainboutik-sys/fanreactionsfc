@@ -366,10 +366,12 @@ test('the article page, flag, and click logger are wired for the poll', () => {
   assert.ok(bodyAt > -1 && bodyAt < markupAt && markupAt < relatedAt);
   assert.match(css, /\.article-poll\{/);
   assert.match(css, /\.article-poll-vote\{[^}]*min-height:44px/);
-  assert.match(click, /data\.link === 'live' \|\| data\.link === 'channel' \|\| data\.link === 'poll'/);
+  assert.match(click, /frfcLinkTypeOk\(data\.link\)/);
+  assert.match(fs.readFileSync(path.join(root, 'js/lib/live-match-window.js'), 'utf8'), /'live', 'channel', 'poll', 'live_hub', 'streamwall_play'/);
   const send = app.match(/function sendCreatorLinkClick\(slug, link, club\) \{[\s\S]*?\n\}/);
   assert.ok(send);
-  assert.match(send[0], /link !== 'live' && link !== 'channel' && link !== 'poll'/);
+  assert.match(send[0], /creatorLinkKind\(link\)/);
+  assert.match(app, /type === 'poll'/);
   assert.doesNotMatch(send[0], /localStorage|sessionStorage|userAgent|currentUser|cookie|fingerprint/i);
 });
 

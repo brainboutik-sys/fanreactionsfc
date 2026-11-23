@@ -8,6 +8,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { hubYoutubeCta, liveMatchWindowEnabled } = require('../../js/lib/live-match-window.js');
+const { clubInMatchWindow } = require('../../js/lib/club-live-banner.js');
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SITE_URL = 'https://fanreactionsfc.com';
@@ -1305,7 +1307,7 @@ async function fetchAllStreamers(supabaseUrl, sbKey) {
   const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
   const order = '&order=subscriber_count.desc.nullslast&limit=1000';
   const base = `${supabaseUrl}/rest/v1/frfc_streamers?select=`;
-  const extended = 'id,name,slug,team,league,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description,is_verified,verified_until,content_types,latest_video_id,latest_video_title,latest_video_date,latest_video_thumbnail,upload_frequency,channel_country';
+  const extended = 'id,name,slug,team,league,subscriber_count,last_youtube_sync,updated_at,channel_url,live_url,avatar_url,description,is_verified,verified_until,content_types,latest_video_id,latest_video_title,latest_video_date,latest_video_thumbnail,upload_frequency,channel_country,is_live,live_video_id,upcoming_video_id,upcoming_video_scheduled_at';
   const withTier = 'id,name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description,is_verified,verified_until';
   const legacy = 'id,name,slug,team,subscriber_count,last_youtube_sync,updated_at,channel_url,avatar_url,description';
   // Prefer the columns the hub template renders (format, latest video,
@@ -1485,13 +1487,17 @@ function sponsorshipInitials(name) {
   return (String(name || '?').trim().split(/\s+/).map(w => w[0]).join('').substring(0, 2) || '?').toUpperCase();
 }
 
-function sponsoredSlotHtml(clubName, creator) {
+function sponsoredSlotHtml(clubName, creator, liveCta) {
   const name = creator && creator.name ? String(creator.name) : '';
   if (!clubName || !name) return '';
   const subs = creator.subscriberCount != null ? creator.subscriberCount : creator.subscriber_count;
   const slug = sponsorshipSlug(name, creator.slug);
   const profile = slug ? '/creators/' + encodeURIComponent(slug).replace(/%2F/gi, '') : '';
-  const youtube = sponsorshipHttpUrl(creator.channel || creator.channel_url);
+  const channel = sponsorshipHttpUrl(creator.channel || creator.channel_url);
+  const useLive = !!(liveCta && liveCta.linkType === 'live_hub' && sponsorshipHttpUrl(liveCta.href));
+  const youtube = useLive ? sponsorshipHttpUrl(liveCta.href) : channel;
+  const youtubeType = useLive ? 'live_hub' : 'channel';
+  const youtubeLabel = useLive ? 'Watch live' : 'Watch on YouTube';
   const avatar = sponsorshipHttpUrl(creator.avatar || creator.avatar_url);
   const blurb = sponsorshipBlurb(creator.description);
   const alt = name + ' – ' + clubName + ' fan YouTuber';
@@ -1503,7 +1509,7 @@ function sponsoredSlotHtml(clubName, creator) {
     : '';
   const blurbLine = blurb ? `<p class="sponsored-slot-blurb">${sponsorshipEscape(blurb)}</p>` : '';
   const youtubeLink = youtube
-    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener"${slug ? ` data-frfc-link="channel" data-frfc-creator="${sponsorshipEscape(slug)}" data-frfc-club="${sponsorshipEscape(clubName)}"` : ''}>Watch on YouTube</a>`
+    ? `<a class="sponsored-slot-yt" href="${sponsorshipEscape(youtube)}" target="_blank" rel="sponsored noopener"${slug ? ` data-frfc-link="${youtubeType}" data-frfc-creator="${sponsorshipEscape(slug)}" data-frfc-club="${sponsorshipEscape(clubName)}"` : ''}>${youtubeLabel}</a>`
     : '';
   return `<section class="sponsored-slot" aria-label="Sponsored">
   <div class="sponsored-slot-labels">
@@ -1667,6 +1673,27 @@ function faqAnswerHtml(faq) {
   return esc(faq.a);
 }
 
+async function fetchClubWindowFixtures(supabaseUrl, sbKey, club) {
+  try {
+    const now = Date.now();
+    const from = new Date(now - 130 * 60 * 1000).toISOString();
+    const to = new Date(now + 45 * 60 * 1000).toISOString();
+    const safe = String(club || '').replace(/["(),]/g, '');
+    if (!safe) return [];
+    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}`, Accept: 'application/json' };
+    const filter = `(home_team.eq."${safe}",away_team.eq."${safe}")`;
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/frfc_fixtures?select=home_team,away_team,kickoff_at,competition_code,status&or=${encodeURIComponent(filter)}&kickoff_at=gte.${encodeURIComponent(from)}&kickoff_at=lte.${encodeURIComponent(to)}&limit=8`,
+      { headers }
+    );
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 async function fetchClubNews(supabaseUrl, sbKey, club) {
   try {
     const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
@@ -1792,6 +1819,15 @@ exports.handler = async (event) => {
 
   // /clubs/multi-club keeps its existing directory copy. It is not a club hub.
   const isMultiClub = club === 'Multi-Club / Other';
+  const windowEnabled = liveMatchWindowEnabled(process.env);
+  let clubFixtures = [];
+  if (sbKey && windowEnabled && !isMultiClub) {
+    clubFixtures = await fetchClubWindowFixtures(supabaseUrl, sbKey, club);
+  }
+  const inMatchWindow = windowEnabled && !isMultiClub && clubInMatchWindow(clubFixtures, club, new Date());
+  const sponsorLiveCta = sponsoredCreator
+    ? hubYoutubeCta(sponsoredCreator, { inMatchWindow: inMatchWindow, enabled: windowEnabled })
+    : null;
   const top = creators[0];
   const sid = sponsoredCreator && sponsoredCreator.id;
   const organic = creators.filter(c => !(sid && c.id === sid));
@@ -1844,7 +1880,7 @@ exports.handler = async (event) => {
     </div>
     <div class="container section">
       <div class="club-feature-slots">
-        ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator) : ''}
+        ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator, sponsorLiveCta) : ''}
         ${verifiedBox}
       </div>
       ${organic.length ? `
@@ -1893,8 +1929,9 @@ exports.handler = async (event) => {
         ? c.upload_frequency : '';
       const synced = syncedMonth(c.last_youtube_sync);
       const country = c.channel_country ? String(c.channel_country).toUpperCase() : '';
-      const yt = /^https?:\/\//i.test(c.channel_url || '')
-        ? `<a href="${esc(c.channel_url)}" target="_blank" rel="noopener" data-frfc-link="channel" data-frfc-creator="${esc(slug)}" data-frfc-club="${esc(club)}">YouTube</a>` : '';
+      const cta = hubYoutubeCta(c, { inMatchWindow: inMatchWindow, enabled: windowEnabled });
+      const yt = cta
+        ? `<a href="${esc(cta.href)}" target="_blank" rel="noopener" data-frfc-link="${esc(cta.linkType)}" data-frfc-creator="${esc(slug)}" data-frfc-club="${esc(club)}">${esc(cta.label)}</a>` : '';
       const subs = c.subscriber_count ? `${formatNum(c.subscriber_count)} subscribers` : '—';
       const extra = [synced ? `as of ${synced}` : '', freq, country].filter(Boolean).join(' · ');
       return `
@@ -1950,7 +1987,7 @@ exports.handler = async (event) => {
       <!-- Featured sponsorship and the Verified pin sit outside the ranked
            table. Neither is a ListItem and neither changes rank numbers. -->
       <div class="club-feature-slots">
-        ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator) : ''}
+        ${sponsoredCreator ? sponsoredSlotHtml(club, sponsoredCreator, sponsorLiveCta) : ''}
         ${verifiedBox}
       </div>
       ${rankedHeading ? `

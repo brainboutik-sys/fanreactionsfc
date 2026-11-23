@@ -147,6 +147,32 @@ test('a poll link click is stored as link_type poll', async () => {
   })).link, 'poll');
 });
 
+test('live_hub and streamwall_play are stored as their own link types', async () => {
+  const inserts = [];
+  const fetchImpl = async (url, options = {}) => {
+    const href = String(url);
+    if (href.includes('frfc_streamers')) return json(200, [{ id: CREATOR, slug: 'aftv' }]);
+    if (href.includes('frfc_link_clicks')) {
+      inserts.push(JSON.parse(options.body));
+      return json(201, null);
+    }
+    return json(500, { message: 'unexpected' });
+  };
+  const hub = await withClickEnv(fetchImpl, () => click.handler(post({
+    slug: 'aftv', link: 'live_hub', club: 'Arsenal', path: '/clubs/arsenal',
+  })));
+  assert.equal(hub.statusCode, 200);
+  click.resetLimits();
+  const wall = await withClickEnv(fetchImpl, () => click.handler(post({
+    slug: 'aftv', link: 'streamwall_play', club: 'Arsenal', path: '/streamwall',
+  })));
+  assert.equal(wall.statusCode, 200);
+  assert.deepEqual(inserts.map(row => row.link_type), ['live_hub', 'streamwall_play']);
+  assert.equal(click.parseClick(JSON.stringify({
+    slug: 'aftv', link: 'live', path: '/clubs/arsenal',
+  })).link, 'live');
+});
+
 test('the same creator and link type is rate limited without using an address', async () => {
   const fetchImpl = async (url) => {
     if (String(url).includes('frfc_streamers')) return json(200, [{ id: CREATOR, slug: 'aftv' }]);
@@ -231,6 +257,25 @@ test('a caller with settings.manage can read click counts', async () => {
   const body = JSON.parse(listed.body);
   assert.equal(body.pendingMigration, false);
   assert.deepEqual(body.counts, [row]);
+  assert.deepEqual(body.byType, [{ link_type: 'live', clicks_7d: 2, clicks_30d: 5 }]);
+});
+
+test('live_hub is not added into the live total', () => {
+  const rows = admin.rollupLinkTypes([
+    { link_type: 'live', clicks_7d: 1, clicks_30d: 4 },
+    { link_type: 'live_hub', clicks_7d: 3, clicks_30d: 3 },
+    { link_type: 'live', clicks_7d: 2, clicks_30d: 2 },
+    { link_type: 'streamwall_play', clicks_7d: 5, clicks_30d: 9 },
+    { link_type: 'channel', clicks_7d: 8, clicks_30d: 8 },
+  ]);
+  const live = rows.find(row => row.link_type === 'live');
+  const hub = rows.find(row => row.link_type === 'live_hub');
+  const wall = rows.find(row => row.link_type === 'streamwall_play');
+  assert.equal(live.clicks_7d, 3);
+  assert.equal(live.clicks_30d, 6);
+  assert.equal(hub.clicks_7d, 3);
+  assert.equal(wall.clicks_7d, 5);
+  assert.equal(rows.filter(row => row.link_type === 'live').length, 1);
 });
 
 test('the migration is service-role only and the client sends no visitor id', () => {
@@ -253,17 +298,19 @@ test('the migration is service-role only and the client sends no visitor id', ()
   assert.doesNotMatch(fn[0], /localStorage|sessionStorage|userAgent|currentUser|cookie|fingerprint/i);
   assert.match(app, /creatorLinkTrackAttrs\(c\.slug, 'channel', c\.team\)/);
   assert.match(app, /creatorLinkTrackAttrs\(c\.slug, 'live', c\.team\)/);
-  assert.match(app, /creatorLinkTrackAttrs\(c\.slug, 'channel', club \|\| c\.team\)/);
-  assert.match(app, /sendCreatorLinkClick\(match\.slug, 'live', match\.team\)/);
+  assert.match(app, /hubYoutubeCta\(c, \{ inMatchWindow: !!inMatchWindow \}\)/);
+  assert.match(app, /creatorLinkTrackAttrs\(c\.slug, hubCta\.linkType, club \|\| c\.team\)/);
+  assert.match(app, /sendCreatorLinkClick\(match\.slug, streamwallLinkType\(\), match\.team\)/);
+  assert.match(app, /return 'streamwall_play'/);
 
   const og = fs.readFileSync(path.join(__dirname, '..', 'netlify/functions/creator-og.js'), 'utf8');
   assert.match(og, /data-frfc-link="channel"/);
   const hub = fs.readFileSync(path.join(__dirname, '..', 'netlify/functions/club-og.js'), 'utf8');
-  assert.match(hub, /data-frfc-link="channel" data-frfc-creator="\$\{esc\(slug\)\}"/);
+  assert.match(hub, /data-frfc-link="\$\{esc\(cta\.linkType\)\}" data-frfc-creator="\$\{esc\(slug\)\}"/);
 
   const adminJs = fs.readFileSync(path.join(__dirname, '..', 'js/admin.js'), 'utf8');
   assert.match(adminJs, /if \(can\('settings\.manage'\)\) \{ loadUnlinkedPayments\(\); loadLinkClicks\(\); \}/);
-  assert.match(adminJs, /can\('settings\.manage'\)[\s\S]*Unlinked Verified payments[\s\S]*Channel and watch-live clicks/);
+  assert.match(adminJs, /can\('settings\.manage'\)[\s\S]*Unlinked Verified payments[\s\S]*Link clicks/);
   assert.match(adminJs, /function loadUnlinkedPayments\(/);
   assert.match(adminJs, /function loadLinkClicks\(/);
   assert.match(sql, /90 days/);

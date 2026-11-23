@@ -53,13 +53,12 @@ schedule = "*/30 * * * *"
 [functions."fixtures-sync"]
 schedule = "30 4 * * *"
 
-# Fixture-aware live-check: every 5 minutes, fires ~5 minutes before kickoff
-# for creators tied to the two clubs playing (World Cup fixtures check every
-# creator instead, since watchalongs aren't nation-limited in practice). See
-# live-check-fixtures-background.js for why it does a real playlist-head
-# refresh instead of just re-checking a stale ID — this replaces the old
-# blanket-hours live-check-peak.js. Background function (up to 15 min) since
-# a broad World Cup check touches all ~265 creators.
+# Fixture-aware live-check: every 5 minutes. With FRFC_LIVE_MATCH_WINDOW on
+# (the default) it rechecks the two clubs from 10 minutes before kickoff
+# until 120 minutes after, using videos.list on saved ids. Set the env var
+# to 0 to restore the one-shot ~7 minute window (World Cup then checks every
+# creator again). Background function (up to 15 min). See
+# live-check-fixtures-background.js. The sync schedule below is unchanged.
 [functions."live-check-fixtures-background"]
 schedule = "*/5 * * * *"
 

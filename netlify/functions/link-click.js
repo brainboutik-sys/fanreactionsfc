@@ -1,7 +1,9 @@
 // POST /.netlify/functions/link-click
 // One row in frfc_link_clicks. The body may contain only:
 //   slug  — a creator slug that exists in frfc_streamers
-//   link  — "live", "channel", or "poll"
+//   link  — "live", "channel", "poll", "live_hub", or "streamwall_play"
+//           live_hub is a club-hub YouTube button during a match.
+//           streamwall_play is a Streamwall add or open. Neither is "live".
 //   club  — optional page-context club name
 //   path  — site path, no query string
 // Anything else in the JSON is ignored and not stored. The function does
@@ -9,8 +11,11 @@
 //
 // The migration supabase/migrations/20261026110000_frfc_link_clicks.sql
 // is applied by hand. It is not run by deploy. link_type "poll" also
-// needs 20261113100000_frfc_article_poll_votes.sql, which widens the
-// check constraint. Until that runs, a poll click insert returns 503.
+// needs 20261113100000_frfc_article_poll_votes.sql. link_type "live_hub"
+// and "streamwall_play" need 20261123120000_frfc_link_clicks_live_hub.sql.
+// Until the check constraint allows a type, that insert returns 503.
+
+const { frfcLinkTypeOk } = require('../../js/lib/live-match-window.js');
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -60,7 +65,7 @@ function parseClick(raw) {
   try { data = JSON.parse(raw); } catch { return null; }
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const slug = typeof data.slug === 'string' ? data.slug.trim() : '';
-  const link = data.link === 'live' || data.link === 'channel' || data.link === 'poll' ? data.link : '';
+  const link = frfcLinkTypeOk(data.link) ? data.link : '';
   const path = cleanPath(data.path);
   if (!SLUG_RE.test(slug) || slug.length > 80 || !link || !path) return null;
   return { slug, link, path, club: cleanClub(data.club) };

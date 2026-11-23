@@ -250,6 +250,12 @@ function clubLiveTrack(slug, club) {
   return ' data-frfc-link="live" data-frfc-creator="' + clubLiveEscape(slug) + '" data-frfc-club="' + clubLiveEscape(club) + '"';
 }
 
+function clubInMatchWindow(fixtures, club, now) {
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now || Date.now()).getTime();
+  if (!Number.isFinite(nowMs)) return false;
+  return !!clubLiveFixture(fixtures, club, nowMs);
+}
+
 function clubLiveBannerHtml(input) {
   const enabled = input && Object.prototype.hasOwnProperty.call(input, 'enabled')
     ? input.enabled
@@ -287,5 +293,6 @@ if (typeof module !== 'undefined' && module.exports) {
     CLUB_LIVE_MATCH_MS,
     clubLiveBannerModel,
     clubLiveBannerHtml,
+    clubInMatchWindow,
   };
 }

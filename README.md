@@ -51,9 +51,10 @@ netlify/functions/
   sync-background.js    scheduled full creator metadata refresh (07:00 & 15:00 UTC)
   live-check.js         scheduled is_live refresh (every 30 min, blanket safety net)
   fixtures-sync.js      daily fixtures pull from football-data.org -> frfc_fixtures
-  live-check-fixtures-background.js  every 5 min; fires ~5 min before a real
-                        kickoff for creators tied to the two clubs playing
-                        (World Cup fixtures check every creator instead)
+  live-check-fixtures-background.js  every 5 min; with FRFC_LIVE_MATCH_WINDOW
+                        on, rechecks the two clubs from 10 min before kickoff
+                        until 120 min after. Set the env var to 0 for the old
+                        one-shot (and the World Cup broad check)
   rank-snapshot-background.js  scheduled ranking snapshots
   sitemap.js            dynamic /sitemap.xml from the creator list
   creator-og.js         per-creator OG meta tags for social crawlers
@@ -159,14 +160,17 @@ Community Feature Requests: `frfc_feature_requests`, `frfc_feature_votes`,
 `frfc_feature_comments`, `frfc_feature_comment_likes`, `frfc_feature_follows`,
 `frfc_feature_status_log`.
 
-Fixtures: `frfc_fixtures` — synced daily from football-data.org by `fixtures-sync.js`;
-`trigger_sent_at` marks which fixtures `live-check-fixtures-background.js` has already
-fired a live-check for, so each kickoff only triggers once. `finished_at`,
-`full_time_source`, and `extra_time` record full time for the matchday speed
-benchmark. They ship in `supabase/migrations/20261117120000_matchday_speed_foundation.sql`
-and are not applied by deploy. That migration also adds `frfc_videos`, whose
-`published_at` is the YouTube upload time `sync-background.js` already receives
-on the playlist response.
+Fixtures: `frfc_fixtures` — synced daily from football-data.org by `fixtures-sync.js`.
+With `FRFC_LIVE_MATCH_WINDOW` on (the default), `live-check-fixtures-background.js`
+rechecks the two clubs from 10 minutes before kickoff until 120 minutes after.
+`trigger_sent_at` records the last playlist discovery, not a one-shot stop.
+Set `FRFC_LIVE_MATCH_WINDOW=0` to restore the old one-shot (next 7 minutes, once).
+`finished_at`, `full_time_source`, and `extra_time` record full time for the
+matchday speed benchmark. They ship in
+`supabase/migrations/20261117120000_matchday_speed_foundation.sql` and are not
+applied by deploy. That migration also adds `frfc_videos`, whose `published_at`
+is the YouTube upload time `sync-background.js` already receives on the playlist
+response.
 
 - **Counts are trigger-owned.** `vote_count`, `comment_count`, and `like_count` are
   maintained by row triggers on the votes/comments/likes tables — never write them from

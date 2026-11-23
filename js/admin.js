@@ -227,7 +227,7 @@ function renderDashboard() {
 
   (can('settings.manage')
     ? '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Unlinked Verified payments</span></div><div class="admin-card-body" id="adminUnlinkedBody">Loading…</div></div>' +
-      '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Channel and watch-live clicks</span></div><div class="admin-card-body" id="adminLinkClicksBody">Loading…</div></div>'
+      '<div class="admin-card" style="margin-top:20px"><div class="admin-card-header"><span class="admin-card-title">Link clicks</span></div><div class="admin-card-body" id="adminLinkClicksBody">Loading…</div></div>'
     : '');
 }
 
@@ -277,15 +277,21 @@ async function loadLinkClicks() {
       return;
     }
     if (data.pendingMigration) {
-      body.innerHTML = 'The click table is not in the database yet. Apply <code>supabase/migrations/20261026110000_frfc_link_clicks.sql</code> in the Supabase SQL editor.';
+      body.innerHTML = 'The click table is not in the database yet. Apply <code>supabase/migrations/20261026110000_frfc_link_clicks.sql</code> and <code>supabase/migrations/20261123120000_frfc_link_clicks_live_hub.sql</code> in the Supabase SQL editor.';
       return;
     }
     var rows = data.counts || [];
     if (!rows.length) {
-      body.textContent = 'No channel or watch-live clicks in the last 30 days.';
+      body.textContent = 'No link clicks in the last 30 days.';
       return;
     }
-    body.innerHTML = '<table class="admin-table"><thead><tr><th>Creator</th><th>Club</th><th>Link</th><th>7 days</th><th>30 days</th></tr></thead><tbody>' +
+    var types = data.byType || [];
+    var summary = types.length
+      ? '<p class="row-dim">' + types.map(function(row) {
+          return escHtml(row.link_type || '') + ' — ' + (row.clicks_7d || 0) + ' in 7 days, ' + (row.clicks_30d || 0) + ' in 30 days';
+        }).join('<br>') + '</p>'
+      : '';
+    body.innerHTML = summary + '<table class="admin-table"><thead><tr><th>Creator</th><th>Club</th><th>Link</th><th>7 days</th><th>30 days</th></tr></thead><tbody>' +
       rows.map(function(row) {
         return '<tr><td>' + escHtml(row.creator_slug || '') + '</td><td>' + escHtml(row.club || '') + '</td><td>' + escHtml(row.link_type || '') + '</td><td>' + escHtml(String(row.clicks_7d || 0)) + '</td><td>' + escHtml(String(row.clicks_30d || 0)) + '</td></tr>';
       }).join('') +

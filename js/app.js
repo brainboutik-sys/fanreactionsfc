@@ -583,16 +583,21 @@ function handleRoute() {
 // The body is slug, club, link type, and the page path. No account, no
 // cookie, no storage id. credentials: 'omit' so the browser does not attach cookies.
 // sendBeacon cannot omit cookies, so this uses fetch keepalive instead.
+function creatorLinkKind(type) {
+  if (type === 'live' || type === 'channel' || type === 'poll' || type === 'live_hub' || type === 'streamwall_play') return type;
+  return '';
+}
+
 function creatorLinkTrackAttrs(slug, type, club) {
   const safeSlug = String(slug || '').trim();
+  const kind = creatorLinkKind(type) || 'channel';
   if (!safeSlug) return '';
-  const kind = type === 'live' ? 'live' : (type === 'poll' ? 'poll' : 'channel');
   return ` data-frfc-link="${kind}" data-frfc-creator="${escHtml(safeSlug)}" data-frfc-club="${escHtml(club || '')}"`;
 }
 
 function sendCreatorLinkClick(slug, link, club) {
   const safeSlug = String(slug || '').trim();
-  if (!safeSlug || (link !== 'live' && link !== 'channel' && link !== 'poll')) return;
+  if (!safeSlug || !creatorLinkKind(link)) return;
   let path = '/';
   try { path = String(location.pathname || '/'); } catch (e) { path = '/'; }
   if (!path.startsWith('/')) path = '/';
@@ -610,6 +615,11 @@ function sendCreatorLinkClick(slug, link, club) {
     keepalive: true,
     credentials: 'omit',
   }).catch(function () {});
+}
+
+function streamwallLinkType() {
+  if (typeof FRFC_LIVE_MATCH_WINDOW_ENABLED !== 'undefined' && FRFC_LIVE_MATCH_WINDOW_ENABLED === false) return 'live';
+  return 'streamwall_play';
 }
 
 function onCreatorLinkClick(e) {
@@ -2829,15 +2839,18 @@ function hubOneSentence(description) {
   return sentence.slice(0, 177).trim() + '…';
 }
 
-function hubCreatorCard(c, rank, club) {
+function hubCreatorCard(c, rank, club, inMatchWindow) {
   const subsStr = c.subscriberCount ? formatNum(c.subscriberCount) + ' subscribers' : '';
   const freqStr = c.uploadFrequency && c.uploadFrequency !== 'Unknown' && c.uploadFrequency !== 'Inactive' ? c.uploadFrequency : '';
   const synced = c.lastYoutubeSync ? new Date(c.lastYoutubeSync).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
   const types = (c.contentTypes || []).slice(0, 4);
   const blurb = hubOneSentence(c.description);
   const country = countryName(c.channelCountry);
-  const yt = c.channel && /^https?:\/\//i.test(c.channel)
-    ? `<a class="hub-yt" href="${escHtml(c.channel)}" target="_blank" rel="noopener"${creatorLinkTrackAttrs(c.slug, 'channel', club || c.team)}>YouTube</a>` : '';
+  const hubCta = (typeof hubYoutubeCta === 'function')
+    ? hubYoutubeCta(c, { inMatchWindow: !!inMatchWindow })
+    : (c.channel && /^https?:\/\//i.test(c.channel) ? { href: c.channel, linkType: 'channel', label: 'YouTube' } : null);
+  const yt = hubCta
+    ? `<a class="hub-yt" href="${escHtml(hubCta.href)}" target="_blank" rel="noopener"${creatorLinkTrackAttrs(c.slug, hubCta.linkType, club || c.team)}>${escHtml(hubCta.label)}</a>` : '';
   return `
     <div class="hub-card">
       <span class="hub-rank">#${rank}</span>
@@ -2903,7 +2916,9 @@ async function loadActiveClubSponsor(club) {
 // only — no trigger bookkeeping. A failed read leaves the live-creator
 // banner working on its own.
 async function loadClubLiveFixtures(club, now) {
-  if (typeof CLUB_LIVE_BANNER_ENABLED === 'undefined' || !CLUB_LIVE_BANNER_ENABLED) return [];
+  const bannerOn = typeof CLUB_LIVE_BANNER_ENABLED !== 'undefined' && CLUB_LIVE_BANNER_ENABLED;
+  const ctaOn = typeof FRFC_LIVE_MATCH_WINDOW_ENABLED === 'undefined' || FRFC_LIVE_MATCH_WINDOW_ENABLED !== false;
+  if (!bannerOn && !ctaOn) return [];
   if (typeof CLUB_LIVE_PRE_MS !== 'number' || typeof CLUB_LIVE_MATCH_MS !== 'number') return [];
   if (typeof sb === 'undefined' || !sb || !club || club === 'Multi-Club / Other') return [];
   const clock = now instanceof Date ? now.getTime() : Date.now();
@@ -2973,6 +2988,7 @@ async function renderClubHub(club) {
   const clubLeague = getLeague(club);
   const leagueInfo = LEAGUES.find(l => l.name === clubLeague);
   const clubUrl = clubPath(club);
+  const inMatchWindow = typeof clubInMatchWindow === 'function' && clubInMatchWindow(fixtures, club, bannerNow);
   const liveBanner = clubLiveBannerFor(club, bySubs, fixtures, bannerNow);
 
   updatePageMeta(
@@ -3012,7 +3028,7 @@ async function renderClubHub(club) {
     </div>
     <div class="container section">
       <div class="club-feature-slots">
-        ${sponsored && typeof sponsoredSlotHtml === 'function' ? sponsoredSlotHtml(club, sponsored) : ''}
+        ${sponsored && typeof sponsoredSlotHtml === 'function' ? sponsoredSlotHtml(club, sponsored, (typeof hubYoutubeCta === 'function') ? hubYoutubeCta(sponsored, { inMatchWindow: inMatchWindow }) : null) : ''}
         ${verifiedPinned.length ? `
         <section class="club-verified-slot" aria-labelledby="club-verified-heading">
           <div class="club-verified-kicker">Pinned</div>
@@ -3036,7 +3052,7 @@ async function renderClubHub(club) {
           </div>
           <div class="sc-body">
             <div class="card-grid">
-              ${shown.length ? shown.map(c => hubCreatorCard(c, rankOf.get(c.id), club)).join('') :
+              ${shown.length ? shown.map(c => hubCreatorCard(c, rankOf.get(c.id), club, inMatchWindow)).join('') :
                 `<div class="empty-state"><div class="es-title">No creators yet</div><p style="color:var(--text-dim)">Know a great ${escHtml(club)} YouTuber?</p><a href="/submit" class="btn btn-primary" style="margin-top:12px" onclick="event.preventDefault();navigate('/submit')">Suggest a Creator</a></div>`}
             </div>
           </div>
@@ -5680,6 +5696,9 @@ function swLaunchWall() {
     .map(id => creators.find(c => c.id === id))
     .filter(Boolean);
   const ids = sortVerifiedFirst(selected).map(c => c.liveVideoId);
+  if (streamwallLinkType() === 'streamwall_play') {
+    selected.forEach(c => sendCreatorLinkClick(c.slug, 'streamwall_play', c.team));
+  }
   try { localStorage.setItem(SW_STORAGE_KEY, JSON.stringify(ids)); } catch (e) {}
   window.open('/streamwall?wall=1', '_blank');
 }
@@ -5946,7 +5965,7 @@ function swRenderGrid(isClone) {
 
     tb.appendChild(swMakeTBtn('newtab', 'Open in new tab', () => {
       const match = creators.find(c => c.liveVideoId && c.liveVideoId === s.videoId);
-      if (match) sendCreatorLinkClick(match.slug, 'live', match.team);
+      if (match) sendCreatorLinkClick(match.slug, streamwallLinkType(), match.team);
       window.open(`https://www.youtube.com/watch?v=${safeId(s.videoId)}`, '_blank');
     }));
 
@@ -5994,6 +6013,10 @@ function swAddStream(url, isClone) {
     return;
   }
   swStreams.push({ videoId, paused: false, muted: false });
+  if (streamwallLinkType() === 'streamwall_play') {
+    const added = creators.find(c => c.liveVideoId === videoId || c.upcomingVideoId === videoId);
+    if (added) sendCreatorLinkClick(added.slug, 'streamwall_play', added.team);
+  }
   swAllPaused = false;
   swUpdateToggleAllBtn();
   swRenderGrid(isClone);

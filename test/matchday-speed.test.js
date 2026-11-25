@@ -245,11 +245,19 @@ test('fixtures sync estimates full time on a second write and keeps the status w
 
   assert.deepEqual(posts[1], [{
     external_id: 101,
+    competition_code: 'PL',
+    home_team: 'Arsenal',
+    away_team: 'Chelsea',
+    home_team_raw: 'Arsenal FC',
+    away_team_raw: 'Chelsea FC',
+    kickoff_at: '2026-11-16T20:00:00Z',
     status: 'FINISHED',
     finished_at: '2026-11-16T21:45:00.000Z',
     full_time_source: 'estimated',
     extra_time: false,
   }]);
+  assert.equal(Object.hasOwn(posts[1][0], 'trigger_sent_at'), false);
+  assert.equal(Object.hasOwn(posts[1][0], 'id'), false);
 });
 
 test('a missing full-time column does not fail the fixture sync', async () => {
@@ -281,6 +289,140 @@ test('a missing full-time column does not fail the fixture sync', async () => {
     assert.equal(body.fixtures_found, 1);
     assert.equal(body.finished_matches, 1);
   });
+});
+
+function jobCallsFrom(fetchImpl) {
+  const calls = [];
+  return {
+    calls,
+    fetch: async (url, options = {}) => {
+      const u = String(url);
+      if (u.includes('/frfc_job_runs')) {
+        calls.push({ method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+        if ((options.method || 'GET') === 'POST') return jsonRes([{ id: 'job-fixtures-1' }]);
+        return jsonRes({});
+      }
+      return fetchImpl(url, options);
+    },
+  };
+}
+
+test('fixtures sync writes one frfc_job_runs row with upsert and stamp counts', async () => {
+  const posts = [];
+  const jobs = jobCallsFrom(async (url, options = {}) => {
+    const u = String(url);
+    if (u.includes('/competitions/PL/')) {
+      return jsonRes({
+        matches: [
+          kickoffMatch(),
+          kickoffMatch({ id: 102, status: 'TIMED', utcDate: '2026-11-20T20:00:00Z' }),
+        ],
+      });
+    }
+    if (u.includes('api.football-data.org')) return jsonRes({ matches: [] });
+    if (u.includes('/frfc_fixtures?') && options.method === 'POST') {
+      posts.push(JSON.parse(options.body));
+      return jsonRes({});
+    }
+    return jsonRes([]);
+  });
+  await withEnv({
+    SUPABASE_SERVICE_ROLE_KEY: 'svc',
+    FOOTBALL_DATA_API_KEY: 'fd',
+    SUPABASE_URL: 'https://supabase.test',
+  }, async () => {
+    global.fetch = jobs.fetch;
+    const res = await fixtures.handler();
+    assert.equal(res.statusCode, 200);
+    assert.equal(JSON.parse(res.body).finished_matches, 1);
+  });
+
+  assert.equal(posts.length, 2);
+  assert.equal(posts[1][0].competition_code, 'PL');
+  assert.equal(posts[1][0].home_team_raw, 'Arsenal FC');
+  assert.equal(posts[1][0].kickoff_at, '2026-11-16T20:00:00Z');
+  const start = jobs.calls.find((call) => call.method === 'POST');
+  const finish = jobs.calls.find((call) => call.method === 'PATCH');
+  assert.deepEqual(start.body, { job_type: 'fixtures-sync', status: 'running' });
+  assert.equal(finish.body.status, 'success');
+  assert.equal(finish.body.items_processed, 2);
+  assert.equal(finish.body.items_failed, 0);
+  assert.equal(finish.body.quota_used, 8);
+  assert.equal(typeof finish.body.finished_at, 'string');
+  assert.deepEqual(finish.body.error_summary, {
+    fixtures_upserted: 2,
+    finished_candidates: 1,
+    stamped: 1,
+  });
+});
+
+test('a not-null failure on the full-time upsert is stored on the job run', async () => {
+  const jobs = jobCallsFrom(async (url, options = {}) => {
+    const u = String(url);
+    if (u.includes('/competitions/PL/')) return jsonRes({ matches: [kickoffMatch()] });
+    if (u.includes('api.football-data.org')) return jsonRes({ matches: [] });
+    if (u.includes('/frfc_fixtures?') && options.method === 'POST') {
+      const rows = JSON.parse(options.body);
+      if (rows.some(row => Object.prototype.hasOwnProperty.call(row, 'finished_at'))) {
+        return jsonRes({
+          code: '23502',
+          message: 'null value in column "competition_code" of relation "frfc_fixtures" violates not-null constraint',
+        }, 400);
+      }
+      return jsonRes({});
+    }
+    return jsonRes([]);
+  });
+  await withEnv({
+    SUPABASE_SERVICE_ROLE_KEY: 'svc',
+    FOOTBALL_DATA_API_KEY: 'fd',
+    SUPABASE_URL: 'https://supabase.test',
+  }, async () => {
+    global.fetch = jobs.fetch;
+    const res = await fixtures.handler();
+    assert.equal(res.statusCode, 502);
+    assert.match(JSON.parse(res.body).error, /full-time upsert failed/);
+  });
+
+  const finish = jobs.calls.find((call) => call.method === 'PATCH');
+  assert.equal(finish.body.status, 'partial');
+  assert.equal(finish.body.items_processed, 1);
+  assert.equal(finish.body.items_failed, 1);
+  assert.equal(finish.body.error_summary.fixtures_upserted, 1);
+  assert.equal(finish.body.error_summary.finished_candidates, 1);
+  assert.equal(finish.body.error_summary.stamped, 0);
+  assert.equal(finish.body.error_summary.stage, 'full_time');
+  assert.equal(finish.body.error_summary.http_status, 400);
+  assert.equal(finish.body.error_summary.code, '23502');
+  assert.match(finish.body.error_summary.message, /competition_code/);
+});
+
+test('a job-run write failure still stamps full time', async () => {
+  const posts = [];
+  await withEnv({
+    SUPABASE_SERVICE_ROLE_KEY: 'svc',
+    FOOTBALL_DATA_API_KEY: 'fd',
+    SUPABASE_URL: 'https://supabase.test',
+  }, async () => {
+    global.fetch = async (url, options = {}) => {
+      const u = String(url);
+      if (u.includes('/frfc_job_runs')) throw new Error('job log down');
+      if (u.includes('/competitions/PL/')) return jsonRes({ matches: [kickoffMatch()] });
+      if (u.includes('api.football-data.org')) return jsonRes({ matches: [] });
+      if (u.includes('/frfc_fixtures?') && options.method === 'POST') {
+        posts.push(JSON.parse(options.body));
+        return jsonRes({});
+      }
+      return jsonRes([]);
+    };
+    const res = await fixtures.handler();
+    assert.equal(res.statusCode, 200);
+    assert.equal(JSON.parse(res.body).finished_matches, 1);
+    assert.equal(JSON.parse(res.body).migration_required, false);
+  });
+  assert.equal(posts.length, 2);
+  assert.equal(posts[1][0].finished_at, '2026-11-16T21:45:00.000Z');
+  assert.equal(posts[1][0].competition_code, 'PL');
 });
 
 test('a real full-time write failure is reported after the status upsert', async () => {

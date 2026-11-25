@@ -24,6 +24,7 @@
 exports.config = { schedule: '30 4 * * *' }; // once a day, 04:30 UTC
 
 const DEFAULT_SUPABASE_URL = 'https://dsxijgrpxsfywxuffbmt.supabase.co';
+const JOB_TYPE = 'fixtures-sync';
 
 // Competitions FanReactionsFC covers, and their football-data.org codes.
 const COMPETITIONS = ['PL', 'ELC', 'PD', 'SA', 'BL1', 'FL1', 'CL', 'WC'];
@@ -286,125 +287,191 @@ exports.handler = async () => {
   const fdKey = process.env.FOOTBALL_DATA_API_KEY;
 
   if (!sbKey) return ok({ error: 'SUPABASE_SERVICE_ROLE_KEY not set' }, 500);
-  if (!fdKey) return ok({ error: 'FOOTBALL_DATA_API_KEY not set' }, 500);
 
-  const windows = fixtureWindows(new Date());
-  const budget = { used: 0, available: null };
-  const collected = new Map();
-  const unmatchedTeams = new Set();
-  let catchUp = null;
-  let catchUpTruncated = false;
+  // Best-effort, same shape as sync-background. A log write must not fail the sync.
+  const jobRunId = await startJobRun(supabaseUrl, sbKey, JOB_TYPE);
+  const counts = { fixtures_upserted: 0, finished_candidates: 0, stamped: 0 };
+  let footballDataRequests = 0;
 
-  for (const code of COMPETITIONS) {
-    if (!canRequestFootballData(budget)) break;
-    try {
-      const res = await fetch(
-        `https://api.football-data.org/v4/competitions/${code}/matches?dateFrom=${windows.dateFrom}&dateTo=${windows.dateTo}&status=SCHEDULED,TIMED,FINISHED`,
-        { headers: { 'X-Auth-Token': fdKey } }
-      );
-      noteFootballDataResponse(budget, res);
-      if (res.status === 429) break; // minute is spent; do not burn the rest of it
-      if (!res.ok) continue; // competition not in this plan, or transient error — skip, don't fail the whole run
-      const data = await res.json();
-      absorbMatches(collected, unmatchedTeams, data.matches || [], code);
-    } catch (e) { /* one competition failing shouldn't block the others */ }
+  async function complete(body, statusCode, patch) {
+    const extra = (patch && patch.error_summary) || {};
+    const rest = Object.assign({}, patch || {});
+    delete rest.error_summary;
+    await finishJobRun(supabaseUrl, sbKey, jobRunId, Object.assign({
+      items_processed: counts.fixtures_upserted,
+      items_failed: Math.max(0, counts.finished_candidates - counts.stamped),
+      quota_used: footballDataRequests,
+    }, rest, {
+      error_summary: Object.assign({}, extra, {
+        fixtures_upserted: counts.fixtures_upserted,
+        finished_candidates: counts.finished_candidates,
+        stamped: counts.stamped,
+      }),
+    }));
+    return ok(body, statusCode);
   }
 
-  // Older than the lookback, one 10-day slice per run. The rows that come
-  // back as FINISHED / POSTPONED / CANCELLED drop out of the next select,
-  // so the slice advances without a stored cursor.
-  if (canRequestFootballData(budget)) {
-    try {
-      const oldest = await oldestUnfinishedKickoff(supabaseUrl, sbKey, windows.dateFrom);
-      const window = catchUpWindow(oldest, windows.dateFrom);
-      if (window) {
-        const params = new URLSearchParams({
-          competitions: COMPETITIONS.join(','),
-          dateFrom: window.dateFrom,
-          dateTo: window.dateTo,
-          limit: '500',
-        });
+  try {
+    if (!fdKey) {
+      return await complete({ error: 'FOOTBALL_DATA_API_KEY not set' }, 500, {
+        status: 'failed',
+        error_summary: { message: 'FOOTBALL_DATA_API_KEY not set' },
+      });
+    }
+
+    const windows = fixtureWindows(new Date());
+    const budget = { used: 0, available: null };
+    const collected = new Map();
+    const unmatchedTeams = new Set();
+    let catchUp = null;
+    let catchUpTruncated = false;
+
+    for (const code of COMPETITIONS) {
+      if (!canRequestFootballData(budget)) break;
+      try {
         const res = await fetch(
-          `https://api.football-data.org/v4/matches?${params}`,
+          `https://api.football-data.org/v4/competitions/${code}/matches?dateFrom=${windows.dateFrom}&dateTo=${windows.dateTo}&status=SCHEDULED,TIMED,FINISHED`,
           { headers: { 'X-Auth-Token': fdKey } }
         );
         noteFootballDataResponse(budget, res);
-        catchUp = window;
-        if (res.ok) {
-          const data = await res.json();
-          const matches = data.matches || [];
-          const count = data.resultSet && data.resultSet.count;
-          if (typeof count === 'number' && count > matches.length) catchUpTruncated = true;
-          for (const m of matches) {
-            const code = m.competition && m.competition.code;
-            if (!COMPETITIONS.includes(code)) continue;
-            absorbMatches(collected, unmatchedTeams, [m], code);
+        if (res.status === 429) break; // minute is spent; do not burn the rest of it
+        if (!res.ok) continue; // competition not in this plan, or transient error — skip, don't fail the whole run
+        const data = await res.json();
+        absorbMatches(collected, unmatchedTeams, data.matches || [], code);
+      } catch (e) { /* one competition failing shouldn't block the others */ }
+    }
+
+    // Older than the lookback, one 10-day slice per run. The rows that come
+    // back as FINISHED / POSTPONED / CANCELLED drop out of the next select,
+    // so the slice advances without a stored cursor.
+    if (canRequestFootballData(budget)) {
+      try {
+        const oldest = await oldestUnfinishedKickoff(supabaseUrl, sbKey, windows.dateFrom);
+        const window = catchUpWindow(oldest, windows.dateFrom);
+        if (window) {
+          const params = new URLSearchParams({
+            competitions: COMPETITIONS.join(','),
+            dateFrom: window.dateFrom,
+            dateTo: window.dateTo,
+            limit: '500',
+          });
+          const res = await fetch(
+            `https://api.football-data.org/v4/matches?${params}`,
+            { headers: { 'X-Auth-Token': fdKey } }
+          );
+          noteFootballDataResponse(budget, res);
+          catchUp = window;
+          if (res.ok) {
+            const data = await res.json();
+            const matches = data.matches || [];
+            const count = data.resultSet && data.resultSet.count;
+            if (typeof count === 'number' && count > matches.length) catchUpTruncated = true;
+            for (const m of matches) {
+              const code = m.competition && m.competition.code;
+              if (!COMPETITIONS.includes(code)) continue;
+              absorbMatches(collected, unmatchedTeams, [m], code);
+            }
           }
         }
-      }
-    } catch (e) { /* catch-up is best-effort; the lookback window already ran */ }
-  }
+      } catch (e) { /* catch-up is best-effort; the lookback window already ran */ }
+    }
 
-  const fixtures = [...collected.values()].map(entry => entry.row);
-  if (!fixtures.length) {
-    return ok({
-      fixtures_found: 0,
+    footballDataRequests = budget.used;
+    const fixtures = [...collected.values()].map(entry => entry.row);
+    if (!fixtures.length) {
+      return await complete({
+        fixtures_found: 0,
+        football_data_requests: budget.used,
+        catch_up: catchUp,
+        catch_up_truncated: catchUpTruncated,
+      }, 200, { status: 'success' });
+    }
+
+    // Upsert. Omitting trigger_sent_at means repeat syncs of an already-seen
+    // fixture leave its trigger state untouched — only brand-new rows get it
+    // NULL by default. Full-time columns stay off this payload so a deploy
+    // that lands before the migration still updates kickoff and status.
+    const upsertRes = await upsertFixtures(supabaseUrl, sbKey, fixtures);
+    if (!upsertRes.ok) {
+      const body = await upsertRes.text();
+      return await complete({ error: 'upsert failed', status: upsertRes.status, body: body.slice(0, 500) }, 502, {
+        status: 'failed',
+        error_summary: Object.assign({ stage: 'fixtures' }, postgrestError(upsertRes.status, body)),
+      });
+    }
+    counts.fixtures_upserted = fixtures.length;
+
+    const finished = [];
+    for (const entry of collected.values()) {
+      if (!entry.fullTime) continue;
+      // The second call is still INSERT ... ON CONFLICT (external_id).
+      // Postgres checks NOT NULL while it builds that row, before it
+      // notices the conflict, so a payload of only external_id plus the
+      // full-time columns fails with 23502 (competition_code, and the
+      // other required columns, are null) and stamps nothing. Repeat the
+      // columns that have no default. Leave id off (identity) and leave
+      // trigger_sent_at off so a re-sync does not clear it.
+      finished.push({
+        external_id: entry.row.external_id,
+        competition_code: entry.row.competition_code,
+        home_team: entry.row.home_team,
+        away_team: entry.row.away_team,
+        home_team_raw: entry.row.home_team_raw,
+        away_team_raw: entry.row.away_team_raw,
+        kickoff_at: entry.row.kickoff_at,
+        status: 'FINISHED',
+        finished_at: entry.fullTime.finished_at,
+        full_time_source: entry.fullTime.full_time_source,
+        extra_time: entry.fullTime.extra_time,
+      });
+    }
+    counts.finished_candidates = finished.length;
+
+    let migrationRequired = false;
+    let fullTimeError = null;
+    if (finished.length) {
+      const finishedRes = await upsertFixtures(supabaseUrl, sbKey, finished);
+      if (!finishedRes.ok) {
+        const body = await finishedRes.text();
+        fullTimeError = postgrestError(finishedRes.status, body);
+        if (isSchemaMissing(finishedRes.status, body)) {
+          migrationRequired = true;
+        } else {
+          return await complete({
+            error: 'full-time upsert failed',
+            status: finishedRes.status,
+            body: body.slice(0, 500),
+            fixtures_found: fixtures.length,
+            football_data_requests: budget.used,
+          }, 502, {
+            status: 'partial',
+            error_summary: Object.assign({ stage: 'full_time' }, fullTimeError),
+          });
+        }
+      } else {
+        counts.stamped = finished.length;
+      }
+    }
+
+    return await complete({
+      fixtures_found: fixtures.length,
+      finished_matches: finished.length,
+      unmatched_teams: [...unmatchedTeams],
       football_data_requests: budget.used,
       catch_up: catchUp,
       catch_up_truncated: catchUpTruncated,
+      migration_required: migrationRequired,
+    }, 200, {
+      status: fullTimeError ? 'partial' : 'success',
+      error_summary: fullTimeError ? Object.assign({ stage: 'full_time' }, fullTimeError) : {},
+    });
+  } catch (e) {
+    const message = e && e.message ? e.message : String(e);
+    return await complete({ error: 'fixtures sync failed', message: message }, 502, {
+      status: 'failed',
+      error_summary: { message: message },
     });
   }
-
-  // Upsert. Omitting trigger_sent_at means repeat syncs of an already-seen
-  // fixture leave its trigger state untouched — only brand-new rows get it
-  // NULL by default. Full-time columns stay off this payload so a deploy
-  // that lands before the migration still updates kickoff and status.
-  const upsertRes = await upsertFixtures(supabaseUrl, sbKey, fixtures);
-  if (!upsertRes.ok) {
-    const body = await upsertRes.text();
-    return ok({ error: 'upsert failed', status: upsertRes.status, body: body.slice(0, 500) }, 502);
-  }
-
-  const finished = [];
-  for (const entry of collected.values()) {
-    if (!entry.fullTime) continue;
-    finished.push({
-      external_id: entry.row.external_id,
-      status: 'FINISHED',
-      finished_at: entry.fullTime.finished_at,
-      full_time_source: entry.fullTime.full_time_source,
-      extra_time: entry.fullTime.extra_time,
-    });
-  }
-
-  let migrationRequired = false;
-  if (finished.length) {
-    const finishedRes = await upsertFixtures(supabaseUrl, sbKey, finished);
-    if (!finishedRes.ok) {
-      const body = await finishedRes.text();
-      if (isSchemaMissing(finishedRes.status, body)) {
-        migrationRequired = true;
-      } else {
-        return ok({
-          error: 'full-time upsert failed',
-          status: finishedRes.status,
-          body: body.slice(0, 500),
-          fixtures_found: fixtures.length,
-          football_data_requests: budget.used,
-        }, 502);
-      }
-    }
-  }
-
-  return ok({
-    fixtures_found: fixtures.length,
-    finished_matches: finished.length,
-    unmatched_teams: [...unmatchedTeams],
-    football_data_requests: budget.used,
-    catch_up: catchUp,
-    catch_up_truncated: catchUpTruncated,
-    migration_required: migrationRequired,
-  });
 };
 
 function absorbMatches(collected, unmatchedTeams, matches, competitionCode) {
@@ -491,6 +558,43 @@ exports.canRequestFootballData = canRequestFootballData;
 exports.noteFootballDataResponse = noteFootballDataResponse;
 exports.isSchemaMissing = isSchemaMissing;
 exports.mapTeamName = mapTeamName;
+
+// Same columns as sync-background. job_type is unconstrained text, so
+// 'fixtures-sync' needs no migration. Both calls swallow errors: a health
+// row must never fail the fixture sync it is reporting.
+async function startJobRun(supabaseUrl, sbKey, jobType) {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/frfc_job_runs`, {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ job_type: jobType, status: 'running' }),
+    });
+    const rows = await res.json().catch(() => []);
+    return rows[0] && rows[0].id;
+  } catch (e) { return null; }
+}
+
+async function finishJobRun(supabaseUrl, sbKey, jobRunId, patch) {
+  if (!jobRunId) return;
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/frfc_job_runs?id=eq.${jobRunId}`, {
+      method: 'PATCH',
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ ...patch, finished_at: new Date().toISOString() }),
+    });
+  } catch (e) { /* non-critical */ }
+}
+
+function postgrestError(status, body) {
+  let parsed = null;
+  try { parsed = JSON.parse(body); } catch (e) { parsed = null; }
+  const row = Array.isArray(parsed) ? parsed[0] : parsed;
+  const message = row && typeof row.message === 'string'
+    ? row.message
+    : String(body || '');
+  const code = row && typeof row.code === 'string' ? row.code : null;
+  return { http_status: status, code: code, message: message.slice(0, 500) };
+}
 
 function ok(body, statusCode = 200) {
   return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
